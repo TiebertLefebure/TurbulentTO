@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<VTKFile type="Collection" version="0.1">
+  <Collection>
+    <DataSet timestep="0" part="0" file="plot_rho_p000000.vtu" />
+    <DataSet timestep="1" part="0" file="plot_rho_p000001.vtu" />
+    <DataSet timestep="2" part="0" file="plot_rho_p000002.vtu" />
+    <DataSet timestep="3" part="0" file="plot_rho_p000003.vtu" />
+    <DataSet timestep="4" part="0" file="plot_rho_p000004.vtu" />
+    <DataSet timestep="5" part="0" file="plot_rho_p000005.vtu" />
+    <DataSet timestep="6" part="0" file="plot_rho_p000006.vtu" />
+    <DataSet timestep="7" part="0" file="plot_rho_p000007.vtu" />
+    <DataSet timestep="8" part="0" file="plot_rho_p000008.vtu" />
+    <DataSet timestep="9" part="0" file="plot_rho_p000009.vtu" />
+    <DataSet timestep="10" part="0" file="plot_rho_p000010.vtu" />
+  </Collection>
+</VTKFile>
