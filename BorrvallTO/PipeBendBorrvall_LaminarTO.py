@@ -38,14 +38,21 @@ U_MAX_OUTLET = 1.0
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 100
-OBJECTIVE_CONVERGENCE_TOL = 1e-5
+MAX_INNER_ITERATIONS = 60  # per continuation stage
+OBJECTIVE_CONVERGENCE_TOL = 5e-5 # OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.1]  # continuation schedule
-MOVE_LIMIT = 0.2
+Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
+MOVE_LIMIT_SCHEDULE = [0.03, 0.03, 0.02, 0.015, 0.01]
+
 SNES_LINEAR_SOLVER = "mumps"  # use "mumps" if available in your PETSc/FEniCS build
-INLET_RAMP_STEPS = 8
+INLET_RAMP_STEPS = 40
+FILTER_RADIUS_IN_CELLS = 3.0
+FORWARD_SNES_RTOL = 5.0e-7
+FORWARD_SNES_ATOL = 1.0e-9
+ADJOINT_SNES_RTOL = 5.0e-7
+ADJOINT_SNES_ATOL = 1.0e-9
+SNES_MAX_ITERS = 200
 
 BETA_PROJ = Constant(0.1)
 ETA_I = 0.50
@@ -188,8 +195,8 @@ bcp_pin = DirichletBC(FlowSpace.sub(1), Constant(0.0), "near(x[0], 0.0) && near(
 bc_NS = [bcu_walls, bcu_inlet, bcu_outlet, bcp_pin]
 
 bcu_walls_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["walls"])
-bcu_inlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_inlet, boundaries, mark["inlet"])
-bcu_outlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_outlet, boundaries, mark["outlet"])
+bcu_inlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["inlet"])
+bcu_outlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["outlet"])
 bcp_pin_adj = DirichletBC(FlowSpaceAdj.sub(1), Constant(0.0), "near(x[0], 0.0) && near(x[1], 0.0)", "pointwise")
 bc_NS_adj = [bcu_walls_adj, bcu_inlet_adj, bcu_outlet_adj, bcp_pin_adj]
 
@@ -197,7 +204,7 @@ bc_NS_adj = [bcu_walls_adj, bcu_inlet_adj, bcu_outlet_adj, bcp_pin_adj]
 # ------------------------------------------------------------
 # Design filter
 # ------------------------------------------------------------
-r_filter = L * 2.0 / float(N)
+r_filter = L * FILTER_RADIUS_IN_CELLS / float(N)
 r = r_filter / (2.0 * 3.0**0.5)
 
 u_filter = TrialFunction(DensitySpace)
@@ -328,17 +335,21 @@ dfdx = np.zeros((mmma, num_mma))
 
 volume = assemble(AreaOfInterest * dx)
 
+if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
+
 
 # ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
-for q_val in Q_PENAL_SCHEDULE:
+for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
     inner_count = 0
     convergence_history = 0
     objective_converged = False
 
-    while inner_count <= MAX_INNER_ITERATIONS and not objective_converged:
+    while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
         ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
         u_inlet.u_max = ramp * U_MAX_INLET
         u_outlet.u_max = ramp * U_MAX_OUTLET
@@ -358,9 +369,10 @@ for q_val in Q_PENAL_SCHEDULE:
         solver_fwd.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
         solver_fwd.parameters["snes_solver"]["method"] = "newtonls"
         solver_fwd.parameters["snes_solver"]["line_search"] = "bt"
-        solver_fwd.parameters["snes_solver"]["relative_tolerance"] = 1.0e-6
-        solver_fwd.parameters["snes_solver"]["absolute_tolerance"] = 1.0e-9
-        solver_fwd.parameters["snes_solver"]["maximum_iterations"] = 100
+        solver_fwd.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
+        solver_fwd.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
+        solver_fwd.parameters["snes_solver"]["maximum_iterations"] = SNES_MAX_ITERS
+        solver_fwd.parameters["snes_solver"]["error_on_nonconvergence"] = True
 
         if iter_count == 0:
             initialize_forward_guess_with_stokes()
@@ -379,9 +391,10 @@ for q_val in Q_PENAL_SCHEDULE:
         solver_adj.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
         solver_adj.parameters["snes_solver"]["method"] = "newtonls"
         solver_adj.parameters["snes_solver"]["line_search"] = "bt"
-        solver_adj.parameters["snes_solver"]["relative_tolerance"] = 1.0e-6
-        solver_adj.parameters["snes_solver"]["absolute_tolerance"] = 1.0e-9
-        solver_adj.parameters["snes_solver"]["maximum_iterations"] = 100
+        solver_adj.parameters["snes_solver"]["relative_tolerance"] = ADJOINT_SNES_RTOL
+        solver_adj.parameters["snes_solver"]["absolute_tolerance"] = ADJOINT_SNES_ATOL
+        solver_adj.parameters["snes_solver"]["maximum_iterations"] = SNES_MAX_ITERS
+        solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = True
         solver_adj.solve()
 
         u_out << w_fwd.sub(0)
@@ -444,7 +457,7 @@ for q_val in Q_PENAL_SCHEDULE:
             a,
             c,
             d,
-            MOVE_LIMIT,
+            move_limit_now,
         )
 
         xold2 = xold1.copy()
@@ -466,8 +479,8 @@ for q_val in Q_PENAL_SCHEDULE:
             )
 
         print(
-            "q = {:.3f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}".format(
-                q_val, inner_count, f0val, obj_conv, vol_fraction_now
+            "q = {:.3f}, beta = {:.2f}, move = {:.3f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}".format(
+                q_val, float(BETA_PROJ.values()[0]), move_limit_now, inner_count, f0val, obj_conv, vol_fraction_now
             )
         )
 
