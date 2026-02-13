@@ -26,28 +26,5 @@
     <DataSet timestep="22" part="0" file="plot_p000022.vtu" />
     <DataSet timestep="23" part="0" file="plot_p000023.vtu" />
     <DataSet timestep="24" part="0" file="plot_p000024.vtu" />
-    <DataSet timestep="25" part="0" file="plot_p000025.vtu" />
-    <DataSet timestep="26" part="0" file="plot_p000026.vtu" />
-    <DataSet timestep="27" part="0" file="plot_p000027.vtu" />
-    <DataSet timestep="28" part="0" file="plot_p000028.vtu" />
-    <DataSet timestep="29" part="0" file="plot_p000029.vtu" />
-    <DataSet timestep="30" part="0" file="plot_p000030.vtu" />
-    <DataSet timestep="31" part="0" file="plot_p000031.vtu" />
-    <DataSet timestep="32" part="0" file="plot_p000032.vtu" />
-    <DataSet timestep="33" part="0" file="plot_p000033.vtu" />
-    <DataSet timestep="34" part="0" file="plot_p000034.vtu" />
-    <DataSet timestep="35" part="0" file="plot_p000035.vtu" />
-    <DataSet timestep="36" part="0" file="plot_p000036.vtu" />
-    <DataSet timestep="37" part="0" file="plot_p000037.vtu" />
-    <DataSet timestep="38" part="0" file="plot_p000038.vtu" />
-    <DataSet timestep="39" part="0" file="plot_p000039.vtu" />
-    <DataSet timestep="40" part="0" file="plot_p000040.vtu" />
-    <DataSet timestep="41" part="0" file="plot_p000041.vtu" />
-    <DataSet timestep="42" part="0" file="plot_p000042.vtu" />
-    <DataSet timestep="43" part="0" file="plot_p000043.vtu" />
-    <DataSet timestep="44" part="0" file="plot_p000044.vtu" />
-    <DataSet timestep="45" part="0" file="plot_p000045.vtu" />
-    <DataSet timestep="46" part="0" file="plot_p000046.vtu" />
-    <DataSet timestep="47" part="0" file="plot_p000047.vtu" />
   </Collection>
 </VTKFile>

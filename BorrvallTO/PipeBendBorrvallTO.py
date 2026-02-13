@@ -30,7 +30,7 @@ OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0 # dynamic viscosity
+MU_FLUID_VALUE = 1.0 # dynamic viscosity 
 RHO_FLUID_VALUE = 1.0 # mass density
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
@@ -77,10 +77,13 @@ def between(value, limits, eps=DOLFIN_EPS):
     return (limits[0] - eps <= value) and (value <= limits[1] + eps)
 
 
-def ensure_clean_dir(path):
-    if os.path.exists(path):
-        shutil.rmtree(path)
-    os.makedirs(path)
+def ensure_clean_dir(path, comm=MPI.comm_world):
+    # Avoid MPI races where multiple ranks delete/create the same folder.
+    if MPI.rank(comm) == 0:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        os.makedirs(path)
+    MPI.barrier(comm)
 
 
 def build_state_form(flow_model_name, state_u, state_p, adj_u, adj_p, rho_eff, custom_dx):
