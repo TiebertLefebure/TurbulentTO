@@ -12,55 +12,14 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 TURB_MODELS_DIR = os.path.abspath(os.path.join(THIS_DIR, "..", "TurbulenceModels"))
 if TURB_MODELS_DIR not in sys.path:
     sys.path.insert(0, TURB_MODELS_DIR)
+from TurbulenceModel_SpalartAllmaras_TO import (
+    SpalartAllmarasSteadyState,
+    sa_turbulent_viscosity,
+)
+from Config_PipeBendBorrvall_TurbulentTO import *
 
 
-# ------------------------------------------------------------
-# User parameters
-# ------------------------------------------------------------
-L = 1.0
-N = 120
-TOL = DOLFIN_EPS
-
-# Figure-6 geometry parameters (Borrvall 2003 pipe bend case)
-INLET_WIDTH = 0.2
-INLET_TOP_OFFSET = 0.2
-OUTLET_WIDTH = 0.2
-OUTLET_RIGHT_OFFSET = 0.2
-
-# Flow settings
-MU_FLUID_VALUE = 1.0e-4 # dynamic viscosity 
-RHO_FLUID_VALUE = 1.0 # mass density
-U_MAX_INLET = 1.0
-U_MAX_OUTLET = 1.0
-
-# Spalart-Allmaras settings
-SA_NU_TILDE_INLET = 1.0e-3 # SA_NU_TILDE_INLET about 10*nu = 10 * MU_FLUID_VALUE / RHO_FLUID_VALUE
-SA_DISTANCE_RELAXATION = 0.01
-SA_SMOOTH_ABS_EPS = 1.0e-12
-SA_INIT_WALL_DIST_SCALE = 0.05 * L
-
-
-# Topology optimization settings
-VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 100
-OBJECTIVE_CONVERGENCE_TOL = 1e-3
-OBJECTIVE_STREAK_TO_STOP = 5
-
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]  # continuation schedule
-MOVE_LIMIT = 0.01
-SNES_LINEAR_SOLVER = "mumps"  # use "mumps" if available in your PETSc/FEniCS build
-INLET_RAMP_STEPS = 100
-USE_FROZEN_TURBULENCE = True
-FORWARD_SNES_METHOD = "newtontr"
-FORWARD_SNES_MAX_ITERS = 300
-FORWARD_SNES_RTOL = 1.0e-2
-FORWARD_SNES_ATOL = 5.0e-5
-ADJOINT_SNES_RTOL = 1.0e-2
-ADJOINT_SNES_ATOL = 5.0e-5
-
-BETA_PROJ = Constant(0.1)
-ETA_I = 0.50
-QUADRATURE_DEGREE = 6
+BETA_PROJ = Constant(BETA_PROJ_VALUE)
 
 # Brinkman penalization constants (same style as diffuser script)
 mu_fluid = Constant(MU_FLUID_VALUE)
@@ -84,8 +43,13 @@ def alpha(brinkman_density):
     return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (brinkman_density + q_penal)
 
 
-def between(value, limits, eps=DOLFIN_EPS):
-    return (limits[0] - eps <= value) and (value <= limits[1] + eps)
+def sa_positive_viscosity(state_nu_tilde):
+    nu_lam = mu_fluid / rho_fluid
+    return sa_turbulent_viscosity(
+        state_nu_tilde,
+        nu_lam,
+        smooth_abs_eps=SA_SMOOTH_ABS_EPS,
+    )
 
 
 def ensure_clean_dir(path, comm=MPI.comm_world):
@@ -97,20 +61,12 @@ def ensure_clean_dir(path, comm=MPI.comm_world):
     MPI.barrier(comm)
 
 
-def sa_min(a, b):
-    return (a + b - smooth_abs(a - b)) / Constant(2.0)
-
-
-def smooth_abs(x):
-    return sqrt(x**2 + Constant(SA_SMOOTH_ABS_EPS))
-
-
-def sa_turbulent_viscosity(state_nu_tilde):
-    nu_lam = mu_fluid / rho_fluid
-    chi = state_nu_tilde / (nu_lam + DOLFIN_EPS)
-    f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
-    nu_t_raw = state_nu_tilde * f_v1
-    return 0.5 * (nu_t_raw + smooth_abs(nu_t_raw))
+def enforce_scalar_floor(scalar_function, floor_value):
+    """Enforce scalar_function >= floor_value in-place."""
+    values = scalar_function.vector().get_local()
+    values = np.maximum(values, floor_value)
+    scalar_function.vector().set_local(values)
+    scalar_function.vector().apply("insert")
 
 
 def calculate_distance_field(space, boundaries_data, wall_marker, custom_dx, relaxation=0.01):
@@ -137,76 +93,9 @@ def calculate_distance_field(space, boundaries_data, wall_marker, custom_dx, rel
     return y
 
 
-def build_state_form(
-    state_u,
-    state_p,
-    state_nu_tilde,
-    adj_u,
-    adj_p,
-    adj_nu_tilde,
-    rho_eff,
-    custom_dx,
-    wall_distance=None,
-):
-    """Build the scalar UFL state form used in forward and adjoint derivations."""
-    if wall_distance is None:
-        raise ValueError("wall_distance is required.")
-
-    nu_lam = mu_fluid / rho_fluid
-    sigma = Constant(2.0 / 3.0)
-    cb1 = Constant(0.1355)
-    cb2 = Constant(0.622)
-    kappa = Constant(0.41)
-    cw2 = Constant(0.3)
-    cw3 = Constant(2.0)
-    cw1 = cb1 / kappa**2 + (Constant(1.0) + cb2) / sigma
-
-    # SA closure quantities
-    chi = state_nu_tilde / (nu_lam + DOLFIN_EPS)
-    f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
-    f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
-
-    S_sq = Constant(2.0) * inner(sym(nabla_grad(state_u)), sym(nabla_grad(state_u)))
-    S = sqrt(S_sq + DOLFIN_EPS)
-    y_safe = wall_distance + DOLFIN_EPS
-
-    S_tilde = S + state_nu_tilde / (kappa**2 * y_safe**2) * f_v2
-    r_arg = state_nu_tilde / (S_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
-    r = sa_min(r_arg, Constant(10.0))
-
-    g = r + cw2 * (r**6 - r)
-    f_w = g * ((Constant(1.0) + cw3**6) / (g**6 + cw3**6)) ** (Constant(1.0) / Constant(6.0))
-
-    nu_t = state_nu_tilde * f_v1
-    nu_t_positive = 0.5 * (nu_t + smooth_abs(nu_t))
-    mu_effective = mu_fluid + rho_fluid * nu_t_positive
-
-    prod_nt = cb1 * S_tilde * state_nu_tilde
-    react_nt = cw1 * f_w * (state_nu_tilde / y_safe**2)
-    cross_diff_nt = (cb2 / sigma) * inner(nabla_grad(state_nu_tilde), nabla_grad(state_nu_tilde))
-    source_nt = prod_nt + cross_diff_nt
-
-    momentum = (
-        rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u)
-        + mu_effective * inner(grad(state_u), grad(adj_u))
-        + inner(grad(state_p), adj_u)
-        + inner(div(state_u), adj_p)
-        + alpha(rho_eff) * inner(state_u, adj_u)
-    ) * custom_dx
-
-    turbulence_transport = (
-        dot(state_u, nabla_grad(state_nu_tilde)) * adj_nu_tilde
-        + inner(((nu_lam + state_nu_tilde) / sigma) * grad(state_nu_tilde), grad(adj_nu_tilde))
-        + react_nt * state_nu_tilde * adj_nu_tilde
-        - source_nt * adj_nu_tilde
-    ) * custom_dx
-
-    return momentum + turbulence_transport
-
-
 def build_frozen_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx, frozen_nu_tilde):
     """State form used for frozen-turbulence adjoint/sensitivity."""
-    mu_effective_frozen = mu_fluid + rho_fluid * sa_turbulent_viscosity(frozen_nu_tilde)
+    mu_effective_frozen = mu_fluid + rho_fluid * sa_positive_viscosity(frozen_nu_tilde)
     return (
         rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u)
         + mu_effective_frozen * inner(grad(state_u), grad(adj_u))
@@ -226,21 +115,14 @@ P_h = FiniteElement("CG", mesh.ufl_cell(), 1)
 T_h = FiniteElement("CG", mesh.ufl_cell(), 1)
 A_h = FiniteElement("DG", mesh.ufl_cell(), 0)
 
-FlowElement = MixedElement([U_h, P_h, T_h])
-FlowSpace = FunctionSpace(mesh, FlowElement)
-FlowSpaceAdj = FunctionSpace(mesh, FlowElement)
 FrozenUPSpace = FunctionSpace(mesh, U_h * P_h)
 TurbulenceSpace = FunctionSpace(mesh, T_h)
 
 DensitySpace = FunctionSpace(mesh, A_h)
 
-w_fwd = Function(FlowSpace)
-w_adj = Function(FlowSpaceAdj)
 w_adj_frozen = Function(FrozenUPSpace)
 w_state_frozen = Function(FrozenUPSpace)
 
-(u, p, nu_tilde) = split(w_fwd)
-(v, q, psi) = split(w_adj)
 (v_frozen, q_frozen) = split(w_adj_frozen)
 (u_frozen_state, p_frozen_state) = split(w_state_frozen)
 
@@ -254,37 +136,13 @@ filtered_gradient = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 
-inlet_y_max = L - INLET_TOP_OFFSET
-inlet_y_min = inlet_y_max - INLET_WIDTH
-outlet_x_max = L - OUTLET_RIGHT_OFFSET
-outlet_x_min = outlet_x_max - OUTLET_WIDTH
-
-
-class Inlet(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and near(x[0], 0.0, TOL) and between(x[1], (inlet_y_min, inlet_y_max), TOL)
-
-
-class Outlet(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and near(x[1], 0.0, TOL) and between(x[0], (outlet_x_min, outlet_x_max), TOL)
-
-
-class Walls(SubDomain):
-    def inside(self, x, on_boundary):
-        left_wall_outside_inlet = near(x[0], 0.0, TOL) and not between(x[1], (inlet_y_min, inlet_y_max), TOL)
-        bottom_wall_outside_outlet = near(x[1], 0.0, TOL) and not between(x[0], (outlet_x_min, outlet_x_max), TOL)
-        right_wall = near(x[0], L, TOL)
-        top_wall = near(x[1], L, TOL)
-        return on_boundary and (left_wall_outside_inlet or bottom_wall_outside_outlet or right_wall or top_wall)
-
-
-mark = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
-boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
-boundaries.set_all(mark["generic"])
-Walls().mark(boundaries, mark["walls"])
-Inlet().mark(boundaries, mark["inlet"])
-Outlet().mark(boundaries, mark["outlet"])
+inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+    L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+)
+mark = MARK
+boundaries = mark_pipe_bend_boundaries(
+    mesh, L, TOL, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max
+)
 
 # Avoid FFC auto-estimating an excessively high quadrature degree for SA nonlinear forms.
 parameters["form_compiler"]["quadrature_degree"] = QUADRATURE_DEGREE
@@ -297,49 +155,24 @@ ds = Measure(
 )
 dS = Measure("dS", domain=mesh, metadata={"quadrature_degree": QUADRATURE_DEGREE})
 
-# Inlet profile: +x direction
-y_inlet_center = 0.5 * (inlet_y_min + inlet_y_max)
-u_inlet = Expression(
-    ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-    degree=2,
-    u_max=U_MAX_INLET,
-    y_c=y_inlet_center,
-    width=INLET_WIDTH,
-)
-
-# Outlet profile: -y direction
-x_outlet_center = 0.5 * (outlet_x_min + outlet_x_max)
-u_outlet = Expression(
-    ("0.0", "-u_max * (1 - pow(2.0 * (x[0] - x_c) / width, 2))"),
-    degree=2,
-    u_max=U_MAX_OUTLET,
-    x_c=x_outlet_center,
-    width=OUTLET_WIDTH,
+u_inlet, u_outlet = build_velocity_profiles(
+    U_MAX_INLET,
+    U_MAX_OUTLET,
+    inlet_y_min,
+    inlet_y_max,
+    outlet_x_min,
+    outlet_x_max,
+    INLET_WIDTH,
+    OUTLET_WIDTH,
 )
 
 u_noslip = Constant((0.0, 0.0))
 
-bcu_walls = DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, mark["walls"])
-bcu_inlet = DirichletBC(FlowSpace.sub(0), u_inlet, boundaries, mark["inlet"])
-bcu_outlet = DirichletBC(FlowSpace.sub(0), u_outlet, boundaries, mark["outlet"])
-bcp_pin = DirichletBC(FlowSpace.sub(1), Constant(0.0), "near(x[0], 0.0) && near(x[1], 0.0)", "pointwise")
-
-bcu_walls_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["walls"])
-bcu_inlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["inlet"])
-bcu_outlet_adj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["outlet"])
-bcp_pin_adj = DirichletBC(FlowSpaceAdj.sub(1), Constant(0.0), "near(x[0], 0.0) && near(x[1], 0.0)", "pointwise")
-
 nu_tilde_inlet_bc_value = Constant(0.0)
 nu_tilde_wall_bc_value = Constant(0.0)
-
-bcnt_inlet = DirichletBC(FlowSpace.sub(2), nu_tilde_inlet_bc_value, boundaries, mark["inlet"])
-bcnt_walls = DirichletBC(FlowSpace.sub(2), nu_tilde_wall_bc_value, boundaries, mark["walls"])
-
-bcnt_inlet_adj = DirichletBC(FlowSpaceAdj.sub(2), Constant(0.0), boundaries, mark["inlet"])
-bcnt_walls_adj = DirichletBC(FlowSpaceAdj.sub(2), nu_tilde_wall_bc_value, boundaries, mark["walls"])
-
-bc_NS = [bcu_walls, bcu_inlet, bcu_outlet, bcp_pin, bcnt_inlet, bcnt_walls]
-bc_NS_adj = [bcu_walls_adj, bcu_inlet_adj, bcu_outlet_adj, bcp_pin_adj, bcnt_inlet_adj, bcnt_walls_adj]
+bcnt_inlet_turb = DirichletBC(TurbulenceSpace, nu_tilde_inlet_bc_value, boundaries, mark["inlet"])
+bcnt_walls_turb = DirichletBC(TurbulenceSpace, nu_tilde_wall_bc_value, boundaries, mark["walls"])
+bcn_turbulence = [bcnt_inlet_turb, bcnt_walls_turb]
 
 bcu_walls_adj_frozen = DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, mark["walls"])
 bcu_inlet_adj_frozen = DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, mark["inlet"])
@@ -347,7 +180,24 @@ bcu_outlet_adj_frozen = DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, 
 bcp_pin_adj_frozen = DirichletBC(FrozenUPSpace.sub(1), Constant(0.0), "near(x[0], 0.0) && near(x[1], 0.0)", "pointwise")
 bc_NS_adj_frozen = [bcu_walls_adj_frozen, bcu_inlet_adj_frozen, bcu_outlet_adj_frozen, bcp_pin_adj_frozen]
 
+bcu_walls_frozen = DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, mark["walls"])
+bcu_inlet_frozen = DirichletBC(FrozenUPSpace.sub(0), u_inlet, boundaries, mark["inlet"])
+bcu_outlet_frozen = DirichletBC(FrozenUPSpace.sub(0), u_outlet, boundaries, mark["outlet"])
+bcp_pin_frozen = DirichletBC(FrozenUPSpace.sub(1), Constant(0.0), "near(x[0], 0.0) && near(x[1], 0.0)", "pointwise")
+bc_NS_frozen = [bcu_walls_frozen, bcu_inlet_frozen, bcu_outlet_frozen, bcp_pin_frozen]
+
 wall_distance = calculate_distance_field(TurbulenceSpace, boundaries, mark["walls"], dx, SA_DISTANCE_RELAXATION)
+nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
+sa_model = SpalartAllmarasSteadyState(
+    TurbulenceSpace,
+    bcn_turbulence,
+    SA_NU_TILDE_INLET,
+    nu_laminar,
+    Constant((0.0, 0.0)),
+    dx,
+    ds,
+    wall_distance,
+)
 
 
 # ------------------------------------------------------------
@@ -383,30 +233,7 @@ def pde_filter(input_field, output_field):
 AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
 rho_effective = projection(rho_f, ETA_I)
 
-mu_effective_obj = mu_fluid + rho_fluid * sa_turbulent_viscosity(nu_tilde)
-ObjFunctional = AreaOfInterest * (
-    0.5 * mu_effective_obj * inner(sym(nabla_grad(u)), sym(nabla_grad(u)))
-    + alpha(rho_effective) * inner(u, u)
-) * dx
-
-state_form = build_state_form(
-    u,
-    p,
-    nu_tilde,
-    v,
-    q,
-    psi,
-    rho_effective,
-    dx,
-    wall_distance,
-)
-lagrangian_form = ObjFunctional + state_form
-
-forward_form = derivative(state_form, w_adj, TestFunction(FlowSpace))
-adjoint_form = derivative(lagrangian_form, w_fwd, TestFunction(FlowSpaceAdj))
-
-ddx = derivative(lagrangian_form, rho_f)
-mu_effective_obj_frozen = mu_fluid + rho_fluid * sa_turbulent_viscosity(nu_tilde_frozen)
+mu_effective_obj_frozen = mu_fluid + rho_fluid * sa_positive_viscosity(nu_tilde_frozen)
 ObjFunctional_frozen = AreaOfInterest * (
     0.5 * mu_effective_obj_frozen * inner(sym(nabla_grad(u_frozen_state)), sym(nabla_grad(u_frozen_state)))
     + alpha(rho_effective) * inner(u_frozen_state, u_frozen_state)
@@ -421,6 +248,7 @@ state_form_frozen = build_frozen_state_form(
     nu_tilde_frozen,
 )
 lagrangian_form_frozen = ObjFunctional_frozen + state_form_frozen
+forward_form_frozen = derivative(state_form_frozen, w_adj_frozen, TestFunction(FrozenUPSpace))
 adjoint_form_frozen = derivative(lagrangian_form_frozen, w_state_frozen, TestFunction(FrozenUPSpace))
 ddx_frozen = derivative(lagrangian_form_frozen, rho_f)
 vol_constraint = AreaOfInterest * rho_effective * dx - AreaOfInterest * VOL_FRAC * dx
@@ -444,8 +272,8 @@ bcp_pin_stokes = DirichletBC(StokesSpace.sub(1), Constant(0.0), "near(x[0], 0.0)
 bc_stokes = [bcu_walls_stokes, bcu_inlet_stokes, bcu_outlet_stokes, bcp_pin_stokes]
 
 
-def initialize_forward_guess_with_stokes():
-    """Initialize w_fwd with a linear Stokes-Brinkman solve for robust Newton startup."""
+def initialize_frozen_forward_guess_with_stokes():
+    """Initialize frozen forward fields and SA state with a Stokes-Brinkman guess."""
     A = assemble(a_stokes)
     b = assemble(l_stokes)
     for bc in bc_stokes:
@@ -454,13 +282,31 @@ def initialize_forward_guess_with_stokes():
     solve(A, w_stokes.vector(), b, SNES_LINEAR_SOLVER)
 
     u_guess, p_guess = w_stokes.split(deepcopy=True)
+    assign(w_state_frozen.sub(0), u_guess)
+    assign(w_state_frozen.sub(1), p_guess)
+
     nu_guess_expr = Constant(SA_NU_TILDE_INLET) * wall_distance / (wall_distance + Constant(SA_INIT_WALL_DIST_SCALE))
     nu_guess = project(nu_guess_expr, TurbulenceSpace)
-    mixed_assigner = FunctionAssigner(
-        FlowSpace,
-        [u_guess.function_space(), p_guess.function_space(), nu_guess.function_space()],
-    )
-    mixed_assigner.assign(w_fwd, [u_guess, p_guess, nu_guess])
+    nu_tilde_frozen.assign(nu_guess)
+    sa_model.nu_tilde0.assign(nu_guess)
+    sa_model.nu_tilde1.assign(nu_guess)
+
+
+def build_forward_solver(forward_residual, state_function, boundary_conditions):
+    """Create a forward SNES solver for a given residual/state/BC set."""
+    jacobian = derivative(forward_residual, state_function)
+    problem = NonlinearVariationalProblem(forward_residual, state_function, boundary_conditions, jacobian)
+    solver = NonlinearVariationalSolver(problem)
+    solver.parameters["nonlinear_solver"] = "snes"
+    solver.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
+    solver.parameters["snes_solver"]["method"] = FORWARD_SNES_METHOD
+    if FORWARD_SNES_METHOD == "newtonls":
+        solver.parameters["snes_solver"]["line_search"] = "l2"
+    solver.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
+    solver.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
+    solver.parameters["snes_solver"]["maximum_iterations"] = FORWARD_SNES_MAX_ITERS
+    solver.parameters["snes_solver"]["error_on_nonconvergence"] = True
+    return solver
 
 
 # ------------------------------------------------------------
@@ -531,23 +377,23 @@ fval = np.zeros((mmma, 1))
 dfdx = np.zeros((mmma, num_mma))
 
 volume = assemble(AreaOfInterest * dx)
+print("Frozen turbulence mode: segregated forward (NS + SA) with frozen adjoint/design derivatives")
 
-if USE_FROZEN_TURBULENCE:
-    print("Sensitivity mode: frozen turbulence (nu_tilde held fixed in adjoint/design derivatives)")
-else:
-    print("Sensitivity mode: fully coupled turbulence adjoint")
+if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 # ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
-for q_val in Q_PENAL_SCHEDULE:
+for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     q_penal.assign(q_val)
+    move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     inner_count = 0
     convergence_history = 0
     objective_converged = False
 
-    while inner_count <= MAX_INNER_ITERATIONS and not objective_converged:
+    while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
         ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
         u_inlet.u_max = ramp * U_MAX_INLET
         u_outlet.u_max = ramp * U_MAX_OUTLET
@@ -561,43 +407,40 @@ for q_val in Q_PENAL_SCHEDULE:
         rhop_out << rho_proj_plot
 
         # Forward solve
-        print("Starting forward SNES solve")
-        jac_fwd = derivative(forward_form, w_fwd)
-        problem_fwd = NonlinearVariationalProblem(forward_form, w_fwd, bc_NS, jac_fwd)
-        solver_fwd = NonlinearVariationalSolver(problem_fwd)
-        solver_fwd.parameters["nonlinear_solver"] = "snes"
-        solver_fwd.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
-        solver_fwd.parameters["snes_solver"]["method"] = FORWARD_SNES_METHOD
-        if FORWARD_SNES_METHOD == "newtonls":
-            solver_fwd.parameters["snes_solver"]["line_search"] = "l2"
-        solver_fwd.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
-        solver_fwd.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
-        solver_fwd.parameters["snes_solver"]["maximum_iterations"] = FORWARD_SNES_MAX_ITERS
-        solver_fwd.parameters["snes_solver"]["error_on_nonconvergence"] = True
+        print("Starting frozen forward solve (segregated NS + SA)")
 
         if iter_count == 0:
-            initialize_forward_guess_with_stokes()
+            initialize_frozen_forward_guess_with_stokes()
 
+        for _ in range(max(1, FROZEN_PICARD_STEPS)):
+            solver_fwd_frozen = build_forward_solver(forward_form_frozen, w_state_frozen, bc_NS_frozen)
+            try:
+                solver_fwd_frozen.solve()
+            except RuntimeError:
+                initialize_frozen_forward_guess_with_stokes()
+                solver_fwd_frozen.solve()
+
+            velocity_for_sa = w_state_frozen.sub(0, deepcopy=True)
+            sa_model.construct_forms(velocity_for_sa)
+            sa_model.solve_turbulence_model()
+            sa_model.update_variables(relaxation=NUT_RELAXATION_FACTOR)
+            nu_tilde_frozen.assign(sa_model.nu_tilde0)
+            enforce_scalar_floor(nu_tilde_frozen, SA_NU_TILDE_FLOOR)
+            sa_model.nu_tilde0.assign(nu_tilde_frozen)
+            sa_model.nu_tilde1.assign(nu_tilde_frozen)
+
+        # Re-solve momentum with the updated frozen turbulence field.
+        solver_fwd_frozen = build_forward_solver(forward_form_frozen, w_state_frozen, bc_NS_frozen)
         try:
-            solver_fwd.solve()
+            solver_fwd_frozen.solve()
         except RuntimeError:
-            initialize_forward_guess_with_stokes()
-            solver_fwd.solve()
+            initialize_frozen_forward_guess_with_stokes()
+            solver_fwd_frozen.solve()
 
         # Adjoint solve
         print("Starting adjoint SNES solve")
-        if USE_FROZEN_TURBULENCE:
-            u_frozen_copy = w_fwd.sub(0, deepcopy=True)
-            p_frozen_copy = w_fwd.sub(1, deepcopy=True)
-            nu_tilde_frozen.assign(w_fwd.sub(2, deepcopy=True))
-            assign(w_state_frozen.sub(0), u_frozen_copy)
-            assign(w_state_frozen.sub(1), p_frozen_copy)
-
-            jac_adj = derivative(adjoint_form_frozen, w_adj_frozen)
-            problem_adj = NonlinearVariationalProblem(adjoint_form_frozen, w_adj_frozen, bc_NS_adj_frozen, jac_adj)
-        else:
-            jac_adj = derivative(adjoint_form, w_adj)
-            problem_adj = NonlinearVariationalProblem(adjoint_form, w_adj, bc_NS_adj, jac_adj)
+        jac_adj = derivative(adjoint_form_frozen, w_adj_frozen)
+        problem_adj = NonlinearVariationalProblem(adjoint_form_frozen, w_adj_frozen, bc_NS_adj_frozen, jac_adj)
 
         solver_adj = NonlinearVariationalSolver(problem_adj)
         solver_adj.parameters["nonlinear_solver"] = "snes"
@@ -610,11 +453,10 @@ for q_val in Q_PENAL_SCHEDULE:
         solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = True
         solver_adj.solve()
 
-        u_out << w_fwd.sub(0)
-        p_out << w_fwd.sub(1)
-        nu_tilde_out << w_fwd.sub(2)
-
-        f0val = assemble(ObjFunctional)
+        u_out << w_state_frozen.sub(0)
+        p_out << w_state_frozen.sub(1)
+        nu_tilde_out << nu_tilde_frozen
+        f0val = assemble(ObjFunctional_frozen)
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
@@ -627,10 +469,7 @@ for q_val in Q_PENAL_SCHEDULE:
         previous_objective = f0val
 
         # Objective gradient
-        if USE_FROZEN_TURBULENCE:
-            unfiltered_gradient.vector()[:] = assemble(ddx_frozen)[:]
-        else:
-            unfiltered_gradient.vector()[:] = assemble(ddx)[:]
+        unfiltered_gradient.vector()[:] = assemble(ddx_frozen)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
@@ -674,7 +513,7 @@ for q_val in Q_PENAL_SCHEDULE:
             a,
             c,
             d,
-            MOVE_LIMIT,
+            move_limit_now,
         )
 
         xold2 = xold1.copy()

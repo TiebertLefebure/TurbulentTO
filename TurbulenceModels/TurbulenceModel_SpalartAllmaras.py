@@ -1,9 +1,9 @@
 from dolfin import *
 from Utilities import *
 
-#########################################
+#---------------------------------------#
 ### Spalart-Allmaras turbulence model ###
-#########################################
+#---------------------------------------#
 
 class SpalartAllmarasGeneral:
     def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field):
@@ -61,9 +61,9 @@ class SpalartAllmarasGeneral:
         f_v2 = 1 - chi / (1 + chi * f_v1)
         f_t2 = 1.2 * exp(-0.5 * chi**2)
 
-        # Strain rate magnitude
-        S_sq = 2 * inner(sym(nabla_grad(external_u1)), sym(nabla_grad(external_u1)))
-        S = sqrt(S_sq + DOLFIN_EPS) # Add epsilon for robustness
+        # SA model uses vorticity magnitude in S_tilde.
+        omega_sq = 2 * inner(skew(nabla_grad(external_u1)), skew(nabla_grad(external_u1)))
+        S = sqrt(omega_sq + DOLFIN_EPS) # Add epsilon for robustness
 
         # Wall distance with safety epsilon
         y_safe = self._y + DOLFIN_EPS
@@ -93,7 +93,7 @@ class SpalartAllmarasGeneral:
 
         # Production term (explicit source)
         # P = cb1 * S_tilde * nu_tilde
-        prod_nt = cb1 * S_tilde * self._nu_tilde0
+        prod_nt = cb1 * (1 - f_t2) * S_tilde * self._nu_tilde0
         
         # Destruction term (linearized for implicit sink)
         # D = cw1 * f_w * (nu_tilde/y)^2 ~= (cw1 * f_w * nu_tilde_0 / y^2) * nu_tilde

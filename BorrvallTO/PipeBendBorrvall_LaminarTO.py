@@ -2,60 +2,14 @@ from dolfin import *
 import numpy as np
 import os
 import shutil
-import sys
 from time import localtime, strftime
 from ufl import tanh
 
 from mma import mmasub
+from Config_PipeBendBorrvall_LaminarTO import *
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-TURB_MODELS_DIR = os.path.abspath(os.path.join(THIS_DIR, "..", "TurbulenceModels"))
-if TURB_MODELS_DIR not in sys.path:
-    sys.path.insert(0, TURB_MODELS_DIR)
-
-
-# ------------------------------------------------------------
-# User parameters
-# ------------------------------------------------------------
-
-L = 1.0
-N = 120
-TOL = DOLFIN_EPS
-
-# Figure-6 geometry parameters (Borrvall 2003 pipe bend case)
-INLET_WIDTH = 0.2
-INLET_TOP_OFFSET = 0.2
-OUTLET_WIDTH = 0.2
-OUTLET_RIGHT_OFFSET = 0.2
-
-# Flow settings
-MU_FLUID_VALUE = 1e-3 # dynamic viscosity 
-RHO_FLUID_VALUE = 1.0 # mass density
-U_MAX_INLET = 1.0
-U_MAX_OUTLET = 1.0
-
-### Reynolds number Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 200
-
-# Topology optimization settings
-VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 60  # per continuation stage
-OBJECTIVE_CONVERGENCE_TOL = 5e-5 # OBJECTIVE_CONVERGENCE_TOL = 1e-5
-OBJECTIVE_STREAK_TO_STOP = 5
-
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.03, 0.03, 0.02, 0.015, 0.01]
-
-SNES_LINEAR_SOLVER = "mumps"  # use "mumps" if available in your PETSc/FEniCS build
-INLET_RAMP_STEPS = 40
-FILTER_RADIUS_IN_CELLS = 3.0
-FORWARD_SNES_RTOL = 5.0e-7
-FORWARD_SNES_ATOL = 1.0e-9
-ADJOINT_SNES_RTOL = 5.0e-7
-ADJOINT_SNES_ATOL = 1.0e-9
-SNES_MAX_ITERS = 200
-
-BETA_PROJ = Constant(0.1)
-ETA_I = 0.50
+BETA_PROJ = Constant(BETA_PROJ_VALUE)
 
 # Brinkman penalization constants (same style as diffuser script)
 mu_fluid = Constant(MU_FLUID_VALUE)
@@ -77,10 +31,6 @@ def projection(rho_design, eta_proj):
 
 def alpha(brinkman_density):
     return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (brinkman_density + q_penal)
-
-
-def between(value, limits, eps=DOLFIN_EPS):
-    return (limits[0] - eps <= value) and (value <= limits[1] + eps)
 
 
 def ensure_clean_dir(path, comm=MPI.comm_world):
@@ -130,60 +80,27 @@ filtered_gradient = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 
-inlet_y_max = L - INLET_TOP_OFFSET
-inlet_y_min = inlet_y_max - INLET_WIDTH
-outlet_x_max = L - OUTLET_RIGHT_OFFSET
-outlet_x_min = outlet_x_max - OUTLET_WIDTH
-
-
-class Inlet(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and near(x[0], 0.0, TOL) and between(x[1], (inlet_y_min, inlet_y_max), TOL)
-
-
-class Outlet(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and near(x[1], 0.0, TOL) and between(x[0], (outlet_x_min, outlet_x_max), TOL)
-
-
-class Walls(SubDomain):
-    def inside(self, x, on_boundary):
-        left_wall_outside_inlet = near(x[0], 0.0, TOL) and not between(x[1], (inlet_y_min, inlet_y_max), TOL)
-        bottom_wall_outside_outlet = near(x[1], 0.0, TOL) and not between(x[0], (outlet_x_min, outlet_x_max), TOL)
-        right_wall = near(x[0], L, TOL)
-        top_wall = near(x[1], L, TOL)
-        return on_boundary and (left_wall_outside_inlet or bottom_wall_outside_outlet or right_wall or top_wall)
-
-
-mark = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
-boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
-boundaries.set_all(mark["generic"])
-Walls().mark(boundaries, mark["walls"])
-Inlet().mark(boundaries, mark["inlet"])
-Outlet().mark(boundaries, mark["outlet"])
+inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+    L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+)
+mark = MARK
+boundaries = mark_pipe_bend_boundaries(
+    mesh, L, TOL, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max
+)
 
 dx = Measure("dx", domain=mesh)
 ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
 dS = Measure("dS", domain=mesh)
 
-# Inlet profile: +x direction
-y_inlet_center = 0.5 * (inlet_y_min + inlet_y_max)
-u_inlet = Expression(
-    ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-    degree=2,
-    u_max=U_MAX_INLET,
-    y_c=y_inlet_center,
-    width=INLET_WIDTH,
-)
-
-# Outlet profile: -y direction
-x_outlet_center = 0.5 * (outlet_x_min + outlet_x_max)
-u_outlet = Expression(
-    ("0.0", "-u_max * (1 - pow(2.0 * (x[0] - x_c) / width, 2))"),
-    degree=2,
-    u_max=U_MAX_OUTLET,
-    x_c=x_outlet_center,
-    width=OUTLET_WIDTH,
+u_inlet, u_outlet = build_velocity_profiles(
+    U_MAX_INLET,
+    U_MAX_OUTLET,
+    inlet_y_min,
+    inlet_y_max,
+    outlet_x_min,
+    outlet_x_max,
+    INLET_WIDTH,
+    OUTLET_WIDTH,
 )
 
 u_noslip = Constant((0.0, 0.0))
