@@ -1,6 +1,11 @@
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
 
 
+# -------------------------------------------------------
+# Configuration file for PipeBendBorrvall_LaminarTO.py
+# -------------------------------------------------------
+
+
 # ------------------------------------------------------------
 # User parameters
 # ------------------------------------------------------------
@@ -8,7 +13,7 @@ L = 1.0
 N = 120
 TOL = DOLFIN_EPS
 
-# Figure-6 geometry parameters (Borrvall 2003 pipe bend case)
+# Geometry parameters (Borrvall 2003 pipe bend case)
 INLET_WIDTH = 0.2
 INLET_TOP_OFFSET = 0.2
 OUTLET_WIDTH = 0.2
@@ -38,7 +43,7 @@ ADJOINT_SNES_RTOL = 5.0e-7
 ADJOINT_SNES_ATOL = 1.0e-9
 SNES_MAX_ITERS = 200
 
-BETA_PROJ_VALUE = 0.1
+BETA_PROJ_VALUE = Constant(0.1) # constant value is OK for laminar flow
 ETA_I = 0.50
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}

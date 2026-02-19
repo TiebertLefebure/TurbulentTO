@@ -13,21 +13,21 @@ L = 1.0
 N = 120
 TOL = DOLFIN_EPS
 
-# Figure-6 geometry parameters (Borrvall 2003 pipe bend case)
+# Geometry parameters (Borrvall 2003 pipe bend case)
 INLET_WIDTH = 0.2
 INLET_TOP_OFFSET = 0.2
 OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-5
+MU_FLUID_VALUE = 1.0e-5 # MU_FLUID_VALUE = 1.0e-4 for Re = 2.0 x 10^3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
-# -----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2 x 10^4
-# -----------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2.0 x 10^4
+# -------------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
 SA_NU_TILDE_INLET = 1.0e-3
@@ -38,12 +38,13 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 60
-OBJECTIVE_CONVERGENCE_TOL = 1e-3
+MAX_INNER_ITERATIONS = 80 # MAX_INNER_ITERATIONS = 60
+OBJECTIVE_CONVERGENCE_TOL = 1e-4 # OBJECTIVE_CONVERGENCE_TOL = 1e-3
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.004, 0.003]
+Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3] # Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
+MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.004, 0.003, 0.0025, 0.002] # MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.004, 0.003]
+BETA_PROJ_SCHEDULE = [0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0] # BETA_PROJ_VALUE = 0.1
 SNES_LINEAR_SOLVER = "mumps"
 INLET_RAMP_STEPS = 100
 FROZEN_PICARD_STEPS = 2 # FROZEN_PICARD_STEPS = 1
@@ -55,7 +56,7 @@ ADJOINT_SNES_RTOL = 1.0e-3
 ADJOINT_SNES_ATOL = 1.0e-6
 NUT_RELAXATION_FACTOR = 0.7
 
-BETA_PROJ_VALUE = 0.1
+BETA_PROJ_VALUE = 0.5 # BETA_PROJ_VALUE = 0.1
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
 

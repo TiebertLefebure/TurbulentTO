@@ -11,7 +11,7 @@ from Config_PipeBendBorrvall_LaminarTO import *
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 BETA_PROJ = Constant(BETA_PROJ_VALUE)
 
-# Brinkman penalization constants (same style as diffuser script)
+# Brinkman penalization constants (same style as DiffuserBorrvallTO.py script)
 mu_fluid = Constant(MU_FLUID_VALUE)
 rho_fluid = Constant(RHO_FLUID_VALUE)
 alpha_fluid = Constant(2.5 * MU_FLUID_VALUE / 100.0**2.0)

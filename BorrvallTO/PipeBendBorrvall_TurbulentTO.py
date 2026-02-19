@@ -381,17 +381,30 @@ print("Frozen turbulence mode: segregated forward (NS + SA) with frozen adjoint/
 
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
+if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("BETA_PROJ_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 # ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    beta_val = BETA_PROJ_SCHEDULE[stage_idx]
+    BETA_PROJ.assign(beta_val)
     q_penal.assign(q_val)
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     inner_count = 0
     convergence_history = 0
     objective_converged = False
+    print(
+        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+            stage_idx + 1,
+            len(Q_PENAL_SCHEDULE),
+            q_val,
+            beta_val,
+            move_limit_now,
+        )
+    )
 
     while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
         ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
@@ -535,8 +548,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             )
 
         print(
-            "q = {:.3f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}".format(
-                q_val, inner_count, f0val, obj_conv, vol_fraction_now
+            "q = {:.3f}, beta = {:.2f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}".format(
+                q_val, beta_val, inner_count, f0val, obj_conv, vol_fraction_now
             )
         )
 
