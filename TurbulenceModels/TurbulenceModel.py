@@ -1,9 +1,9 @@
 from dolfin import *
 from Utilities import *
 
-################################################
+# -------------------------------------------- #
 ### Lam-Bremhorst k-epsilon turbulence model ###
-################################################
+# -------------------------------------------- #
 
 class KEpsilonGeneral:
     def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field):

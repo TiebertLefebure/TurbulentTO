@@ -1,19 +1,19 @@
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
 
 
-# -------------------------------------------------------
-# Configuration file for PipeBendBorrvall_LaminarTO.py
-# -------------------------------------------------------
+# ----------------------------------------------------------
+# Configuration file for Borrvall Pipe Bend case (Laminar)
+# ----------------------------------------------------------
 
 
 # ------------------------------------------------------------
 # User parameters
 # ------------------------------------------------------------
-L = 1.0
+L = 1.0 # L x L square design domain
 N = 120
 TOL = DOLFIN_EPS
 
-# Geometry parameters (Borrvall 2003 pipe bend case)
+# Geometry parameters
 INLET_WIDTH = 0.2
 INLET_TOP_OFFSET = 0.2
 OUTLET_WIDTH = 0.2
@@ -24,6 +24,12 @@ MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
+
+
+# -------------------------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 200
+# -------------------------------------------------------------------------------------------------
+
 
 # Topology optimization settings
 VOL_FRAC = 0.50
@@ -43,7 +49,7 @@ ADJOINT_SNES_RTOL = 5.0e-7
 ADJOINT_SNES_ATOL = 1.0e-9
 SNES_MAX_ITERS = 200
 
-BETA_PROJ_VALUE = Constant(0.1) # constant value is OK for laminar flow
+BETA_PROJ_VALUE = 0.1
 ETA_I = 0.50
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}

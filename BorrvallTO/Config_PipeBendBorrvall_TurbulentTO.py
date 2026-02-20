@@ -1,16 +1,18 @@
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
 
 
-# --------------------------------------------------------
-# Configuration file for PipeBendBorrvall_TurbulentTO.py
-# --------------------------------------------------------
+# --------------------------------------------------------------
+# Configuration file for Borrvall Pipe Bend case (Turbulent)
+# -------------------------------------------------------------- 
 
 
 # ------------------------------------------------------------
 # User parameters
 # ------------------------------------------------------------
 L = 1.0
-N = 120
+N = 96
+NX = 96
+NY = 96
 TOL = DOLFIN_EPS
 
 # Geometry parameters (Borrvall 2003 pipe bend case)
@@ -25,16 +27,28 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
-# -------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------
 # Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2.0 x 10^4
-# -------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
 SA_NU_TILDE_INLET = 1.0e-3
+SA_NU_TILDE_INITIAL = SA_NU_TILDE_INLET
 SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
+
+# ----------------------------------------------------------------------------
+# Validated baseline tuning from standalone SA Borrvall PipeBend simulation (TurbulenceModels/PipeBendBorrvallSimulation.py)
+# Note: steady TO solver (BorrvallTO/Borrvall_TurbulentTO.py) does not use transient time stepping
+# STEP_SIZE/CFL bounds are kept for traceability and future variants
+# ----------------------------------------------------------------------------
+STEP_SIZE = 2.0e-4
+MIN_STEP_SIZE = 5.0e-6
+MAX_STEP_SIZE = 2.0e-3
+CFL_RELAXATION = 0.12
+U_RELAXATION_FACTOR = 0.7
 
 # Topology optimization settings
 VOL_FRAC = 0.50

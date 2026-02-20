@@ -3,6 +3,11 @@ from mpi4py import MPI
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+# ---------------------------------------------------- #
+# Utilities.py originally present in GitHub repository #
+# ---------------------------------------------------- #
+
+
 
 # ------------- Utilities for checking convergence  ------------- #
 
@@ -196,7 +201,7 @@ def load_mesh_from_file(mesh_directory, facet_directory):
     return mesh, marked_facets
 
 def calculate_Distance_field(Space, mf, wall_index, relax):
-    '''computes ditance to boundaries specified by wall_index on mf'''
+    '''computes distance to boundaries specified by wall_index on mf'''
     bcy = []
     for index in wall_index:
         bc = DirichletBC(Space, Constant(0), mf, index)

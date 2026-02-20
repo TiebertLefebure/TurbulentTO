@@ -67,6 +67,7 @@ class SpalartAllmarasGeneral:
 
         # Wall distance with safety epsilon
         y_safe = self._y + DOLFIN_EPS
+        ### "calculate_Distance_field" in "Utilities.py" solves the Eikonal equation for the wall distance function
         kappa = 0.41
 
         # Modified strain rate S_tilde

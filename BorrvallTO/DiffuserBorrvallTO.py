@@ -11,6 +11,12 @@ from ufl import tanh
 from scipy.sparse import csr_matrix, lil_matrix
 from mma import mmasub
 
+
+# -----------------------------------
+# Borrvall Diffuser case (Laminar)
+# -----------------------------------
+
+
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_ROOT = os.path.join(THIS_DIR, 'DiffuserTO_Results')
 MESH_DIR = os.path.join(RESULTS_ROOT, 'mesh')
@@ -266,9 +272,9 @@ txtout.write("{} {} {} {} {}\r\n".format(header1, header2, header21, header6, \
               strftime("%a, %d %b %Y %H:%M:%S", localtime())))
 txtout.close()
 
-#############
+###########################
 #     Optimization
-#############
+###########################
 
 assign(rho, interpolate(Expression('(x[0] >= 0.0 && x[0] <= L)  ? 0.5 : 1.0', L = L, degree = 0), DensitySpace))
 
@@ -318,7 +324,7 @@ for jj in range(len(qpen)):
 
         ###########################
         #           FWD
-        #########################
+        ###########################
 
         rho_f = pdefilter(rho, rho_f)
 
@@ -338,8 +344,8 @@ for jj in range(len(qpen)):
         solver_NSR_fwd.parameters['snes_solver']['linear_solver'] = 'lu'
         solver_NSR_fwd.solve()
         
-        ##############################
-        #        ADJ
+        ########################################
+        #        ADJOINT
         ########################################
 
         ###### SOLVE NSR_adj
@@ -369,9 +375,9 @@ for jj in range(len(qpen)):
         #s_out << filteredGradient
         np.savetxt(os.path.join(DESIGN_DIR, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
-        ##############################
+        ########################################
         #           MMA
-        ###########################
+        ########################################
 
         df0dx[:,0] = filteredGradient.vector()
 
