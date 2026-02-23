@@ -16,7 +16,7 @@ class SpalartAllmarasGeneral:
         self._force = force
         self._dx = custom_dx
         self._ds = custom_ds
-        self._y = distance_field
+        self._y = distance_field # This Spalart-Allmaras implementation (without TO) uses a smoothened Eikonal equation for the wall-distance field
 
         self._construct_functions()
 

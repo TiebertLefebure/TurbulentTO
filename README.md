@@ -41,7 +41,7 @@ Turbulent:
 
 
 
-3. Borrvall, 2003: Double Pipe case (wide domain, delta=1.5) -> Laminar & Turbulent
+3. Borrvall, 2003: Double Pipe case (wide domain, delta = 1.5) -> Laminar & Turbulent
 
 Laminar:
 - Config_DoublePipeBorrvall_LaminarTO.py

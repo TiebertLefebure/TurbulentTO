@@ -65,7 +65,18 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
 
 
 class SpalartAllmarasGeneral:
-    def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field):
+    def __init__(
+        self,
+        N,
+        bcn,
+        nu_tilde_init,
+        nu,
+        force,
+        custom_dx,
+        custom_ds,
+        distance_field,
+        nu_tilde_penalty_reaction=None,
+    ):
         """Base class for the Spalart-Allmaras one-equation turbulence model."""
         self._N = N
         self._bcn = bcn
@@ -76,6 +87,7 @@ class SpalartAllmarasGeneral:
         self._dx = custom_dx
         self._ds = custom_ds
         self._y = distance_field
+        self._nu_tilde_penalty_reaction = nu_tilde_penalty_reaction
 
         self._construct_functions()
 
@@ -134,27 +146,76 @@ class SpalartAllmarasGeneral:
 
 
 class SpalartAllmarasSteadyState(SpalartAllmarasGeneral):
-    def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field):
-        super().__init__(N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field)
+    def __init__(
+        self,
+        N,
+        bcn,
+        nu_tilde_init,
+        nu,
+        force,
+        custom_dx,
+        custom_ds,
+        distance_field,
+        nu_tilde_penalty_reaction=None,
+    ):
+        super().__init__(
+            N,
+            bcn,
+            nu_tilde_init,
+            nu,
+            force,
+            custom_dx,
+            custom_ds,
+            distance_field,
+            nu_tilde_penalty_reaction=nu_tilde_penalty_reaction,
+        )
 
     def construct_forms(self, external_u1):
         self._construct_turbulent_quantities(external_u1)
+        penalty_react = self._nu_tilde_penalty_reaction
+        if penalty_react is None:
+            penalty_react = Constant(0.0)
 
         # Weak form for steady-state SA model
         FNT  = dot(dot(external_u1, nabla_grad(self._nu_tilde)), self._xi)*self._dx \
             + inner((self._nu + self._nu_tilde0) / self._sigma * grad(self._nu_tilde), grad(self._xi))*self._dx \
-            + dot(self._react_nt * self._nu_tilde, self._xi)*self._dx \
+            + dot((self._react_nt + penalty_react) * self._nu_tilde, self._xi)*self._dx \
             - dot(self._source_nt, self._xi)*self._dx
         self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
-
+        # added penalty_react to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)
 
 class SpalartAllmarasTransient(SpalartAllmarasGeneral):
-    def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, dt, distance_field):
+    def __init__(
+        self,
+        N,
+        bcn,
+        nu_tilde_init,
+        nu,
+        force,
+        custom_dx,
+        custom_ds,
+        dt,
+        distance_field,
+        nu_tilde_penalty_reaction=None,
+    ):
         self._dt = dt
-        super().__init__(N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field)
+        super().__init__(
+            N,
+            bcn,
+            nu_tilde_init,
+            nu,
+            force,
+            custom_dx,
+            custom_ds,
+            distance_field,
+            nu_tilde_penalty_reaction=nu_tilde_penalty_reaction,
+        )
 
     def construct_forms(self, external_u1):
         self._construct_turbulent_quantities(external_u1)
+        penalty_react = self._nu_tilde_penalty_reaction
+        if penalty_react is None:
+            penalty_react = Constant(0.0)
         mesh = self._nu_tilde.function_space().mesh()
         h = CellDiameter(mesh)
         u_mag = sqrt(dot(external_u1, external_u1) + 1e-10)
@@ -163,13 +224,14 @@ class SpalartAllmarasTransient(SpalartAllmarasGeneral):
         # Residual used in SUPG stabilization (same style as k-epsilon model)
         res_nt = (self._nu_tilde - self._nu_tilde0) / self._dt \
                + dot(external_u1, nabla_grad(self._nu_tilde)) \
-               + self._react_nt * self._nu_tilde - self._source_nt
+               + (self._react_nt + penalty_react) * self._nu_tilde - self._source_nt
         F_supg_nt = inner(tau * dot(external_u1, nabla_grad(self._xi)), res_nt) * self._dx
 
         # Weak form for transient SA model
         FNT  = dot((self._nu_tilde - self._nu_tilde0) / self._dt, self._xi)*self._dx \
             + dot(dot(external_u1, nabla_grad(self._nu_tilde)), self._xi)*self._dx \
             + inner((self._nu + self._nu_tilde0) / self._sigma * grad(self._nu_tilde), grad(self._xi))*self._dx \
-            + dot(self._react_nt * self._nu_tilde, self._xi)*self._dx \
+            + dot((self._react_nt + penalty_react) * self._nu_tilde, self._xi)*self._dx \
             - dot(self._source_nt, self._xi)*self._dx + F_supg_nt
         self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
+        # added penalty_react to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)

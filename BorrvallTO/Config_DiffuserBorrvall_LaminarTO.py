@@ -1,0 +1,149 @@
+from dolfin import DOLFIN_EPS, DirichletBC, Expression, MeshFunction, SubDomain, inner, nabla_grad, near
+
+
+# -------------------------------------------------------------------
+# Configuration file for Borrvall Diffuser case (Laminar baseline)
+# -------------------------------------------------------------------
+
+
+# Domain and mesh
+L = 1.0
+N = 120
+DOMAIN_X_MIN = 0.0
+DOMAIN_Y_MIN = 0.0
+DOMAIN_X_MAX = L
+DOMAIN_Y_MAX = L
+TOL = DOLFIN_EPS
+
+
+# Diffuser opening on right boundary
+OUTLET_Y_MIN = 1.0 / 3.0
+OUTLET_Y_MAX = 2.0 / 3.0
+
+
+# Flow settings (match legacy DiffuserBorrvallTO.py)
+MU_FLUID_VALUE = 1.0
+RHO_FLUID_VALUE = 1.0
+U_MAX_INLET = 1.0
+U_MAX_OUTLET = 3.0
+
+# ----------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.0
+# ----------------------------------------------------------------------------------
+
+# Topology optimization settings (match legacy baseline)
+VOL_FRAC = 0.50
+MAX_INNER_ITERATIONS = 100
+OBJECTIVE_CONVERGENCE_TOL = 1e-5
+OBJECTIVE_STREAK_TO_STOP = 5
+
+Q_PENAL_SCHEDULE = [0.1]
+MOVE_LIMIT_SCHEDULE = [0.2]
+
+SNES_LINEAR_SOLVER = "lu"
+INLET_RAMP_STEPS = 1
+FILTER_RADIUS_IN_CELLS = 2.0
+FORWARD_SNES_RTOL = 1.0e-4
+FORWARD_SNES_ATOL = 1.0e-6
+ADJOINT_SNES_RTOL = 1.0e-4
+ADJOINT_SNES_ATOL = 1.0e-6
+SNES_MAX_ITERS = 200
+
+BETA_PROJ_VALUE = 0.1
+ETA_I = 0.50
+
+ENABLE_PRESSURE_PIN = False
+PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
+RESULTS_ROOT_NAME = "DiffuserTO_Results_Laminar"
+
+MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
+
+
+def between(value, limits, eps=DOLFIN_EPS):
+    return (limits[0] - eps <= value) and (value <= limits[1] + eps)
+
+
+class WallsBoundary(SubDomain):
+    def inside(self, x, on_boundary):
+        return on_boundary and (
+            near(x[1], DOMAIN_Y_MIN, TOL)
+            or near(x[1], DOMAIN_Y_MAX, TOL)
+            or (near(x[0], DOMAIN_X_MAX, TOL) and between(x[1], (DOMAIN_Y_MIN, OUTLET_Y_MIN), TOL))
+            or (near(x[0], DOMAIN_X_MAX, TOL) and between(x[1], (OUTLET_Y_MAX, DOMAIN_Y_MAX), TOL))
+        )
+
+
+class InletBoundary(SubDomain):
+    def inside(self, x, on_boundary):
+        return on_boundary and near(x[0], DOMAIN_X_MIN, TOL) and between(
+            x[1], (DOMAIN_Y_MIN, DOMAIN_Y_MAX), TOL
+        )
+
+
+class OutletBoundary(SubDomain):
+    def inside(self, x, on_boundary):
+        return on_boundary and near(x[0], DOMAIN_X_MAX, TOL) and between(
+            x[1], (OUTLET_Y_MIN, OUTLET_Y_MAX), TOL
+        )
+
+
+def mark_boundaries(mesh):
+    boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+    boundaries.set_all(MARK["generic"])
+    WallsBoundary().mark(boundaries, MARK["walls"])
+    InletBoundary().mark(boundaries, MARK["inlet"])
+    OutletBoundary().mark(boundaries, MARK["outlet"])
+    return boundaries
+
+
+def build_velocity_profile_sets():
+    inlet_center = 0.5 * (DOMAIN_Y_MIN + DOMAIN_Y_MAX)
+    inlet_width = DOMAIN_Y_MAX - DOMAIN_Y_MIN
+    u_inlet = Expression(
+        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
+        degree=2,
+        u_max=U_MAX_INLET,
+        y_c=inlet_center,
+        width=inlet_width,
+    )
+
+    outlet_center = 0.5 * (OUTLET_Y_MIN + OUTLET_Y_MAX)
+    outlet_width = OUTLET_Y_MAX - OUTLET_Y_MIN
+    u_outlet = Expression(
+        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
+        degree=2,
+        u_max=U_MAX_OUTLET,
+        y_c=outlet_center,
+        width=outlet_width,
+    )
+
+    return [u_inlet], [u_outlet]
+
+
+def build_dissipation_density(u, mu_fluid):
+    deformation = nabla_grad(u) + nabla_grad(u).T
+    return 0.5 * mu_fluid * inner(deformation, deformation)
+
+
+def build_adjoint_velocity_bcs(
+    flow_space_adj,
+    boundaries,
+    wall_markers,
+    inlet_markers,
+    outlet_markers,
+    u_noslip,
+    inlet_profiles,
+    outlet_profiles,
+):
+    bcu_walls_adj = [
+        DirichletBC(flow_space_adj.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
+    ]
+    bcu_inlet_adj = [
+        DirichletBC(flow_space_adj.sub(0), profile, boundaries, marker)
+        for profile, marker in zip(inlet_profiles, inlet_markers)
+    ]
+    bcu_outlet_adj = [
+        DirichletBC(flow_space_adj.sub(0), profile, boundaries, marker)
+        for profile, marker in zip(outlet_profiles, outlet_markers)
+    ]
+    return bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj

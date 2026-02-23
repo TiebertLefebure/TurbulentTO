@@ -54,6 +54,15 @@ SA_DISTANCE_RELAXATION = 0.01 # Relaxation for calculate_distance_field function
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
 SA_NU_TILDE_FLOOR = 1.0e-12
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_PENALTY_N = 3.0
+
+# Penalized reciprocal wall-distance equation parameters
+SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
+SA_WALL_G0 = 20.0
+SA_WALL_PENALTY_ALPHA = 1.0e3
+SA_WALL_PENALTY_N = 3.0
+SA_WALL_G_FLOOR = 1.0e-8
 
 # ------------------------------------------------------------------
 # Validated baseline tuning from standalone SA Borrvall DoublePipe simulation (TurbulenceModels/DoublePipeBorrvallSimulation.py)

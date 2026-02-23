@@ -200,6 +200,7 @@ def load_mesh_from_file(mesh_directory, facet_directory):
     marked_facets = cpp.mesh.MeshFunctionSizet(mesh, mvc)
     return mesh, marked_facets
 
+# Smoothened (with relaxation) Eikonal equation for wall-distance
 def calculate_Distance_field(Space, mf, wall_index, relax):
     '''computes distance to boundaries specified by wall_index on mf'''
     bcy = []

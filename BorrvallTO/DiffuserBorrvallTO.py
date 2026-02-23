@@ -11,6 +11,10 @@ from ufl import tanh
 from scipy.sparse import csr_matrix, lil_matrix
 from mma import mmasub
 
+# =================================================
+# Original KU Leuven file for Borrvall diffuser
+# =================================================
+
 
 # -----------------------------------
 # Borrvall Diffuser case (Laminar)
@@ -18,7 +22,7 @@ from mma import mmasub
 
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULTS_ROOT = os.path.join(THIS_DIR, 'DiffuserTO_Results')
+RESULTS_ROOT = os.path.join(THIS_DIR, 'Diffuser_Results')
 MESH_DIR = os.path.join(RESULTS_ROOT, 'mesh')
 RHO_DIR = os.path.join(RESULTS_ROOT, 'rho_')
 RHOF_DIR = os.path.join(RESULTS_ROOT, 'rho_f')

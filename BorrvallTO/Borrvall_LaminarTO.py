@@ -1,71 +1,36 @@
 from dolfin import *
-import argparse
-import importlib
 import inspect
 import numpy as np
 import os
-import shutil
 from time import localtime, strftime
 from ufl import tanh
 
 from mma import mmasub
+from Utilities_LaminarTO import (
+    as_list,
+    build_pressure_pin_expression_from_config,
+    compute_filter_base_length_from_config,
+    compute_legacy_port_extents_from_config,
+    ensure_clean_dir,
+    float_scalar,
+    load_config_module_from_cli,
+    match_count,
+)
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def _normalize_module_name(module_name):
-    normalized = module_name.strip()
-    if normalized.endswith(".py"):
-        normalized = normalized[:-3]
-    normalized = normalized.replace(os.sep, ".")
-    return normalized
-
-
-def _load_config_module():
-    parser = argparse.ArgumentParser(add_help=True)
-    parser.add_argument(
-        "--config",
-        required=True,
-        help="Python module name for solver configuration (required).",
-    )
-    args, _unknown = parser.parse_known_args()
-    module_name = _normalize_module_name(args.config)
-    if not module_name:
-        raise ValueError("Empty config module name is not allowed.")
-    return module_name, importlib.import_module(module_name)
-
-
-def _float_scalar(value):
-    if hasattr(value, "values"):
-        values = value.values()
-        if len(values) == 1:
-            return float(values[0])
-    return float(value)
-
-
-def _as_list(value):
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    return [value]
-
-
-def _expand_to_match(values, target_size, label):
-    if len(values) == target_size:
-        return values
-    if len(values) == 1 and target_size > 1:
-        return values * target_size
-    raise ValueError(
-        "{} count ({}) must match marker count ({})".format(label, len(values), target_size)
-    )
-
-
-CONFIG_MODULE_NAME, CONFIG = _load_config_module()
+CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
 print("Using config module: {}".format(CONFIG_MODULE_NAME))
 
-BETA_PROJ = Constant(_float_scalar(BETA_PROJ_VALUE))
+BETA_PROJ = Constant(float_scalar(BETA_PROJ_VALUE))
+if "BETA_PROJ_SCHEDULE" in globals():
+    BETA_PROJ_SCHEDULE = [float(float_scalar(beta_value)) for beta_value in BETA_PROJ_SCHEDULE]
+else:
+    BETA_PROJ_SCHEDULE = [float(float_scalar(BETA_PROJ_VALUE))] * len(Q_PENAL_SCHEDULE)
 
 # Brinkman penalization constants (same style as DiffuserBorrvallTO.py script)
 mu_fluid = Constant(MU_FLUID_VALUE)
@@ -125,37 +90,11 @@ def create_design_mesh_from_config():
 
 
 def compute_filter_base_length():
-    custom_base = globals().get("FILTER_BASE_LENGTH")
-    if custom_base is not None:
-        return float(custom_base)
-
-    if "L" in globals() and "N" in globals():
-        return float(L) / float(N)
-
-    x_min = float(globals().get("DOMAIN_X_MIN", 0.0))
-    y_min = float(globals().get("DOMAIN_Y_MIN", 0.0))
-    x_max = float(globals().get("DOMAIN_X_MAX", x_min + 1.0))
-    y_max = float(globals().get("DOMAIN_Y_MAX", y_min + 1.0))
-    nx = int(globals().get("NX", globals().get("N", 1)))
-    ny = int(globals().get("NY", globals().get("N", 1)))
-    return min((x_max - x_min) / float(max(nx, 1)), (y_max - y_min) / float(max(ny, 1)))
+    return compute_filter_base_length_from_config(globals())
 
 
 def compute_legacy_port_extents():
-    if not callable(globals().get("compute_port_extents")):
-        return None
-    required = [
-        "L",
-        "INLET_TOP_OFFSET",
-        "INLET_WIDTH",
-        "OUTLET_RIGHT_OFFSET",
-        "OUTLET_WIDTH",
-    ]
-    if any(name not in globals() for name in required):
-        return None
-    return compute_port_extents(
-        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
-    )
+    return compute_legacy_port_extents_from_config(globals())
 
 
 def build_marked_boundaries(custom_mesh):
@@ -184,7 +123,7 @@ def build_velocity_profile_sets_from_config():
     custom_builder = globals().get("build_velocity_profile_sets")
     if callable(custom_builder):
         inlet_profiles, outlet_profiles = custom_builder()
-        return _as_list(inlet_profiles), _as_list(outlet_profiles)
+        return as_list(inlet_profiles), as_list(outlet_profiles)
 
     profile_builder = globals().get("build_velocity_profiles")
     if not callable(profile_builder):
@@ -206,7 +145,7 @@ def build_velocity_profile_sets_from_config():
             raise ValueError(
                 "build_velocity_profiles() must return (inlet_profiles, outlet_profiles)."
             )
-        return _as_list(profile_data[0]), _as_list(profile_data[1])
+        return as_list(profile_data[0]), as_list(profile_data[1])
 
     extents = compute_legacy_port_extents()
     if extents is None:
@@ -234,48 +173,34 @@ def apply_ramped_velocity_profiles(ramp, inlet_profiles, outlet_profiles):
         return
 
     if "U_MAX_INLETS" in globals():
-        inlet_targets = _as_list(U_MAX_INLETS)
+        inlet_targets = as_list(U_MAX_INLETS)
     elif "U_MAX_INLET" in globals():
         inlet_targets = [U_MAX_INLET]
     else:
         raise ValueError("Config must define U_MAX_INLETS or U_MAX_INLET.")
 
     if "U_MAX_OUTLETS" in globals():
-        outlet_targets = _as_list(U_MAX_OUTLETS)
+        outlet_targets = as_list(U_MAX_OUTLETS)
     elif "U_MAX_OUTLET" in globals():
         outlet_targets = [U_MAX_OUTLET]
     else:
         raise ValueError("Config must define U_MAX_OUTLETS or U_MAX_OUTLET.")
 
-    inlet_targets = _expand_to_match(inlet_targets, len(inlet_profiles), "inlet velocity targets")
-    outlet_targets = _expand_to_match(outlet_targets, len(outlet_profiles), "outlet velocity targets")
+    inlet_targets = match_count(inlet_targets, len(inlet_profiles))
+    outlet_targets = match_count(outlet_targets, len(outlet_profiles))
 
     for profile, u_target in zip(inlet_profiles, inlet_targets):
         if not hasattr(profile, "u_max"):
             raise ValueError("Inlet profile is missing writable attribute 'u_max' for ramping.")
-        profile.u_max = ramp * _float_scalar(u_target)
+        profile.u_max = ramp * float_scalar(u_target)
     for profile, u_target in zip(outlet_profiles, outlet_targets):
         if not hasattr(profile, "u_max"):
             raise ValueError("Outlet profile is missing writable attribute 'u_max' for ramping.")
-        profile.u_max = ramp * _float_scalar(u_target)
+        profile.u_max = ramp * float_scalar(u_target)
 
 
 def build_pressure_pin_expression():
-    if "PRESSURE_PIN_POINT" in globals():
-        pin_x, pin_y = PRESSURE_PIN_POINT
-    else:
-        pin_x = float(globals().get("DOMAIN_X_MIN", 0.0))
-        pin_y = float(globals().get("DOMAIN_Y_MIN", 0.0))
-    return "near(x[0], {:.16g}) && near(x[1], {:.16g})".format(float(pin_x), float(pin_y))
-
-
-def ensure_clean_dir(path, comm=MPI.comm_world):
-    # Avoid MPI races where multiple ranks delete/create the same folder.
-    if MPI.rank(comm) == 0:
-        if os.path.exists(path):
-            shutil.rmtree(path)
-        os.makedirs(path)
-    MPI.barrier(comm)
+    return build_pressure_pin_expression_from_config(globals())
 
 
 def build_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx):
@@ -318,17 +243,17 @@ filtered_s_vol = Function(DensitySpace)
 
 mark = MARK
 boundaries = build_marked_boundaries(mesh)
-wall_markers = _as_list(mark["walls"])
-inlet_markers = _as_list(mark["inlet"])
-outlet_markers = _as_list(mark["outlet"])
+wall_markers = as_list(mark["walls"])
+inlet_markers = as_list(mark["inlet"])
+outlet_markers = as_list(mark["outlet"])
 
 dx = Measure("dx", domain=mesh)
 ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
 dS = Measure("dS", domain=mesh)
 
 inlet_profiles, outlet_profiles = build_velocity_profile_sets_from_config()
-inlet_profiles = _expand_to_match(inlet_profiles, len(inlet_markers), "inlet velocity profiles")
-outlet_profiles = _expand_to_match(outlet_profiles, len(outlet_markers), "outlet velocity profiles")
+inlet_profiles = match_count(inlet_profiles, len(inlet_markers))
+outlet_profiles = match_count(outlet_profiles, len(outlet_markers))
 
 u_noslip = Constant((0.0, 0.0))
 
@@ -351,16 +276,31 @@ if globals().get("ENABLE_PRESSURE_PIN", True):
     )
     bc_NS.append(bcp_pin)
 
-bcu_walls_adj = [
-    DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
-]
-bcu_inlet_adj = [
-    DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in inlet_markers
-]
-bcu_outlet_adj = [
-    DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in outlet_markers
-]
-bc_NS_adj = bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj
+adjoint_velocity_bc_builder = globals().get("build_adjoint_velocity_bcs")
+if callable(adjoint_velocity_bc_builder):
+    bc_NS_adj = list(
+        adjoint_velocity_bc_builder(
+            FlowSpaceAdj,
+            boundaries,
+            wall_markers,
+            inlet_markers,
+            outlet_markers,
+            u_noslip,
+            inlet_profiles,
+            outlet_profiles,
+        )
+    )
+else:
+    bcu_walls_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
+    ]
+    bcu_inlet_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in inlet_markers
+    ]
+    bcu_outlet_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in outlet_markers
+    ]
+    bc_NS_adj = bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj
 if globals().get("ENABLE_PRESSURE_PIN", True):
     bcp_pin_adj = DirichletBC(
         FlowSpaceAdj.sub(1),
@@ -404,9 +344,14 @@ def pde_filter(input_field, output_field):
 AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
 rho_effective = projection(rho_f, ETA_I)
 
+dissipation_density_builder = globals().get("build_dissipation_density")
+if callable(dissipation_density_builder):
+    dissipation_density = dissipation_density_builder(u, mu_fluid)
+else:
+    dissipation_density = 0.5 * mu_fluid * inner(sym(nabla_grad(u)), sym(nabla_grad(u)))
+
 ObjFunctional = AreaOfInterest * (
-    0.5 * mu_fluid * inner(sym(nabla_grad(u)), sym(nabla_grad(u)))
-    + alpha(rho_effective) * inner(u, u)
+    dissipation_density + alpha(rho_effective) * inner(u, u)
 ) * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx)
@@ -509,17 +454,30 @@ volume = assemble(AreaOfInterest * dx)
 
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
+if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("BETA_PROJ_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 # ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
+    BETA_PROJ.assign(beta_val)
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
     inner_count = 0
     convergence_history = 0
     objective_converged = False
+    print(
+        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+            stage_idx + 1,
+            len(Q_PENAL_SCHEDULE),
+            q_val,
+            beta_val,
+            move_limit_now,
+        )
+    )
 
     while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
         ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
