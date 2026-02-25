@@ -11,30 +11,38 @@ boundary_markers = {
     'OUTFLOW': [3],
     'WALLS': [4]
 }
+# -----------------
+# 2D U-bend
+# -----------------
 
-# 2D U-bend (Ansys Manual VMFL048)
-# radius R = 14 mm
-# radius of curvature = 125 mm
-# straight section lenghts = 1555 mm
+# pipe radius R = 14 mm
+# pipe diameter D = 2 * R = 28 mm
+# radius of curvature R_c = 125 mm
+# straight section length H_LEG = 30 * D = 840 mm
 
-# hydraulic diameter D = 2 * R = 0.028 m
+# hydraulic diameter D_h = 2 * R = 0.028 m
 
 # inlet bulk velocity U = 1.42 m/s
 
 # 'VISCOSITY' ν = 8.9e-7 
 
-# Spalart-Allmaras inlet estimate based on k-epsilon inlet values:
-# NU_TILDE = Cµ * K^2 / E, with Cµ = 0.09
+# Spalart-Allmaras inlet estimate from ANSYS inlet specification:
+# turbulence intensity I = 5% and hydraulic diameter D_h = 28 mm.
+# Standard auxiliary relations (also used to derive k-epsilon inlet values):
+#   k = 1.5 * (U * I)^2
+#   epsilon = C_mu^(3/4) * k^(3/2) / l,   l = 0.07 * D_h
+# Then map to SA with nu_tilde ~= nu_t = C_mu * k^2 / epsilon
+# (for positive chi, f_v1 is close to 1).
 
-K_EPSILON_INLET = 0.008
-E_EPSILON_INLET = 0.054
 C_MU = 0.09
-SA_INLET_SCALE = 0.35
-NU_TILDE_INLET = SA_INLET_SCALE * C_MU * (K_EPSILON_INLET ** 2) / E_EPSILON_INLET
+TURBULENCE_INTENSITY_INLET = 0.05
+HYDRAULIC_DIAMETER_INLET = 0.028  # [m]
+INLET_BULK_VELOCITY = 1.42        # [m/s]
+TURBULENCE_LENGTH_SCALE_INLET = 0.07 * HYDRAULIC_DIAMETER_INLET
 
-# NU_TILDE_INLET = max(NU_TILDE_INLET, 3 * ν)
-NU_TILDE_INLET = max(NU_TILDE_INLET, 3.0 * 8.9e-7)
-
+K_EPSILON_INLET = 1.5 * (INLET_BULK_VELOCITY * TURBULENCE_INTENSITY_INLET) ** 2
+E_EPSILON_INLET = (C_MU ** 0.75) * (K_EPSILON_INLET ** 1.5) / TURBULENCE_LENGTH_SCALE_INLET
+NU_TILDE_INLET = C_MU * (K_EPSILON_INLET ** 2) / E_EPSILON_INLET
 
 
 # Initial conditions
@@ -69,21 +77,56 @@ physical_prm = {
     'FORCE': (0.0, 0.0, 0.0)
 }
 
-# Reynolds number:
-# Re = U * D / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 × 10^4
+# ------------------------------------------------------------------------------
+# Reynolds number: Re = U_ref * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 × 10^4
+# ------------------------------------------------------------------------------
 
 
 # Simulation parameters for SA model
 simulation_prm_SA = {
-    'QUADRATURE_DEGREE': 2,
+    'QUADRATURE_DEGREE': 6,
     'MAX_ITERATIONS': 9000,
     'TOLERANCE': 1e-6,
-    'CFL_RELAXATION': 0.1,
+    # Optional field-specific tolerances (defaults fall back to TOLERANCE if omitted).
+    # Practical tail settings for this U-bend SA case:
+    'TOLERANCE_U': 1e-5,
+    'TOLERANCE_P': 5e-6,
+    'TOLERANCE_NU_TILDE': 1e-6,
+
+    'CFL_RELAXATION': 0.3,
     'U_RELAXATION_FACTOR': 0.7, # 'U_RELAXATION_FACTOR': 1.0
     'NUT_RELAXATION_FACTOR': 0.7, # 'NUT_RELAXATION_FACTOR': 1.0
+
+    # Number of SA solves per outer NS/SA coupling iteration.
+    'SA_INNER_ITERS': 5,
+    # One-way runtime optimization: drop SA inner iterations in the convergence tail.
+    'SA_INNER_ITERS_MIN': 2,
+    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1,
+    'SA_INNER_ITERS_REDUCE_STREAK': 20,
+
+    # Wall-distance model:
+    #   'OriginalEikonal'    -> original smoothed Eikonal distance
+    #   'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
+    'WALL_DISTANCE_METHOD': 'RelaxedWallEikonal',
+
+    'WALL_DISTANCE_EIKONAL_RELAXATION': 0.01,
+
+    # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHOD='RelaxedWallEikonal')
+    'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses 0.1
+    'WALL_DISTANCE_YOON_G0': 20.0,          # [1/m], reference reciprocal distance (Eq. 15)
+    'WALL_DISTANCE_YOON_G_FLOOR': 1.0e-12,  # numerical floor for G
+    
     'STEP_SIZE': 5e-4,
-    'MIN_STEP_SIZE': 1e-6,
-    'MAX_STEP_SIZE': 1e-3 
+    'MIN_STEP_SIZE': 1e-5,
+    'MAX_STEP_SIZE': 1e-3,
+
+    # Optional warm-start from saved H5 fields (same mesh/function spaces required).
+    'WARM_START_ENABLED': False,
+    'WARM_START_U_H5': 'Results/U-Bend_SA/H5 files/u.h5',
+    'WARM_START_P_H5': 'Results/U-Bend_SA/H5 files/p.h5',
+    # Optional SA warm-start 'Results/U-Bend_SA/H5 files/nu_tilde.h5.
+    'WARM_START_NU_TILDE_H5': 'Results/U-Bend_SA/H5 files/nu_tilde.h5',
+
 }
 
 # Specify where results are saved for SA model
@@ -98,16 +141,3 @@ post_processing = {
     'PLOT': True,
     'SAVE': True,
 }
-
-
-#docker run -ti \
-#    -v $(pwd):/home/fenics/shared \
-#    -w /home/fenics/shared \
-#    quay.io/fenicsproject/stable:current
-
-
-#cd ~/shared
-
-#ls 
-
-#python3 UBendSimulation_SpalartAllmaras.py

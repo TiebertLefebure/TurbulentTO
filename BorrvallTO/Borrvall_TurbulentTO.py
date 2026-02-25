@@ -1,4 +1,5 @@
 from dolfin import *
+import inspect
 import numpy as np
 import os
 import sys
@@ -7,28 +8,33 @@ from ufl import tanh
 
 from mma import mmasub
 
-# --------------------------------------------------------------------------------
-# Topology Optimization solver uses steady (!) Spalart-Allmaras turbulence model
-# --------------------------------------------------------------------------------
-
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 TURB_MODELS_DIR = os.path.abspath(os.path.join(THIS_DIR, "..", "TurbulenceModels"))
 if TURB_MODELS_DIR not in sys.path:
     sys.path.insert(0, TURB_MODELS_DIR)
+
 from TurbulenceModel_SpalartAllmaras_TO import (
     SpalartAllmarasSteadyState,
+    sa_transport_terms,
     sa_turbulent_viscosity,
 )
-from Utilities_TurbulentTO import (
+from Utilities_LaminarTO import ( 
     as_list,
-    build_penalized_wall_distance_solver,
+    build_pressure_pin_expression_from_config,
+    compute_filter_base_length_from_config,
+    compute_legacy_port_extents_from_config,
     ensure_clean_dir,
-    enforce_scalar_floor,
     float_scalar,
     load_config_module_from_cli,
     match_count,
+)
+from Utilities_TurbulentTO import (
+    build_penalized_wall_distance_solver,
+    calculate_distance_field,
+    enforce_scalar_floor,
     positive_part,
 )
+
 
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
@@ -37,8 +43,12 @@ for _name, _value in vars(CONFIG).items():
 print("Using config module: {}".format(CONFIG_MODULE_NAME))
 
 BETA_PROJ = Constant(float_scalar(BETA_PROJ_VALUE))
+if "BETA_PROJ_SCHEDULE" in globals():
+    BETA_PROJ_SCHEDULE = [float(float_scalar(beta_value)) for beta_value in BETA_PROJ_SCHEDULE]
+else:
+    BETA_PROJ_SCHEDULE = [float(float_scalar(BETA_PROJ_VALUE))] * len(Q_PENAL_SCHEDULE)
 
-# Brinkman penalization constants (same style as diffuser script)
+# Brinkman penalization constants
 mu_fluid = Constant(MU_FLUID_VALUE)
 rho_fluid = Constant(RHO_FLUID_VALUE)
 alpha_fluid = Constant(2.5 * MU_FLUID_VALUE / 100.0**2.0)
@@ -57,44 +67,45 @@ def projection(rho_design, eta_proj):
 
 
 def alpha(brinkman_density):
-    return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (brinkman_density + q_penal)
+    return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (
+        brinkman_density + q_penal
+    )
 
 
 def sa_positive_viscosity(state_nu_tilde):
     nu_lam = mu_fluid / rho_fluid
+    smooth_abs_eps = float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12))
     return sa_turbulent_viscosity(
         state_nu_tilde,
         nu_lam,
-        smooth_abs_eps=float(SA_SMOOTH_ABS_EPS),
+        smooth_abs_eps=smooth_abs_eps,
     )
 
 
-def build_frozen_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx, frozen_nu_tilde):
-    """State form used for frozen-turbulence adjoint/sensitivity."""
-    mu_effective_frozen = mu_fluid + rho_fluid * sa_positive_viscosity(frozen_nu_tilde)
-    return (
-        rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u)
-        + mu_effective_frozen * inner(grad(state_u), grad(adj_u))
-        + inner(grad(state_p), adj_u)
-        + inner(div(state_u), adj_p)
-        + alpha(rho_eff) * inner(state_u, adj_u)
-    ) * custom_dx
+def create_design_mesh_from_config():
+    mesh_builder = globals().get("create_design_mesh")
+    if callable(mesh_builder):
+        return mesh_builder()
 
-
-# ------------------------------------------------------------
-# Mesh, function spaces, and boundaries
-# ------------------------------------------------------------
-if "create_design_mesh" in globals():
-    mesh = create_design_mesh()
-else:
     x_min = float(globals().get("DOMAIN_X_MIN", 0.0))
     y_min = float(globals().get("DOMAIN_Y_MIN", 0.0))
-    x_max = float(globals().get("DOMAIN_X_MAX", globals().get("L", 1.0)))
-    y_max = float(globals().get("DOMAIN_Y_MAX", globals().get("L", x_max)))
-    nx = int(globals().get("NX", globals().get("N", 96)))
-    ny = int(globals().get("NY", globals().get("N", nx)))
+
+    x_max_default = globals().get("DOMAIN_X_MAX", globals().get("L"))
+    y_max_default = globals().get("DOMAIN_Y_MAX", globals().get("L", x_max_default))
+    if x_max_default is None or y_max_default is None:
+        raise ValueError("Config must define DOMAIN_X_MAX/DOMAIN_Y_MAX or legacy L.")
+    x_max = float(x_max_default)
+    y_max = float(y_max_default)
+
+    nx_default = globals().get("NX", globals().get("N"))
+    ny_default = globals().get("NY", globals().get("N", nx_default))
+    if nx_default is None or ny_default is None:
+        raise ValueError("Config must define NX/NY or legacy N.")
+    nx = int(nx_default)
+    ny = int(ny_default)
     mesh_diagonal = globals().get("MESH_DIAGONAL", "crossed")
-    mesh = Mesh(
+
+    return Mesh(
         RectangleMesh(
             MPI.comm_world,
             Point(x_min, y_min),
@@ -105,41 +116,28 @@ else:
         )
     )
 
-U_h = VectorElement("CG", mesh.ufl_cell(), 2)
-P_h = FiniteElement("CG", mesh.ufl_cell(), 1)
-T_h = FiniteElement("CG", mesh.ufl_cell(), 1)
-A_h = FiniteElement("DG", mesh.ufl_cell(), 0)
 
-FrozenUPSpace = FunctionSpace(mesh, U_h * P_h)
-TurbulenceSpace = FunctionSpace(mesh, T_h)
+def compute_filter_base_length():
+    return compute_filter_base_length_from_config(globals())
 
-DensitySpace = FunctionSpace(mesh, A_h)
 
-w_adj_frozen = Function(FrozenUPSpace)
-w_state_frozen = Function(FrozenUPSpace)
+def compute_legacy_port_extents():
+    return compute_legacy_port_extents_from_config(globals())
 
-(v_frozen, q_frozen) = split(w_adj_frozen)
-(u_frozen_state, p_frozen_state) = split(w_state_frozen)
 
-rho = Function(DensitySpace)
-rho_f = Function(DensitySpace)
-nu_tilde_frozen = Function(TurbulenceSpace)
+def build_marked_boundaries(custom_mesh):
+    custom_marker = globals().get("mark_boundaries")
+    if callable(custom_marker):
+        return custom_marker(custom_mesh)
 
-rho_proj_plot = Function(DensitySpace)
-unfiltered_gradient = Function(DensitySpace)
-filtered_gradient = Function(DensitySpace)
-unfiltered_s_vol = Function(DensitySpace)
-filtered_s_vol = Function(DensitySpace)
-
-mark = MARK
-if "mark_boundaries" in globals():
-    boundaries = mark_boundaries(mesh)
-else:
-    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
-        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
-    )
-    boundaries = mark_pipe_bend_boundaries(
-        mesh,
+    extents = compute_legacy_port_extents()
+    if extents is None:
+        raise ValueError(
+            "Config must define mark_boundaries(mesh) or legacy pipe-bend extent helpers."
+        )
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = extents
+    return mark_pipe_bend_boundaries(
+        custom_mesh,
         L,
         TOL,
         inlet_y_min,
@@ -147,40 +145,44 @@ else:
         outlet_x_min,
         outlet_x_max,
     )
-wall_markers = as_list(mark["walls"])
-inlet_markers = as_list(mark["inlet"])
-outlet_markers = as_list(mark["outlet"])
 
-pin_point = globals().get(
-    "PRESSURE_PIN_POINT",
-    (
-        float(globals().get("DOMAIN_X_MIN", 0.0)),
-        float(globals().get("DOMAIN_Y_MIN", 0.0)),
-    ),
-)
-pressure_pin_expression = "near(x[0], {:.16g}) && near(x[1], {:.16g})".format(
-    float(pin_point[0]),
-    float(pin_point[1]),
-)
 
-# Avoid FFC auto-estimating an excessively high quadrature degree for SA nonlinear forms.
-parameters["form_compiler"]["quadrature_degree"] = QUADRATURE_DEGREE
-dx = Measure("dx", domain=mesh, metadata={"quadrature_degree": QUADRATURE_DEGREE})
-ds = Measure(
-    "ds",
-    domain=mesh,
-    subdomain_data=boundaries,
-    metadata={"quadrature_degree": QUADRATURE_DEGREE},
-)
-dS = Measure("dS", domain=mesh, metadata={"quadrature_degree": QUADRATURE_DEGREE})
+def build_velocity_profile_sets_from_config():
+    custom_builder = globals().get("build_velocity_profile_sets")
+    if callable(custom_builder):
+        inlet_profiles, outlet_profiles = custom_builder()
+        return as_list(inlet_profiles), as_list(outlet_profiles)
 
-if "build_velocity_profile_sets" in globals():
-    inlet_profiles, outlet_profiles = build_velocity_profile_sets()
-else:
-    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
-        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
-    )
-    u_inlet, u_outlet = build_velocity_profiles(
+    profile_builder = globals().get("build_velocity_profiles")
+    if not callable(profile_builder):
+        raise ValueError(
+            "Config must define build_velocity_profile_sets() or build_velocity_profiles(...)."
+        )
+
+    builder_signature = inspect.signature(profile_builder)
+    required_positionals = [
+        parameter
+        for parameter in builder_signature.parameters.values()
+        if parameter.kind
+        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        and parameter.default is inspect.Parameter.empty
+    ]
+
+    if len(required_positionals) == 0:
+        profile_data = profile_builder()
+        if not isinstance(profile_data, (tuple, list)) or len(profile_data) != 2:
+            raise ValueError(
+                "build_velocity_profiles() must return (inlet_profiles, outlet_profiles)."
+            )
+        return as_list(profile_data[0]), as_list(profile_data[1])
+
+    extents = compute_legacy_port_extents()
+    if extents is None:
+        raise ValueError(
+            "Legacy velocity-profile builder requires compute_port_extents and pipe-bend parameters."
+        )
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = extents
+    u_inlet, u_outlet = profile_builder(
         U_MAX_INLET,
         U_MAX_OUTLET,
         inlet_y_min,
@@ -190,152 +192,242 @@ else:
         INLET_WIDTH,
         OUTLET_WIDTH,
     )
-    inlet_profiles, outlet_profiles = [u_inlet], [u_outlet]
-inlet_profiles = match_count(as_list(inlet_profiles), len(inlet_markers))
-outlet_profiles = match_count(as_list(outlet_profiles), len(outlet_markers))
+    return [u_inlet], [u_outlet]
+
+
+def apply_ramped_velocity_profiles(ramp, inlet_profiles, outlet_profiles):
+    custom_ramp = globals().get("apply_velocity_ramp")
+    if callable(custom_ramp):
+        custom_ramp(ramp, inlet_profiles, outlet_profiles)
+        return
+
+    if "U_MAX_INLETS" in globals():
+        inlet_targets = as_list(U_MAX_INLETS)
+    elif "U_MAX_INLET" in globals():
+        inlet_targets = [U_MAX_INLET]
+    else:
+        raise ValueError("Config must define U_MAX_INLETS or U_MAX_INLET.")
+
+    if "U_MAX_OUTLETS" in globals():
+        outlet_targets = as_list(U_MAX_OUTLETS)
+    elif "U_MAX_OUTLET" in globals():
+        outlet_targets = [U_MAX_OUTLET]
+    else:
+        raise ValueError("Config must define U_MAX_OUTLETS or U_MAX_OUTLET.")
+
+    inlet_targets = match_count(inlet_targets, len(inlet_profiles))
+    outlet_targets = match_count(outlet_targets, len(outlet_profiles))
+
+    for profile, u_target in zip(inlet_profiles, inlet_targets):
+        if not hasattr(profile, "u_max"):
+            raise ValueError("Inlet profile is missing writable attribute 'u_max' for ramping.")
+        profile.u_max = ramp * float_scalar(u_target)
+    for profile, u_target in zip(outlet_profiles, outlet_targets):
+        if not hasattr(profile, "u_max"):
+            raise ValueError("Outlet profile is missing writable attribute 'u_max' for ramping.")
+        profile.u_max = ramp * float_scalar(u_target)
+
+
+def apply_ramped_sa_inlet_bcs(ramp, nu_tilde_inlet_constants):
+    if "SA_NU_TILDE_INLETS" in globals():
+        targets = as_list(SA_NU_TILDE_INLETS)
+    elif "SA_NU_TILDE_INLET" in globals():
+        targets = [SA_NU_TILDE_INLET]
+    else:
+        raise ValueError("Config must define SA_NU_TILDE_INLETS or SA_NU_TILDE_INLET.")
+
+    targets = match_count(targets, len(nu_tilde_inlet_constants))
+    for bc_value, target in zip(nu_tilde_inlet_constants, targets):
+        bc_value.assign(ramp * float_scalar(target))
+
+
+def build_pressure_pin_expression():
+    return build_pressure_pin_expression_from_config(globals())
+
+
+def build_frozen_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx, frozen_nu_tilde):
+    """State form for frozen-turbulence forward/adjoint solves."""
+    mu_effective = mu_fluid + rho_fluid * sa_positive_viscosity(frozen_nu_tilde)
+    return (
+        rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u) * custom_dx
+        + mu_effective * inner(grad(state_u), grad(adj_u)) * custom_dx
+        + inner(grad(state_p), adj_u) * custom_dx
+        + inner(div(state_u), adj_p) * custom_dx
+        + alpha(rho_eff) * inner(state_u, adj_u) * custom_dx
+    )
+
+
+# ------------------------------------------------------------
+# Mesh, function spaces, and boundaries
+# ------------------------------------------------------------
+mesh = create_design_mesh_from_config()
+
+U_h = VectorElement("CG", mesh.ufl_cell(), 2) # Velocity function space (2D vector space)
+P_h = FiniteElement("CG", mesh.ufl_cell(), 1) # Pressure function space
+T_h = FiniteElement("CG", mesh.ufl_cell(), 1) # Turbulence variable function space
+A_h = FiniteElement("DG", mesh.ufl_cell(), 0) # Density function space
+
+FlowSpace = FunctionSpace(mesh, U_h * P_h) # Navier-Stokes state space (U, p)
+FlowSpaceAdj = FunctionSpace(mesh, U_h * P_h) # # Navier-Stokes adjoint space (U, p)
+TurbulenceSpace = FunctionSpace(mesh, T_h) # Spalart-Allmaras state space (nu_tilde)
+DensitySpace = FunctionSpace(mesh, A_h) # Topology Optimization state space (rho)
+CoupledStateSpace = FunctionSpace(mesh, MixedElement([U_h, P_h, T_h])) # Coupled NS + SA state space (U, p, nu_tilde)
+CoupledAdjSpace = FunctionSpace(mesh, MixedElement([U_h, P_h, T_h])) # Coupled NS + SA adjoint space (U, p, nu_tilde)
+
+w_fwd = Function(FlowSpace)
+(u, p) = split(w_fwd)
+w_adj = Function(FlowSpaceAdj)
+(v, q) = split(w_adj)
+w_state_coupled = Function(CoupledStateSpace)
+w_adj_coupled = Function(CoupledAdjSpace)
+(u_coupled, p_coupled, nu_tilde_coupled) = split(w_state_coupled)
+(v_coupled, q_coupled, psi_coupled) = split(w_adj_coupled)
+
+rho = Function(DensitySpace)
+rho_f = Function(DensitySpace)
+nu_tilde_frozen = Function(TurbulenceSpace)
+nu_tilde_coeff_sa_adj = Function(TurbulenceSpace)
+g_state_adj = Function(TurbulenceSpace) # Reciprocal wall-distance adjoint space
+phi_g_adj = Function(TurbulenceSpace)
+
+rho_proj_plot = Function(DensitySpace)
+unfiltered_gradient = Function(DensitySpace)
+filtered_gradient = Function(DensitySpace)
+unfiltered_s_vol = Function(DensitySpace)
+filtered_s_vol = Function(DensitySpace)
+
+mark = MARK
+boundaries = build_marked_boundaries(mesh)
+wall_markers = as_list(mark["walls"])
+inlet_markers = as_list(mark["inlet"])
+outlet_markers = as_list(mark["outlet"])
+
+if "QUADRATURE_DEGREE" in globals():
+    quadrature_degree = int(QUADRATURE_DEGREE)
+    parameters["form_compiler"]["quadrature_degree"] = quadrature_degree
+    measure_metadata = {"quadrature_degree": quadrature_degree}
+    dx = Measure("dx", domain=mesh, metadata=measure_metadata)
+    ds = Measure("ds", domain=mesh, subdomain_data=boundaries, metadata=measure_metadata)
+    dS = Measure("dS", domain=mesh, metadata=measure_metadata)
+else:
+    dx = Measure("dx", domain=mesh)
+    ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
+    dS = Measure("dS", domain=mesh)
+
+inlet_profiles, outlet_profiles = build_velocity_profile_sets_from_config()
+inlet_profiles = match_count(inlet_profiles, len(inlet_markers))
+outlet_profiles = match_count(outlet_profiles, len(outlet_markers))
 
 u_noslip = Constant((0.0, 0.0))
 
-if "SA_NU_TILDE_INLETS" in globals():
-    sa_nu_tilde_targets = match_count(SA_NU_TILDE_INLETS, len(inlet_markers))
+bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, marker) for marker in wall_markers]
+bcu_inlet = [
+    DirichletBC(FlowSpace.sub(0), profile, boundaries, marker)
+    for profile, marker in zip(inlet_profiles, inlet_markers)
+]
+bcu_outlet = [
+    DirichletBC(FlowSpace.sub(0), profile, boundaries, marker)
+    for profile, marker in zip(outlet_profiles, outlet_markers)
+]
+bc_NS = bcu_walls + bcu_inlet + bcu_outlet
+if globals().get("ENABLE_PRESSURE_PIN", True):
+    bcp_pin = DirichletBC(
+        FlowSpace.sub(1),
+        Constant(0.0),
+        build_pressure_pin_expression(),
+        "pointwise",
+    )
+    bc_NS.append(bcp_pin)
+
+adjoint_velocity_bc_builder = globals().get("build_adjoint_velocity_bcs")
+if callable(adjoint_velocity_bc_builder):
+    bc_NS_adj = list(
+        adjoint_velocity_bc_builder(
+            FlowSpaceAdj,
+            boundaries,
+            wall_markers,
+            inlet_markers,
+            outlet_markers,
+            u_noslip,
+            inlet_profiles,
+            outlet_profiles,
+        )
+    )
 else:
-    sa_nu_tilde_targets = match_count([SA_NU_TILDE_INLET], len(inlet_markers))
+    bcu_walls_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
+    ]
+    bcu_inlet_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in inlet_markers
+    ]
+    bcu_outlet_adj = [
+        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in outlet_markers
+    ]
+    bc_NS_adj = bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj
+if globals().get("ENABLE_PRESSURE_PIN", True):
+    bcp_pin_adj = DirichletBC(
+        FlowSpaceAdj.sub(1),
+        Constant(0.0),
+        build_pressure_pin_expression(),
+        "pointwise",
+    )
+    bc_NS_adj.append(bcp_pin_adj)
+
 nu_tilde_inlet_bc_values = [Constant(0.0) for _ in inlet_markers]
 nu_tilde_wall_bc_value = Constant(0.0)
-bcnt_inlet_turb = [
+bcn_turbulence_inlet = [
     DirichletBC(TurbulenceSpace, inlet_bc, boundaries, marker)
     for inlet_bc, marker in zip(nu_tilde_inlet_bc_values, inlet_markers)
 ]
-bcnt_walls_turb = [
+bcn_turbulence_walls = [
     DirichletBC(TurbulenceSpace, nu_tilde_wall_bc_value, boundaries, marker)
     for marker in wall_markers
 ]
-bcn_turbulence = bcnt_inlet_turb + bcnt_walls_turb
+bcn_turbulence = bcn_turbulence_inlet + bcn_turbulence_walls
 
-bcu_walls_adj_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, marker)
+bc_g_adj = [
+    DirichletBC(TurbulenceSpace, Constant(0.0), boundaries, marker)
     for marker in wall_markers
 ]
-bcu_inlet_adj_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, marker)
+
+bcu_walls_adj_coupled = [
+    DirichletBC(CoupledAdjSpace.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
+]
+bcu_inlet_adj_coupled = [
+    DirichletBC(CoupledAdjSpace.sub(0), u_noslip, boundaries, marker) for marker in inlet_markers
+]
+bcu_outlet_adj_coupled = [
+    DirichletBC(CoupledAdjSpace.sub(0), u_noslip, boundaries, marker) for marker in outlet_markers
+]
+bca_sa_inlet_coupled = [
+    DirichletBC(CoupledAdjSpace.sub(2), Constant(0.0), boundaries, marker)
     for marker in inlet_markers
 ]
-bcu_outlet_adj_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, marker)
-    for marker in outlet_markers
-]
-bc_NS_adj_frozen = bcu_walls_adj_frozen + bcu_inlet_adj_frozen + bcu_outlet_adj_frozen
-if globals().get("ENABLE_PRESSURE_PIN", True):
-    bcp_pin_adj_frozen = DirichletBC(
-        FrozenUPSpace.sub(1),
-        Constant(0.0),
-        pressure_pin_expression,
-        "pointwise",
-    )
-    bc_NS_adj_frozen.append(bcp_pin_adj_frozen)
-
-bcu_walls_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), u_noslip, boundaries, marker)
+bca_sa_walls_coupled = [
+    DirichletBC(CoupledAdjSpace.sub(2), Constant(0.0), boundaries, marker)
     for marker in wall_markers
 ]
-bcu_inlet_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(inlet_profiles, inlet_markers)
-]
-bcu_outlet_frozen = [
-    DirichletBC(FrozenUPSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(outlet_profiles, outlet_markers)
-]
-bc_NS_frozen = bcu_walls_frozen + bcu_inlet_frozen + bcu_outlet_frozen
+bc_coupled_adj = (
+    bcu_walls_adj_coupled
+    + bcu_inlet_adj_coupled
+    + bcu_outlet_adj_coupled
+    + bca_sa_inlet_coupled
+    + bca_sa_walls_coupled
+)
 if globals().get("ENABLE_PRESSURE_PIN", True):
-    bcp_pin_frozen = DirichletBC(
-        FrozenUPSpace.sub(1),
+    bcp_pin_adj_coupled = DirichletBC(
+        CoupledAdjSpace.sub(1),
         Constant(0.0),
-        pressure_pin_expression,
+        build_pressure_pin_expression(),
         "pointwise",
     )
-    bc_NS_frozen.append(bcp_pin_frozen)
-
-# Use filtered/projected density to define Brinkman and design-dependent wall-distance fields.
-AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
-rho_effective = projection(rho_f, ETA_I)
-
-sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", SA_DISTANCE_RELAXATION))
-sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
-sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
-sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
-sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
-sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
-sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
-sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
-sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAX", 1.0))
-(
-    wall_distance,
-    _wall_distance_reciprocal,
-    update_wall_distance_field,
-) = build_penalized_wall_distance_solver(
-    TurbulenceSpace,
-    boundaries,
-    wall_markers,
-    dx,
-    rho_effective,
-    sa_wall_sigma,
-    sa_wall_g0,
-    sa_wall_penalty_alpha,
-    sa_wall_penalty_power,
-    sa_wall_g_floor,
-    sa_wall_newton_rtol,
-    sa_wall_newton_atol,
-    sa_wall_newton_max_iters,
-    sa_wall_newton_relax,
-)
-print(
-    "SA wall equation with penalty: sigma={}, G0={}, alpha_G={}, n_G={}".format(
-        sa_wall_sigma,
-        sa_wall_g0,
-        sa_wall_penalty_alpha,
-        sa_wall_penalty_power,
-    )
-)
-
-nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
-sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", sa_nu_tilde_targets[0]))
-sa_nu_tilde_penalty_alpha = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3)))
-sa_nu_tilde_penalty_power = float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
-# TO convention here: rho_effective=1 fluid, 0 solid.
-sa_nu_tilde_penalty_reaction = sa_nu_tilde_penalty_alpha * (
-    positive_part(Constant(1.0) - rho_effective) ** sa_nu_tilde_penalty_power
-)
-
-sa_model = SpalartAllmarasSteadyState(
-    TurbulenceSpace,
-    bcn_turbulence,
-    sa_nu_tilde_init,
-    nu_laminar,
-    Constant((0.0, 0.0)),
-    dx,
-    ds,
-    wall_distance,
-    nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
-)
+    bc_coupled_adj.append(bcp_pin_adj_coupled)
 
 
 # ------------------------------------------------------------
 # Design filter
 # ------------------------------------------------------------
-if "FILTER_BASE_LENGTH" in globals():
-    filter_base_length = float(FILTER_BASE_LENGTH)
-elif "L" in globals() and "N" in globals():
-    filter_base_length = float(L) / float(N)
-else:
-    x_min = float(globals().get("DOMAIN_X_MIN", 0.0))
-    y_min = float(globals().get("DOMAIN_Y_MIN", 0.0))
-    x_max = float(globals().get("DOMAIN_X_MAX", 1.0))
-    y_max = float(globals().get("DOMAIN_Y_MAX", 1.0))
-    nx = int(globals().get("NX", globals().get("N", 1)))
-    ny = int(globals().get("NY", globals().get("N", 1)))
-    filter_base_length = min((x_max - x_min) / max(nx, 1), (y_max - y_min) / max(ny, 1))
-r_filter = filter_base_length * float(globals().get("FILTER_RADIUS_IN_CELLS", 2.0))
+r_filter = compute_filter_base_length() * float(globals().get("FILTER_RADIUS_IN_CELLS", 3.0))
 r = r_filter / (2.0 * 3.0**0.5)
 
 u_filter = TrialFunction(DensitySpace)
@@ -360,32 +452,223 @@ def pde_filter(input_field, output_field):
 
 
 # ------------------------------------------------------------
-# Optimization forms
+# SA model setup (penalized wall distance + penalized nu_tilde)
+# ------------------------------------------------------------
+AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
+rho_effective = projection(rho_f, ETA_I)
+
+use_penalized_wall_distance = bool(globals().get("SA_USE_PENALIZED_WALL_DISTANCE", True))
+if use_penalized_wall_distance:
+    sa_wall_sigma = float(
+        globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01))
+    )
+    sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
+    sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+    sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
+    sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
+    sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
+    sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
+    sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
+    sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAX", 1.0))
+
+    (
+        wall_distance,
+        wall_distance_reciprocal,
+        update_wall_distance_field,
+    ) = build_penalized_wall_distance_solver(
+        TurbulenceSpace,
+        boundaries,
+        wall_markers,
+        dx,
+        rho_effective,
+        sa_wall_sigma,
+        sa_wall_g0,
+        sa_wall_penalty_alpha,
+        sa_wall_penalty_power,
+        sa_wall_g_floor,
+        sa_wall_newton_rtol,
+        sa_wall_newton_atol,
+        sa_wall_newton_max_iters,
+        sa_wall_newton_relax,
+    )
+    print(
+        "Penalized SA wall-distance enabled (Yoon 2016 Eq. 25): sigma={}, G0={}, alpha_G={}, n_G={}".format(
+            sa_wall_sigma,
+            sa_wall_g0,
+            sa_wall_penalty_alpha,
+            sa_wall_penalty_power,
+        )
+    )
+else:
+    wall_distance_reciprocal = None
+    wall_distance = calculate_distance_field(
+        TurbulenceSpace,
+        boundaries,
+        wall_markers,
+        dx,
+        relaxation=float(globals().get("SA_DISTANCE_RELAXATION", 0.01)),
+    )
+
+    def update_wall_distance_field():
+        return None
+
+if "SA_NU_TILDE_INLETS" in globals():
+    _sa_nu_tilde_targets_for_init = match_count(SA_NU_TILDE_INLETS, len(inlet_markers))
+else:
+    _sa_nu_tilde_targets_for_init = match_count([SA_NU_TILDE_INLET], len(inlet_markers))
+sa_nu_tilde_init = float(
+    globals().get("SA_NU_TILDE_INITIAL", float_scalar(_sa_nu_tilde_targets_for_init[0]))
+)
+
+nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
+sa_nu_tilde_penalty_alpha = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3)))
+sa_nu_tilde_penalty_power = float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
+sa_nu_tilde_penalty_reaction = sa_nu_tilde_penalty_alpha * (
+    positive_part(Constant(1.0) - rho_effective) ** sa_nu_tilde_penalty_power
+)
+
+sa_model = SpalartAllmarasSteadyState(
+    TurbulenceSpace,
+    bcn_turbulence,
+    sa_nu_tilde_init,
+    nu_laminar,
+    Constant((0.0, 0.0)),
+    dx,
+    ds,
+    wall_distance,
+    nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
+)
+
+
+# ------------------------------------------------------------
+# Optimization forms (frozen turbulence adjoint)
 # ------------------------------------------------------------
 mu_effective_obj_frozen = mu_fluid + rho_fluid * sa_positive_viscosity(nu_tilde_frozen)
 ObjFunctional_frozen = AreaOfInterest * (
-    0.5 * mu_effective_obj_frozen * inner(sym(nabla_grad(u_frozen_state)), sym(nabla_grad(u_frozen_state)))
-    + alpha(rho_effective) * inner(u_frozen_state, u_frozen_state)
+    0.5
+    * mu_effective_obj_frozen
+    * inner(sym(nabla_grad(u)), sym(nabla_grad(u)))
+    + alpha(rho_effective) * inner(u, u)
 ) * dx
-state_form_frozen = build_frozen_state_form(
-    u_frozen_state,
-    p_frozen_state,
-    v_frozen,
-    q_frozen,
+
+state_form_frozen = build_frozen_state_form(u, p, v, q, rho_effective, dx, nu_tilde_frozen)
+lagrangian_form_frozen = ObjFunctional_frozen + state_form_frozen
+
+forward_form_frozen = derivative(state_form_frozen, w_adj, TestFunction(FlowSpace))
+adjoint_form_frozen = derivative(lagrangian_form_frozen, w_fwd, TestFunction(FlowSpaceAdj))
+
+ddx_frozen = derivative(lagrangian_form_frozen, rho_f)
+
+# ------------------------------------------------------------
+# Coupled NS+SA adjoint for gradient (G frozen)
+# ------------------------------------------------------------
+state_form_ns_sa_coupled_gfrozen = build_frozen_state_form(
+    u_coupled,
+    p_coupled,
+    v_coupled,
+    q_coupled,
     rho_effective,
     dx,
-    nu_tilde_frozen,
+    nu_tilde_coupled,
 )
-lagrangian_form_frozen = ObjFunctional_frozen + state_form_frozen
-forward_form_frozen = derivative(state_form_frozen, w_adj_frozen, TestFunction(FrozenUPSpace))
-adjoint_form_frozen = derivative(lagrangian_form_frozen, w_state_frozen, TestFunction(FrozenUPSpace))
-ddx_frozen = derivative(lagrangian_form_frozen, rho_f)
+
+sa_sigma_adj, sa_react_nt_adj, sa_source_nt_adj = sa_transport_terms(
+    u_coupled,
+    nu_tilde_coeff_sa_adj,
+    nu_laminar,
+    wall_distance,  # G/y treated as frozen for this adjoint step
+    smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+)
+sa_state_form_coupled_gfrozen = (
+    dot(u_coupled, nabla_grad(nu_tilde_coupled)) * psi_coupled * dx
+    + inner(
+        ((nu_laminar + nu_tilde_coeff_sa_adj) / sa_sigma_adj) * grad(nu_tilde_coupled),
+        grad(psi_coupled),
+    )
+    * dx
+    + (sa_react_nt_adj + sa_nu_tilde_penalty_reaction) * nu_tilde_coupled * psi_coupled * dx
+    - sa_source_nt_adj * psi_coupled * dx
+)
+
+mu_effective_obj_coupled = mu_fluid + rho_fluid * sa_positive_viscosity(nu_tilde_coupled)
+ObjFunctional_coupled_gfrozen = AreaOfInterest * (
+    0.5
+    * mu_effective_obj_coupled
+    * inner(sym(nabla_grad(u_coupled)), sym(nabla_grad(u_coupled)))
+    + alpha(rho_effective) * inner(u_coupled, u_coupled)
+) * dx
+
+lagrangian_form_coupled_gfrozen = (
+    ObjFunctional_coupled_gfrozen
+    + state_form_ns_sa_coupled_gfrozen
+    + sa_state_form_coupled_gfrozen
+)
+adjoint_form_coupled_gfrozen = derivative(
+    lagrangian_form_coupled_gfrozen, w_state_coupled, TestFunction(CoupledAdjSpace)
+)
+ddx_coupled_gfrozen = derivative(lagrangian_form_coupled_gfrozen, rho_f)
+
+# ------------------------------------------------------------
+# G adjoint (Eq. 25) with solved NS+SA adjoints treated as known
+# ------------------------------------------------------------
+if use_penalized_wall_distance:
+    g_floor_constant = Constant(sa_wall_g_floor)
+    g0_constant = Constant(sa_wall_g0)
+    sigma_g_constant = Constant(sa_wall_sigma)
+    alpha_g_constant = Constant(sa_wall_penalty_alpha)
+    n_g_power = sa_wall_penalty_power
+
+    wall_distance_from_g_adj = positive_part(
+        Constant(1.0) / (g_state_adj + g_floor_constant) - Constant(1.0 / sa_wall_g0)
+    )
+
+    sa_sigma_gadj, sa_react_nt_gadj, sa_source_nt_gadj = sa_transport_terms(
+        u_coupled,
+        nu_tilde_coeff_sa_adj,
+        nu_laminar,
+        wall_distance_from_g_adj,
+        smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+    )
+    # Same SA residual as above, but with y(G) variable so dR_SA/dG enters the G-adjoint equation.
+    sa_state_form_for_g_adjoint = (
+        dot(u_coupled, nabla_grad(nu_tilde_coupled)) * psi_coupled * dx
+        + inner(
+            ((nu_laminar + nu_tilde_coeff_sa_adj) / sa_sigma_gadj) * grad(nu_tilde_coupled),
+            grad(psi_coupled),
+        )
+        * dx
+        + (sa_react_nt_gadj + sa_nu_tilde_penalty_reaction) * nu_tilde_coupled * psi_coupled * dx
+        - sa_source_nt_gadj * psi_coupled * dx
+    )
+
+    solid_indicator_g = positive_part(Constant(1.0) - rho_effective)
+    g_penalty_term = alpha_g_constant * (g_state_adj - g0_constant) * solid_indicator_g**n_g_power
+    g_state_form_adjoint = (
+        (Constant(1.0) - sigma_g_constant)
+        * inner(grad(g_state_adj), grad(g_state_adj))
+        * phi_g_adj
+        * dx
+        - sigma_g_constant
+        * g_state_adj
+        * inner(grad(g_state_adj), grad(phi_g_adj))
+        * dx
+        - ((Constant(1.0) + Constant(2.0) * sigma_g_constant) * g_state_adj**4 + g_penalty_term)
+        * phi_g_adj
+        * dx
+    )
+
+    lagrangian_form_g_adjoint = sa_state_form_for_g_adjoint + g_state_form_adjoint
+    adjoint_form_g = derivative(lagrangian_form_g_adjoint, g_state_adj, TestFunction(TurbulenceSpace))
+    ddx_g_adjoint = derivative(g_state_form_adjoint, rho_f)
+    ddx_total = ddx_coupled_gfrozen + ddx_g_adjoint
+else:
+    ddx_total = ddx_coupled_gfrozen
+
 vol_constraint = AreaOfInterest * rho_effective * dx - AreaOfInterest * VOL_FRAC * dx
 sensitivities_vol_constraint = derivative(vol_constraint, rho_f)
 
-StokesSpace = FunctionSpace(mesh, U_h * P_h)
-u_lin, p_lin = TrialFunctions(StokesSpace)
-v_lin, q_lin = TestFunctions(StokesSpace)
+u_lin, p_lin = TrialFunctions(FlowSpace)
+v_lin, q_lin = TestFunctions(FlowSpace)
 a_stokes = (
     mu_fluid * inner(grad(u_lin), grad(v_lin))
     + inner(grad(p_lin), v_lin)
@@ -394,44 +677,28 @@ a_stokes = (
 ) * dx
 l_stokes = Constant(0.0) * q_lin * dx
 
-bcu_walls_stokes = [
-    DirichletBC(StokesSpace.sub(0), u_noslip, boundaries, marker)
-    for marker in wall_markers
-]
-bcu_inlet_stokes = [
-    DirichletBC(StokesSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(inlet_profiles, inlet_markers)
-]
-bcu_outlet_stokes = [
-    DirichletBC(StokesSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(outlet_profiles, outlet_markers)
-]
-bc_stokes = bcu_walls_stokes + bcu_inlet_stokes + bcu_outlet_stokes
-if globals().get("ENABLE_PRESSURE_PIN", True):
-    bcp_pin_stokes = DirichletBC(
-        StokesSpace.sub(1),
-        Constant(0.0),
-        pressure_pin_expression,
-        "pointwise",
-    )
-    bc_stokes.append(bcp_pin_stokes)
 
-
-def initialize_frozen_forward_guess_with_stokes():
-    """Initialize frozen forward fields and SA state with a Stokes-Brinkman guess."""
+def initialize_forward_guess_with_stokes():
+    """Initialize flow and frozen SA state using a Stokes-Brinkman guess."""
     A = assemble(a_stokes)
     b = assemble(l_stokes)
-    for bc in bc_stokes:
+    for bc in bc_NS:
         bc.apply(A, b)
-    w_stokes = Function(StokesSpace)
+
+    w_stokes = Function(FlowSpace)
     solve(A, w_stokes.vector(), b, SNES_LINEAR_SOLVER)
 
     u_guess, p_guess = w_stokes.split(deepcopy=True)
-    assign(w_state_frozen.sub(0), u_guess)
-    assign(w_state_frozen.sub(1), p_guess)
+    assign(w_fwd.sub(0), u_guess)
+    assign(w_fwd.sub(1), p_guess)
 
+    default_length = float(globals().get("L", 1.0))
+    wall_dist_scale = max(
+        float(globals().get("SA_INIT_WALL_DIST_SCALE", 0.05 * default_length)),
+        1.0e-12,
+    )
     nu_guess_expr = Constant(sa_nu_tilde_init) * wall_distance / (
-        wall_distance + Constant(SA_INIT_WALL_DIST_SCALE)
+        wall_distance + Constant(wall_dist_scale)
     )
     nu_guess = project(nu_guess_expr, TurbulenceSpace)
     nu_tilde_frozen.assign(nu_guess)
@@ -439,196 +706,77 @@ def initialize_frozen_forward_guess_with_stokes():
     sa_model.nu_tilde1.assign(nu_guess)
 
 
-def build_forward_solver(forward_residual, state_function, boundary_conditions):
-    """Create a forward SNES solver for a given residual/state/BC set."""
-    jacobian = derivative(forward_residual, state_function)
-    problem = NonlinearVariationalProblem(forward_residual, state_function, boundary_conditions, jacobian)
+def sync_coupled_state_for_adjoint():
+    """Copy converged segregated forward variables into the coupled state container."""
+    assign(w_state_coupled.sub(0), w_fwd.sub(0, deepcopy=True))
+    assign(w_state_coupled.sub(1), w_fwd.sub(1, deepcopy=True))
+    assign(w_state_coupled.sub(2), nu_tilde_frozen)
+    nu_tilde_coeff_sa_adj.assign(nu_tilde_frozen)
+    if wall_distance_reciprocal is not None:
+        g_state_adj.assign(wall_distance_reciprocal)
+
+
+def build_snes_solver(residual_form, state_function, boundary_conditions, method, line_search, rtol, atol, max_it):
+    jacobian = derivative(residual_form, state_function)
+    problem = NonlinearVariationalProblem(residual_form, state_function, boundary_conditions, jacobian)
     solver = NonlinearVariationalSolver(problem)
     solver.parameters["nonlinear_solver"] = "snes"
     solver.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
-    solver.parameters["snes_solver"]["method"] = FORWARD_SNES_METHOD
-    if FORWARD_SNES_METHOD == "newtonls":
-        solver.parameters["snes_solver"]["line_search"] = "l2"
-    solver.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
-    solver.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
-    solver.parameters["snes_solver"]["maximum_iterations"] = FORWARD_SNES_MAX_ITERS
+    solver.parameters["snes_solver"]["method"] = method
+    if method == "newtonls":
+        solver.parameters["snes_solver"]["line_search"] = line_search
+    solver.parameters["snes_solver"]["relative_tolerance"] = rtol
+    solver.parameters["snes_solver"]["absolute_tolerance"] = atol
+    solver.parameters["snes_solver"]["maximum_iterations"] = max_it
     solver.parameters["snes_solver"]["error_on_nonconvergence"] = True
     return solver
 
-# -------------------------
-# SNES solver attempts
-# -------------------------
 
-_forward_attempts = list(globals().get("FORWARD_SNES_ATTEMPTS", []))
-if not _forward_attempts:
-    _forward_attempts = [
-        {
-            "method": FORWARD_SNES_METHOD,
-            "line_search": globals().get("FORWARD_SNES_LINE_SEARCH", None),
-            "rtol": FORWARD_SNES_RTOL,
-            "atol": FORWARD_SNES_ATOL,
-            "max_it": min(FORWARD_SNES_MAX_ITERS, 120),
-            "reinitialize": False,
-        },
-        {
-            "method": FORWARD_SNES_METHOD,
-            "line_search": globals().get("FORWARD_SNES_LINE_SEARCH", None),
-            "rtol": FORWARD_SNES_RTOL,
-            "atol": FORWARD_SNES_ATOL,
-            "max_it": min(FORWARD_SNES_MAX_ITERS, 120),
-            "reinitialize": True,
-        },
-        {
-            "method": "newtonls",
-            "line_search": "bt",
-            "rtol": max(FORWARD_SNES_RTOL, 5.0e-3),
-            "atol": max(FORWARD_SNES_ATOL, 1.0e-5),
-            "max_it": max(FORWARD_SNES_MAX_ITERS, 200),
-            "reinitialize": True,
-        }
-    ]
-
-FORWARD_SNES_ATTEMPTS_RESOLVED = []
-for idx, attempt in enumerate(_forward_attempts):
-    FORWARD_SNES_ATTEMPTS_RESOLVED.append(
-        {
-            "method": attempt.get("method", FORWARD_SNES_METHOD),
-            "line_search": attempt.get("line_search", globals().get("FORWARD_SNES_LINE_SEARCH", None)),
-            "relative_tolerance": attempt.get("rtol", FORWARD_SNES_RTOL),
-            "absolute_tolerance": attempt.get("atol", FORWARD_SNES_ATOL),
-            "maximum_iterations": int(attempt.get("max_it", FORWARD_SNES_MAX_ITERS)),
-            "reinitialize": bool(attempt.get("reinitialize", idx > 0)),
-        }
+def solve_forward_once():
+    method = globals().get("FORWARD_SNES_METHOD", "newtonls")
+    line_search = globals().get("FORWARD_SNES_LINE_SEARCH", "bt")
+    max_it = int(globals().get("FORWARD_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 200)))
+    solver_fwd = build_snes_solver(
+        forward_form_frozen,
+        w_fwd,
+        bc_NS,
+        method,
+        line_search,
+        FORWARD_SNES_RTOL,
+        FORWARD_SNES_ATOL,
+        max_it,
     )
+    solver_fwd.solve()
 
 
-def solve_forward_with_attempts(forward_residual, state_function, boundary_conditions):
-    """Solve forward residual using the configured ordered SNES attempts."""
-    last_error = None
-    total_attempts = len(FORWARD_SNES_ATTEMPTS_RESOLVED)
-    for attempt_idx, attempt in enumerate(FORWARD_SNES_ATTEMPTS_RESOLVED):
-        if attempt["reinitialize"]:
-            initialize_frozen_forward_guess_with_stokes()
-        solver = build_forward_solver(forward_residual, state_function, boundary_conditions)
-        solver.parameters["snes_solver"]["method"] = attempt["method"]
-        if attempt["method"] == "newtonls":
-            if attempt["line_search"] is None:
-                solver.parameters["snes_solver"]["line_search"] = "l2"
-            else:
-                solver.parameters["snes_solver"]["line_search"] = attempt["line_search"]
-        solver.parameters["snes_solver"]["relative_tolerance"] = attempt["relative_tolerance"]
-        solver.parameters["snes_solver"]["absolute_tolerance"] = attempt["absolute_tolerance"]
-        solver.parameters["snes_solver"]["maximum_iterations"] = attempt["maximum_iterations"]
-        try:
-            solver.solve()
-            if attempt_idx > 0:
-                print(
-                    "Forward SNES recovered on attempt {}/{} using method '{}'.".format(
-                        attempt_idx + 1, total_attempts, attempt["method"]
-                    )
-                )
-            return
-        except RuntimeError as exc:
-            last_error = exc
-            print(
-                "Forward SNES attempt {}/{} failed (method='{}', rtol={}, atol={}, max_it={}).".format(
-                    attempt_idx + 1,
-                    total_attempts,
-                    attempt["method"],
-                    attempt["relative_tolerance"],
-                    attempt["absolute_tolerance"],
-                    attempt["maximum_iterations"],
-                )
-            )
-    if last_error is not None:
-        raise last_error
+def solve_adjoint_once():
+    # Coupled linear adjoint for [NS, SA], followed by scalar G adjoint (Eq. 25).
+    sync_coupled_state_for_adjoint()
 
-# -------------------------
-# Adjoint solver attempts
-# -------------------------
+    dw_adj_coupled = TrialFunction(CoupledAdjSpace)
+    a_adj_coupled = derivative(adjoint_form_coupled_gfrozen, w_adj_coupled, dw_adj_coupled)
 
-_adjoint_attempts = list(globals().get("ADJOINT_SNES_ATTEMPTS", []))
-if not _adjoint_attempts:
-    _adjoint_attempts = [
-        {
-            "method": "newtonls",
-            "line_search": "bt",
-            "rtol": ADJOINT_SNES_RTOL,
-            "atol": ADJOINT_SNES_ATOL,
-            "max_it": int(globals().get("ADJOINT_SNES_MAX_ITERS", 200)),
-            "reset_initial_guess": False,
-        },
-        {
-            "method": "newtontr",
-            "line_search": None,
-            "rtol": max(ADJOINT_SNES_RTOL, 5.0e-3),
-            "atol": max(ADJOINT_SNES_ATOL, 1.0e-5),
-            "max_it": int(globals().get("ADJOINT_SNES_MAX_ITERS", 200)),
-            "reset_initial_guess": True,
-        },
-    ]
+    w_adj_coupled.vector().zero()
+    w_adj_coupled.vector().apply("insert")
 
-ADJOINT_SNES_ATTEMPTS_RESOLVED = []
-for idx, attempt in enumerate(_adjoint_attempts):
-    ADJOINT_SNES_ATTEMPTS_RESOLVED.append(
-        {
-            "method": attempt.get("method", "newtonls"),
-            "line_search": attempt.get("line_search", "bt"),
-            "relative_tolerance": attempt.get("rtol", ADJOINT_SNES_RTOL),
-            "absolute_tolerance": attempt.get("atol", ADJOINT_SNES_ATOL),
-            "maximum_iterations": int(attempt.get("max_it", int(globals().get("ADJOINT_SNES_MAX_ITERS", 200)))),
-            "reset_initial_guess": bool(attempt.get("reset_initial_guess", idx > 0)),
-        }
-    )
+    A_adj_coupled = assemble(a_adj_coupled)
+    b_adj_coupled = assemble(-adjoint_form_coupled_gfrozen)
+    for bc in bc_coupled_adj:
+        bc.apply(A_adj_coupled, b_adj_coupled)
+    solve(A_adj_coupled, w_adj_coupled.vector(), b_adj_coupled, SNES_LINEAR_SOLVER)
 
+    if use_penalized_wall_distance:
+        dphi_g = TrialFunction(TurbulenceSpace)
+        a_adj_g = derivative(adjoint_form_g, phi_g_adj, dphi_g)
 
-def solve_adjoint_with_attempts(adjoint_residual, adjoint_function, boundary_conditions):
-    """Solve adjoint residual using configured ordered SNES attempts."""
-    last_error = None
-    total_attempts = len(ADJOINT_SNES_ATTEMPTS_RESOLVED)
-    for attempt_idx, attempt in enumerate(ADJOINT_SNES_ATTEMPTS_RESOLVED):
-        if attempt["reset_initial_guess"]:
-            adjoint_function.vector().zero()
-            adjoint_function.vector().apply("insert")
+        phi_g_adj.vector().zero()
+        phi_g_adj.vector().apply("insert")
 
-        jacobian = derivative(adjoint_residual, adjoint_function)
-        problem = NonlinearVariationalProblem(adjoint_residual, adjoint_function, boundary_conditions, jacobian)
-        solver = NonlinearVariationalSolver(problem)
-        solver.parameters["nonlinear_solver"] = "snes"
-        solver.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
-        solver.parameters["snes_solver"]["method"] = attempt["method"]
-        if attempt["method"] == "newtonls":
-            if attempt["line_search"] is None:
-                solver.parameters["snes_solver"]["line_search"] = "l2"
-            else:
-                solver.parameters["snes_solver"]["line_search"] = attempt["line_search"]
-        solver.parameters["snes_solver"]["relative_tolerance"] = attempt["relative_tolerance"]
-        solver.parameters["snes_solver"]["absolute_tolerance"] = attempt["absolute_tolerance"]
-        solver.parameters["snes_solver"]["maximum_iterations"] = attempt["maximum_iterations"]
-        solver.parameters["snes_solver"]["error_on_nonconvergence"] = True
-
-        try:
-            solver.solve()
-            if attempt_idx > 0:
-                print(
-                    "Adjoint SNES recovered on attempt {}/{} using method '{}'.".format(
-                        attempt_idx + 1, total_attempts, attempt["method"]
-                    )
-                )
-            return
-        except RuntimeError as exc:
-            last_error = exc
-            print(
-                "Adjoint SNES attempt {}/{} failed (method='{}', rtol={}, atol={}, max_it={}).".format(
-                    attempt_idx + 1,
-                    total_attempts,
-                    attempt["method"],
-                    attempt["relative_tolerance"],
-                    attempt["absolute_tolerance"],
-                    attempt["maximum_iterations"],
-                )
-            )
-    raise RuntimeError("All adjoint SNES attempts failed. Last error: {}".format(last_error))
+        A_adj_g = assemble(a_adj_g)
+        b_adj_g = assemble(-adjoint_form_g)
+        for bc in bc_g_adj:
+            bc.apply(A_adj_g, b_adj_g)
+        solve(A_adj_g, phi_g_adj.vector(), b_adj_g, SNES_LINEAR_SOLVER)
 
 
 # ------------------------------------------------------------
@@ -665,7 +813,7 @@ with open(log_path, "w") as txtout:
             "Iteration".ljust(12),
             "Objective".ljust(14),
             "ObjConv".ljust(12),
-            "VolFrac".ljust(12),
+            "VolProj".ljust(12),
             strftime("%a, %d %b %Y %H:%M:%S", localtime()),
         )
     )
@@ -677,8 +825,6 @@ with open(log_path, "w") as txtout:
 assign(rho, interpolate(Constant(0.5), DensitySpace))
 
 iter_count = 0
-# MMA iteration index must count design updates only (warm-up ramp steps do not call MMA).
-mma_iter_count = 0
 previous_objective = 0.0
 
 num_mma = mesh.num_cells()
@@ -703,118 +849,89 @@ fval = np.zeros((mmma, 1))
 dfdx = np.zeros((mmma, num_mma))
 
 volume = assemble(AreaOfInterest * dx)
-print("Frozen turbulence mode: segregated forward (NS + SA) with frozen adjoint/design derivatives")
+print("Turbulent TO: steady SA transport with nu_tilde + wall-distance penalization")
 
-num_stages = min(len(Q_PENAL_SCHEDULE), len(MOVE_LIMIT_SCHEDULE), len(BETA_PROJ_SCHEDULE))
-design_updates_after_full_ramp = bool(globals().get("DESIGN_UPDATES_AFTER_FULL_RAMP", True))
-ramp_steps = max(1, int(globals().get("INLET_RAMP_STEPS", 1)))
-mma_damping = min(max(float(globals().get("MMA_DAMPING", 1.0)), 0.0), 1.0)
-mma_damping_on_spike = min(
-    max(float(globals().get("MMA_DAMPING_ON_SPIKE", mma_damping)), 0.0),
-    1.0,
-)
-objective_spike_rel_tol = max(float(globals().get("OBJECTIVE_SPIKE_REL_TOL", 0.3)), 0.0)
-move_limit_reduction_on_spike = min(
-    max(float(globals().get("MOVE_LIMIT_REDUCTION_ON_SPIKE", 0.7)), 0.05),
-    1.0,
-)
-move_limit_recovery_factor = max(float(globals().get("MOVE_LIMIT_RECOVERY_FACTOR", 1.02)), 1.0)
-move_limit_min = max(float(globals().get("MOVE_LIMIT_MIN", 5.0e-4)), 1.0e-6)
+if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
+if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("BETA_PROJ_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 # ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
-for stage_idx in range(num_stages):
-    q_val = Q_PENAL_SCHEDULE[stage_idx]
-    beta_val = BETA_PROJ_SCHEDULE[stage_idx]
+for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
+    move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
-    base_move_limit = float(MOVE_LIMIT_SCHEDULE[stage_idx])
-    move_limit_now = base_move_limit
     inner_count = 0
     convergence_history = 0
     objective_converged = False
     print(
-            "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
-                stage_idx + 1,
-                num_stages,
-                q_val,
-                beta_val,
-                base_move_limit,
+        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+            stage_idx + 1,
+            len(Q_PENAL_SCHEDULE),
+            q_val,
+            beta_val,
+            move_limit_now,
         )
     )
 
     while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
-        ramp = min(1.0, float(iter_count + 1) / float(ramp_steps))
-        if "U_MAX_INLETS" in globals():
-            inlet_targets = match_count(U_MAX_INLETS, len(inlet_profiles))
-        else:
-            inlet_targets = match_count([U_MAX_INLET], len(inlet_profiles))
-        if "U_MAX_OUTLETS" in globals():
-            outlet_targets = match_count(U_MAX_OUTLETS, len(outlet_profiles))
-        else:
-            outlet_targets = match_count([U_MAX_OUTLET], len(outlet_profiles))
-        for profile, u_target in zip(inlet_profiles, inlet_targets):
-            profile.u_max = ramp * float(u_target)
-        for profile, u_target in zip(outlet_profiles, outlet_targets):
-            profile.u_max = ramp * float(u_target)
-        for constant_value, nu_target in zip(nu_tilde_inlet_bc_values, sa_nu_tilde_targets):
-            constant_value.assign(ramp * float(nu_target))
+        ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
+        apply_ramped_velocity_profiles(ramp, inlet_profiles, outlet_profiles)
+        apply_ramped_sa_inlet_bcs(ramp, nu_tilde_inlet_bc_values)
 
         # Filter current design
         rho_f = pde_filter(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-
-        # Recompute penalized wall-distance with the current filtered design.
         update_wall_distance_field()
 
         rho_out << rho
         rhop_out << rho_proj_plot
 
-        # Forward solve
-        print("Starting frozen forward solve (segregated NS + SA)")
-
+        # Forward solve: segregated frozen turbulence (NS + SA Picard)
         if iter_count == 0:
-            initialize_frozen_forward_guess_with_stokes()
+            initialize_forward_guess_with_stokes()
 
-        for _ in range(max(1, FROZEN_PICARD_STEPS)):
-            solve_forward_with_attempts(forward_form_frozen, w_state_frozen, bc_NS_frozen)
+        for _ in range(max(1, int(globals().get("FROZEN_PICARD_STEPS", 1)))):
+            try:
+                solve_forward_once()
+            except RuntimeError:
+                initialize_forward_guess_with_stokes()
+                solve_forward_once()
 
-            velocity_for_sa = w_state_frozen.sub(0, deepcopy=True)
+            velocity_for_sa = w_fwd.sub(0, deepcopy=True)
             sa_model.construct_forms(velocity_for_sa)
             sa_model.solve_turbulence_model()
-            sa_model.update_variables(relaxation=NUT_RELAXATION_FACTOR)
+            sa_model.update_variables(
+                relaxation=float(globals().get("NUT_RELAXATION_FACTOR", 1.0))
+            )
+
             nu_tilde_frozen.assign(sa_model.nu_tilde0)
-            enforce_scalar_floor(nu_tilde_frozen, SA_NU_TILDE_FLOOR)
+            enforce_scalar_floor(
+                nu_tilde_frozen, float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12))
+            )
             sa_model.nu_tilde0.assign(nu_tilde_frozen)
             sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
-        # Re-solve momentum with the updated frozen turbulence field.
-        solve_forward_with_attempts(forward_form_frozen, w_state_frozen, bc_NS_frozen)
+        # Final momentum solve using updated frozen nu_tilde
+        try:
+            solve_forward_once()
+        except RuntimeError:
+            initialize_forward_guess_with_stokes()
+            solve_forward_once()
 
-        u_out << w_state_frozen.sub(0)
-        p_out << w_state_frozen.sub(1)
+        # Adjoint solve (coupled NS+SA, with G frozen)
+        solve_adjoint_once()
+
+        u_out << w_fwd.sub(0)
+        p_out << w_fwd.sub(1)
         nu_tilde_out << nu_tilde_frozen
+
         f0val = assemble(ObjFunctional_frozen)
-        # Symmetric normalization avoids pathological spikes when the objective drops sharply.
-        obj_conv = abs(f0val - previous_objective) / max(abs(f0val), abs(previous_objective), 1e-12)
-
-        # Keep design fixed while inlet/turbulence ramp reaches full magnitude.
-        if design_updates_after_full_ramp and ramp < 1.0:
-            warmup_step = iter_count + 1
-            previous_objective = f0val
-            iter_count += 1
-            print(
-                "Warm-up ramp {}/{}: ramp = {:.3f}, J = {:.4e}".format(
-                    warmup_step, ramp_steps, ramp, f0val
-                )
-            )
-            continue
-
-        # Adjoint solve
-        print("Starting adjoint SNES solve")
-        solve_adjoint_with_attempts(adjoint_form_frozen, w_adj_frozen, bc_NS_adj_frozen)
+        obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
             convergence_history += 1
@@ -823,8 +940,10 @@ for stage_idx in range(num_stages):
         else:
             convergence_history = 0
 
+        previous_objective = f0val
+
         # Objective gradient
-        unfiltered_gradient.vector()[:] = assemble(ddx_frozen)[:]
+        unfiltered_gradient.vector()[:] = assemble(ddx_total)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
@@ -835,19 +954,6 @@ for stage_idx in range(num_stages):
 
         df0dx[:, 0] = filtered_gradient.vector()[:]
         dfdx[0, :] = filtered_s_vol.vector()[:]
-
-        objective_spike = (
-            inner_count > 0
-            and
-            previous_objective > 0.0
-            and f0val > (1.0 + objective_spike_rel_tol) * previous_objective
-        )
-        if objective_spike:
-            move_limit_now = max(move_limit_min, move_limit_now * move_limit_reduction_on_spike)
-            update_damping = mma_damping_on_spike
-        else:
-            move_limit_now = min(base_move_limit, move_limit_now * move_limit_recovery_factor)
-            update_damping = mma_damping
 
         # MMA update
         (
@@ -865,7 +971,7 @@ for stage_idx in range(num_stages):
         ) = mmasub(
             mmma,
             num_mma,
-            mma_iter_count + 1,
+            iter_count,
             xval,
             xmin,
             xmax,
@@ -884,16 +990,14 @@ for stage_idx in range(num_stages):
             move_limit_now,
         )
 
-        # Damped update improves robustness for SA-TO coupling under aggressive gradients.
-        xmma = xval + update_damping * (xmma - xval)
-        xmma = np.maximum(xmin, np.minimum(xmax, xmma))
-
         xold2 = xold1.copy()
         xold1 = xval.copy()
         xval = xmma.copy()
         rho.vector()[:] = xmma[:, 0].copy()
 
-        vol_fraction_now = assemble(rho * dx) / volume
+        vol_fraction_raw = assemble(rho * dx) / volume
+        vol_fraction_proj = assemble(rho_effective * dx) / volume
+        vol_constraint_residual = fval[0, 0] / volume
         with open(log_path, "a") as txtout:
             txtout.write(
                 "{:03d}.{:03d}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
@@ -901,27 +1005,26 @@ for stage_idx in range(num_stages):
                     inner_count,
                     f0val,
                     obj_conv,
-                    vol_fraction_now,
+                    vol_fraction_proj,
                     strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+                )
             )
-        )
 
         print(
-            "q = {:.3f}, beta = {:.2f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}, move = {:.4f}, damping = {:.2f}".format(
+            "q = {:.3f}, beta = {:.2f}, move = {:.3f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol_proj = {:.4f}, vol_raw = {:.4f}, c_vol = {:.3e}".format(
                 q_val,
-                beta_val,
+                float(BETA_PROJ.values()[0]),
+                move_limit_now,
                 inner_count,
                 f0val,
                 obj_conv,
-                vol_fraction_now,
-                move_limit_now,
-                update_damping,
+                vol_fraction_proj,
+                vol_fraction_raw,
+                vol_constraint_residual,
             )
         )
 
-        previous_objective = f0val
         inner_count += 1
-        mma_iter_count += 1
         iter_count += 1
 
 print("Optimization finished. Results written to {}".format(results_root))

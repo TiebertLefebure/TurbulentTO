@@ -145,7 +145,19 @@ for iter in range(simulation_prm['MAX_ITERATIONS']):
         print(f'Simulation converged in {iter + 1} iterations ({time.time() - start_time:.2f} seconds)')
         break
 
-solutions = {'u': u1, 'p': p1, 'k': turbulence_model.k1, 'e': turbulence_model.e1}
+nu_t_final = project(
+    turbulence_model.nu_t,
+    K,
+    form_compiler_parameters={'quadrature_degree': quadrature_degree},
+)
+
+solutions = {
+    'u': u1,
+    'p': p1,
+    'k': turbulence_model.k1,
+    'e': turbulence_model.e1,
+    'nu_t': nu_t_final,
+}
 
 # Save results and residuals
 if post_processing['SAVE'] is True:

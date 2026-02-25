@@ -41,26 +41,13 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3 # Penalization value α_nut for SA transport equation -> Yoon 2016 Eq.(27)
 SA_NU_TILDE_PENALTY_N = 3.0 # Penalization factor n_nut for SA transport equation -> Yoon 2016 Eq.(27)
 
-# Penalized reciprocal wall-distance equation parameters
+# Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
+SA_USE_PENALIZED_WALL_DISTANCE = True
 SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
 SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e3 # Penalization value αG for relaxed wall equation -> Yoon 2016 Eq.(25)
-# Yoon 2016: "The penalization value αG is chosen by considering the size of design domain geometry. 
-# For example, if the characteristic length of a design domain is about 1 m, the value αG can be a positive value above 10^3."
-
-SA_WALL_PENALTY_N = 3.0 # Penalization factor nG for relaxed wall equation -> Yoon 2016 Eq.(25)
+SA_WALL_PENALTY_ALPHA = 1.0e3
+SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
-
-# ----------------------------------------------------------------------------
-# Validated baseline tuning from standalone SA Borrvall PipeBend simulation (TurbulenceModels/PipeBendBorrvallSimulation.py)
-# Note: steady TO solver (BorrvallTO/Borrvall_TurbulentTO.py) does not use transient time stepping
-# STEP_SIZE/CFL bounds are kept for traceability and future variants
-# ----------------------------------------------------------------------------
-STEP_SIZE = 2.0e-4
-MIN_STEP_SIZE = 5.0e-6
-MAX_STEP_SIZE = 2.0e-3
-CFL_RELAXATION = 0.12
-U_RELAXATION_FACTOR = 0.7
 
 # Topology optimization settings
 VOL_FRAC = 0.50
@@ -72,8 +59,7 @@ Q_PENAL_SCHEDULE = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.05, 0.1, 0.2, 0.3]
 MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0025, 0.002, 0.002]
 BETA_PROJ_SCHEDULE = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]
 SNES_LINEAR_SOLVER = "mumps"
-INLET_RAMP_STEPS = 20
-DESIGN_UPDATES_AFTER_FULL_RAMP = True
+INLET_RAMP_STEPS = 1
 FROZEN_PICARD_STEPS = 2 # FROZEN_PICARD_STEPS = 1
 FORWARD_SNES_METHOD = "newtontr"
 FORWARD_SNES_MAX_ITERS = 300
@@ -82,12 +68,6 @@ FORWARD_SNES_ATOL = 1.0e-6
 ADJOINT_SNES_RTOL = 1.0e-3
 ADJOINT_SNES_ATOL = 1.0e-6
 NUT_RELAXATION_FACTOR = 0.7
-MMA_DAMPING = 0.40
-MMA_DAMPING_ON_SPIKE = 0.20
-OBJECTIVE_SPIKE_REL_TOL = 0.30
-MOVE_LIMIT_REDUCTION_ON_SPIKE = 0.60
-MOVE_LIMIT_RECOVERY_FACTOR = 1.03
-MOVE_LIMIT_MIN = 8.0e-4
 
 BETA_PROJ_VALUE = 0.5 
 ETA_I = 0.50

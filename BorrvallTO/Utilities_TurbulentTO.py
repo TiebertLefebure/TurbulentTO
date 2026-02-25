@@ -1,14 +1,8 @@
-import argparse
-import importlib
-import os
-import shutil
-
 from dolfin import (
     Constant,
     DOLFIN_EPS,
     DirichletBC,
     Function,
-    MPI,
     NonlinearVariationalProblem,
     NonlinearVariationalSolver,
     TestFunction,
@@ -26,52 +20,9 @@ from dolfin import (
 )
 import numpy as np
 
-
-def normalize_module_name(module_name):
-    normalized = module_name.strip()
-    if normalized.endswith(".py"):
-        normalized = normalized[:-3]
-    normalized = normalized.replace(os.sep, ".")
-    return normalized
-
-
-def load_config_module_from_cli():
-    parser = argparse.ArgumentParser(add_help=True)
-    parser.add_argument(
-        "--config",
-        required=True,
-        help="Python module name for solver configuration (required).",
-    )
-    args, _unknown = parser.parse_known_args()
-    module_name = normalize_module_name(args.config)
-    if not module_name:
-        raise ValueError("Empty config module name is not allowed.")
-    return module_name, importlib.import_module(module_name)
-
-
-def float_scalar(value):
-    if hasattr(value, "values"):
-        values = value.values()
-        if len(values) == 1:
-            return float(values[0])
-    return float(value)
-
-
-def as_list(value):
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    return [value]
-
-
-def match_count(values, target_size):
-    values = as_list(values)
-    if len(values) == target_size:
-        return values
-    if len(values) == 1:
-        return values * target_size
-    if len(values) < target_size:
-        return values + [values[-1]] * (target_size - len(values))
-    return values[:target_size]
+from Utilities_LaminarTO import (
+    as_list,
+)
 
 
 def positive_part(expr):
@@ -85,15 +36,6 @@ def enforce_scalar_floor(scalar_function, floor_value):
     values = np.maximum(values, floor_value)
     scalar_function.vector().set_local(values)
     scalar_function.vector().apply("insert")
-
-
-def ensure_clean_dir(path, comm=MPI.comm_world):
-    # Avoid MPI races where multiple ranks delete/create the same folder.
-    if MPI.rank(comm) == 0:
-        if os.path.exists(path):
-            shutil.rmtree(path)
-        os.makedirs(path)
-    MPI.barrier(comm)
 
 
 def calculate_distance_field(space, boundaries_data, wall_markers, custom_dx, relaxation=0.01):
@@ -139,6 +81,14 @@ def build_penalized_wall_distance_solver(
     newton_max_iters=80,
     newton_relax=1.0,
 ):
+    """
+    Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25) in terms of G.
+
+    Returns:
+    - wall_distance: UFL expression for y reconstructed from G
+    - reciprocal_distance: Function G
+    - update_reciprocal_distance: callback to re-solve G for the current design
+    """
     g0_constant = Constant(g0_value)
     sigma_w_constant = Constant(sigma_w)
     alpha_g_constant = Constant(alpha_g_value)
@@ -149,7 +99,7 @@ def build_penalized_wall_distance_solver(
         for marker in as_list(wall_markers)
     ]
 
-    # Use the classic wall-distance as a robust initial guess for reciprocal distance G.
+    # Robust initialization from the standard wall-distance field.
     y_initial = calculate_distance_field(
         space,
         boundaries_data,
@@ -158,8 +108,7 @@ def build_penalized_wall_distance_solver(
         relaxation=sigma_w,
     )
 
-    # Yoon 2016 Eq.(15)
-    # l_w = 1/G - 1/G0  ->  G = 1 / (l_w + 1/G0)
+    # Yoon 2016 Eq. (15): l_w = 1/G - 1/G0  ->  G = 1 / (l_w + 1/G0)
     reciprocal_distance = project(
         Constant(1.0) / (y_initial + Constant(1.0 / g0_value)),
         space,
@@ -167,11 +116,11 @@ def build_penalized_wall_distance_solver(
     enforce_scalar_floor(reciprocal_distance, g_floor_value)
 
     z = TestFunction(space)
-    # In this TO code, rho_effective=1 means fluid and rho_effective=0 means solid.
+    # TO convention in this code: fluid_density_indicator = 1 in fluid, 0 in solid.
     solid_indicator = positive_part(Constant(1.0) - fluid_density_indicator)
     penalty = alpha_g_constant * (reciprocal_distance - g0_constant) * solid_indicator**n_g_constant
 
-    # Weak form: grad(G).grad(G) + sigma_w * G * Laplacian(G) = (1 + 2*sigma_w)*G^4 + penalty
+    # Yoon 2016 Eq. (25), weak form for reciprocal wall distance G.
     F = (
         (Constant(1.0) - sigma_w_constant)
         * inner(grad(reciprocal_distance), grad(reciprocal_distance))

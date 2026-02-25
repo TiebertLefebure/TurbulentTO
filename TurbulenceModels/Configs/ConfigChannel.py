@@ -62,7 +62,7 @@ boundary_conditions = {
         'E': None
     }
 }
-# VISCOSITY ν = 0.00181818
+# VISCOSITY ν = 0.00181818 m^2/s
 # 
 # for laminar flow: Poiseuille flow with parabolic velocity profile
 # FORCE = 12 * ν * U_avg / H^2 = 0.4363632, with U_avg = 20.0 m/s, H = 1.0 m

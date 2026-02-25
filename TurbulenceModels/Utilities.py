@@ -188,33 +188,91 @@ def initialize_mixed_functions(Space, initial_condition=None):
 
 # ---------------- Mesh and distance constructor ---------------- #
 
+def _raise_xdmf_load_error(label, xdmf_path, exc):
+    '''Raise a clearer mesh-loading error for common HDF5/XDMF issues.'''
+    xdmf_abs_path = os.path.abspath(xdmf_path)
+    sibling_h5_path = os.path.splitext(xdmf_path)[0] + '.h5'
+    sibling_h5_abs_path = os.path.abspath(sibling_h5_path)
+    hdf5_locking = os.environ.get('HDF5_USE_FILE_LOCKING')
+
+    message = [
+        f"Failed to load {label} from XDMF/HDF5 files.",
+        f"XDMF path: {xdmf_abs_path}",
+    ]
+
+    if os.path.exists(xdmf_path):
+        message.append("XDMF file exists.")
+    else:
+        message.append("XDMF file is missing.")
+
+    if os.path.exists(sibling_h5_path):
+        message.append(f"Sibling HDF5 path exists: {sibling_h5_abs_path}")
+    else:
+        message.append(
+            "Sibling HDF5 path not found (the XDMF file may reference a different .h5 filename)."
+        )
+
+    message.extend([
+        f"HDF5_USE_FILE_LOCKING={hdf5_locking!r}",
+        "",
+        "Common cause: HDF5 read failure on a Docker bind-mounted or cloud-synced folder",
+        "(macOS/Windows shared folders, iCloud/Dropbox/OneDrive).",
+        "",
+        "Try one of these:",
+        "1. Run with: HDF5_USE_FILE_LOCKING=FALSE python3 <script>.py",
+        "2. Copy the mesh .xdmf/.h5 files to a container-local path (for example /tmp) and load from there.",
+        "3. Move the repository to a non-synced local directory before mounting into Docker.",
+        "",
+        f"Original exception: {type(exc).__name__}: {exc}",
+    ])
+
+    raise RuntimeError("\n".join(message)) from exc
+
 def load_mesh_from_file(mesh_directory, facet_directory):
     '''Loads .xdmf mesh and faces mesh'''
+    if not os.path.exists(mesh_directory):
+        raise FileNotFoundError(f"Mesh XDMF file not found: {os.path.abspath(mesh_directory)}")
+    if not os.path.exists(facet_directory):
+        raise FileNotFoundError(f"Facet XDMF file not found: {os.path.abspath(facet_directory)}")
+
     mesh = Mesh()
-    with XDMFFile(mesh_directory) as infile:
-        infile.read(mesh)
+    try:
+        with XDMFFile(mesh_directory) as infile:
+            infile.read(mesh)
+    except Exception as exc:
+        _raise_xdmf_load_error("mesh", mesh_directory, exc)
 
     mvc = MeshValueCollection("size_t", mesh, 1)
-    with XDMFFile(facet_directory) as infile:
-        infile.read(mvc)
+    try:
+        with XDMFFile(facet_directory) as infile:
+            infile.read(mvc)
+    except Exception as exc:
+        _raise_xdmf_load_error("facet markers", facet_directory, exc)
     marked_facets = cpp.mesh.MeshFunctionSizet(mesh, mvc)
     return mesh, marked_facets
 
-# Smoothened (with relaxation) Eikonal equation for wall-distance
-def calculate_Distance_field(Space, mf, wall_index, relax):
-    '''computes distance to boundaries specified by wall_index on mf'''
-    bcy = []
-    for index in wall_index:
-        bc = DirichletBC(Space, Constant(0), mf, index)
-        bcy.append(bc)
+def _normalize_wall_markers(wall_index):
+    '''Normalize wall markers to a Python set of ints.'''
+    if isinstance(wall_index, (list, tuple, set, np.ndarray)):
+        return {int(marker) for marker in wall_index}
+    return {int(wall_index)}
 
-    y =  Function(Space)
+def _build_wall_bcs(Space, mf, wall_index, value):
+    '''Dirichlet boundary conditions on wall markers.'''
+    wall_markers = sorted(_normalize_wall_markers(wall_index))
+    return [DirichletBC(Space, Constant(value), mf, marker) for marker in wall_markers]
+
+def _calculate_eikonal_distance_field(Space, mf, wall_index, relax):
+    '''Smoothened (with relaxation) Eikonal equation for wall-distance.'''
+    bcy = _build_wall_bcs(Space, mf, wall_index, 0.0)
+
+    y = Function(Space)
     dy = TrialFunction(Space)
-    z =  TestFunction(Space)
+    z = TestFunction(Space)
     relaxation = Constant(relax)
     g = Constant(1.0)
 
-    #Linear approximation
+    # Linear approximation
     F0 = inner(grad(dy), grad(z))*dx - g*z*dx
     a0, L0 = lhs(F0), rhs(F0)
     solve(a0==L0, y, bcy)
@@ -223,8 +281,86 @@ def calculate_Distance_field(Space, mf, wall_index, relax):
     F0  = sqrt(inner(grad(y), grad(y)))*z*dx - g*z*dx \
         + relaxation*inner(grad(y),grad(z))*dx
     problem = NonlinearVariationalProblem(F0, y,J=derivative(F0, y), bcs=bcy)
-    solver = NonlinearVariationalSolver(problem)    
+    solver = NonlinearVariationalSolver(problem)
     solver.solve()
     return y
+
+def calculate_relaxed_wall_distance_field_yoon_eq19(
+    Space,
+    mf,
+    wall_index,
+    relax=0.01,
+    sigma_w=0.1,
+    g0=20.0,
+    g_floor=1.0e-12,
+):
+    '''
+    Yoon 2016 Eq. (19) relaxed wall equation in reciprocal-distance form G.
+
+    Solves for G and reconstructs wall distance using Eq. (15): y = 1/G - 1/G0.
+    '''
+    if float(g0) <= 0.0:
+        raise ValueError("Yoon Eq. (19) requires g0 > 0.")
+    if float(g_floor) <= 0.0:
+        raise ValueError("Yoon Eq. (19) requires g_floor > 0.")
+
+    sigma_w_const = Constant(float(sigma_w))
+    g0_const = Constant(float(g0))
+    g_floor_const = Constant(float(g_floor))
+
+    # Robust initialization from the standard smoothed Eikonal distance.
+    y_initial = _calculate_eikonal_distance_field(Space, mf, wall_index, relax)
+    G = project(Constant(1.0) / (y_initial + Constant(1.0 / float(g0))), Space)
+    G.vector()[:] = np.maximum(G.vector()[:], float(g_floor))
+
+    wall_bcs = _build_wall_bcs(Space, mf, wall_index, float(g0))
+    z = TestFunction(Space)
+
+    # Weak form corresponding to Yoon 2016 Eq. (19):
+    # |grad G|^2 + sigma_w * G * div(grad G) = (1 + 2 sigma_w) * G^4
+    # using |grad G|^2 = div(G grad G) - G * div(grad G).
+    F = (
+        (Constant(1.0) - sigma_w_const) * inner(grad(G), grad(G)) * z * dx
+        - sigma_w_const * G * inner(grad(G), grad(z)) * dx
+        - (Constant(1.0) + Constant(2.0) * sigma_w_const) * G**4 * z * dx
+    )
+    problem = NonlinearVariationalProblem(F, G, bcs=wall_bcs, J=derivative(F, G))
+    solver = NonlinearVariationalSolver(problem)
+    solver.solve()
+    G.vector()[:] = np.maximum(G.vector()[:], float(g_floor))
+
+    y = project(Constant(1.0) / (G + g_floor_const) - Constant(1.0) / g0_const, Space)
+    return bound_from_bellow(y, 0.0)
+
+# Smoothened (with relaxation) Eikonal equation for wall-distance
+def calculate_Distance_field(
+    Space,
+    mf,
+    wall_index,
+    relax=0.01,
+    method='OriginalEikonal',
+    sigma_w=0.1,
+    g0=20.0,
+    g_floor=1.0e-12,
+):
+    '''computes distance to boundaries specified by wall_index on mf'''
+    method_normalized = method.lower().replace('-', '_')
+
+    if method_normalized in {'relaxedwalleikonal', 'yoon_eq19', 'relaxed_wall', 'yoon19'}:
+        return calculate_relaxed_wall_distance_field_yoon_eq19(
+            Space,
+            mf,
+            wall_index,
+            relax=relax,
+            sigma_w=sigma_w,
+            g0=g0,
+            g_floor=g_floor,
+        )
+    if method_normalized in {'originaleikonal', 'eikonal'}:
+        return _calculate_eikonal_distance_field(Space, mf, wall_index, relax)
+
+    raise ValueError(
+        "Unknown wall-distance method '{}'. Use 'OriginalEikonal' or 'RelaxedWallEikonal'.".format(method)
+    )
 
 # --------------------------------------------------------------- #

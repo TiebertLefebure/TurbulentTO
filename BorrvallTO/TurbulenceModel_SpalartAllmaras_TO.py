@@ -182,7 +182,7 @@ class SpalartAllmarasSteadyState(SpalartAllmarasGeneral):
             + dot((self._react_nt + penalty_react) * self._nu_tilde, self._xi)*self._dx \
             - dot(self._source_nt, self._xi)*self._dx
         self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
-        # added penalty_react to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)
+        # added penalization term to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)
 
 class SpalartAllmarasTransient(SpalartAllmarasGeneral):
     def __init__(

@@ -57,31 +57,13 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Penalized reciprocal wall-distance equation parameters
+# Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
+SA_USE_PENALIZED_WALL_DISTANCE = True
 SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
-
-# ------------------------------------------------------------------
-# Validated baseline tuning from standalone SA Borrvall DoublePipe simulation (TurbulenceModels/DoublePipeBorrvallSimulation.py)
-# Note: current TO solver path (BorrvallTO/Borrvall_TurbulentTO.py) is steady (SNES-based)
-# Transient keys are kept for traceability and future variants.
-# ------------------------------------------------------------------
-STEP_SIZE = 2.0e-4
-MIN_STEP_SIZE = 5.0e-6
-MAX_STEP_SIZE = 2.0e-3
-CFL_RELAXATION = 0.12
-U_RELAXATION_FACTOR = 0.7
-P_RELAXATION_FACTOR = 1.0
-
-# ===========================================================
-# If pressure oscillations appear in standalone SA reruns:
-# 1) CFL_RELAXATION: 0.12 -> 0.05
-# 2) MAX_STEP_SIZE: 2.0e-3 -> 5.0e-4
-# 3) P_RELAXATION_FACTOR: 1.0 -> 0.7
-# ===========================================================
 
 # Topology optimization settings
 VOL_FRAC = 1.0 / 3.0
@@ -99,11 +81,6 @@ FORWARD_SNES_METHOD = "newtontr"
 FORWARD_SNES_MAX_ITERS = 300
 FORWARD_SNES_RTOL = 1.0e-3
 FORWARD_SNES_ATOL = 1.0e-6 # Relax if too many SNES iterations
-FORWARD_SNES_ATTEMPTS = [
-    {"method": "newtontr", "rtol": 1.0e-3, "atol": 1.0e-6, "max_it": 80, "reinitialize": False},
-    {"method": "newtontr", "rtol": 1.0e-3, "atol": 1.0e-6, "max_it": 80, "reinitialize": True},
-    {"method": "newtonls", "line_search": "bt", "rtol": 5.0e-3, "atol": 1.0e-5, "max_it": 200, "reinitialize": True},
-]
 ADJOINT_SNES_RTOL = 1.0e-3
 ADJOINT_SNES_ATOL = 1.0e-6
 NUT_RELAXATION_FACTOR = 0.7

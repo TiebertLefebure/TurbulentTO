@@ -17,7 +17,7 @@ boundary_markers = {
 # radius of curvature = 125 mm
 # straight section lenghts = 1555 mm
 
-# hydraulic diameter D = 2 * R = 0.028 m
+# hydraulic diameter D_h = 2 * R = 0.028 m
 
 # inlet bulk velocity U = 1.42 m/s
 
@@ -67,8 +67,9 @@ physical_prm = {
     'FORCE': (0.0, 0.0, 0.0)
 }
 
-# Reynolds number:
-# Re = U * D / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 x 10^4
+# -----------------------------------------------------------------------
+# Reynolds number: Re = U * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 x 10^4
+# -----------------------------------------------------------------------
 
 # Simulation parameters
 simulation_prm = {
@@ -94,14 +95,3 @@ post_processing = {
     'SAVE': True,
 }
 
-#docker run -ti \
-#    -v $(pwd):/home/fenics/shared \
-#    -w /home/fenics/shared \
-#    quay.io/fenicsproject/stable:current
-
-
-#cd ~/shared
-
-#ls 
-
-#python3 UBendSimulation.py
