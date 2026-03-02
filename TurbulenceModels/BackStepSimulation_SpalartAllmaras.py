@@ -52,7 +52,21 @@ for boundary_name, markers in boundary_markers.items():
 # Initialize constants and expressions
 nu = Constant(physical_prm['VISCOSITY'])
 force = Constant(physical_prm['FORCE'])
-y = calculate_Distance_field(K, marked_facets, boundary_markers['WALLS'], 0.01)
+wall_distance_method = simulation_prm.get('WALL_DISTANCE_METHOD', 'RelaxedWallEikonal')
+wall_distance_relax = simulation_prm.get('WALL_DISTANCE_EIKONAL_RELAXATION', 0.01)
+wall_distance_sigma_w = simulation_prm.get('WALL_DISTANCE_YOON_SIGMA_W', 0.1)
+wall_distance_g0 = simulation_prm.get('WALL_DISTANCE_YOON_G0', 20.0)
+wall_distance_g_floor = simulation_prm.get('WALL_DISTANCE_YOON_G_FLOOR', 1.0e-12)
+y = calculate_Distance_field(
+    K,
+    marked_facets,
+    boundary_markers['WALLS'],
+    wall_distance_relax,
+    method=wall_distance_method,
+    sigma_w=wall_distance_sigma_w,
+    g0=wall_distance_g0,
+    g_floor=wall_distance_g_floor,
+)
 
 # Initialize functions
 u, v, u1, u0, p, q, p1, p0, w1, w0 = initialize_mixed_functions(

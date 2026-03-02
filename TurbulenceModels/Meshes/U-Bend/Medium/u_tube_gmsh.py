@@ -16,7 +16,7 @@ D_PIPE = 2.0 * R_PIPE
 H_LEG = 30.0 * D_PIPE   # Straight-leg length = 30D = 840 mm
 
 # Medium characteristic element size
-LC = D_PIPE / 20.0      # Between coarse (D/10) and fine (D/40) wall-resolved mesh
+LC = D_PIPE / 20.0      # Between coarse (D/10) and fine (D/40) mesh
 
 
 def create_mesh(output_filename='u_bend_2d.msh'):

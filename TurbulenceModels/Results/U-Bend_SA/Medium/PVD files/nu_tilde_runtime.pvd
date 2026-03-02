@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<VTKFile type="Collection" version="0.1">
+  <Collection>
+    <DataSet timestep="0.003613624258708602" part="0" file="nu_tilde_runtime000000.vtu" />
+    <DataSet timestep="0.0068917632739789658" part="0" file="nu_tilde_runtime000001.vtu" />
+    <DataSet timestep="0.010171631142765666" part="0" file="nu_tilde_runtime000002.vtu" />
+    <DataSet timestep="0.013453250756293193" part="0" file="nu_tilde_runtime000003.vtu" />
+    <DataSet timestep="0.016736078511655327" part="0" file="nu_tilde_runtime000004.vtu" />
+    <DataSet timestep="0.020020081102709683" part="0" file="nu_tilde_runtime000005.vtu" />
+    <DataSet timestep="0.023305622920053014" part="0" file="nu_tilde_runtime000006.vtu" />
+    <DataSet timestep="0.026592940927248933" part="0" file="nu_tilde_runtime000007.vtu" />
+    <DataSet timestep="0.029881828010789115" part="0" file="nu_tilde_runtime000008.vtu" />
+    <DataSet timestep="0.033172324112795172" part="0" file="nu_tilde_runtime000009.vtu" />
+    <DataSet timestep="0.036465073633956659" part="0" file="nu_tilde_runtime000010.vtu" />
+    <DataSet timestep="0.03976068250383967" part="0" file="nu_tilde_runtime000011.vtu" />
+    <DataSet timestep="0.04305927035571662" part="0" file="nu_tilde_runtime000012.vtu" />
+    <DataSet timestep="0.043884354382044667" part="0" file="nu_tilde_runtime000013.vtu" />
+  </Collection>
+</VTKFile>

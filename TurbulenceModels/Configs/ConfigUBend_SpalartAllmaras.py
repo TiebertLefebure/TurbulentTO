@@ -1,9 +1,30 @@
+import os
 
 # File paths for mesh and boundary data
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/U-Bend/Coarse/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/U-Bend/Coarse/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/U-Bend/Medium_WallRefinement/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/U-Bend/Medium_WallRefinement/facet.xdmf'
 }
+
+
+def _infer_mesh_label_from_path(path):
+    parts = os.path.normpath(path).split(os.sep)
+    for label in ('Coarse', 'Medium', 'Fine'):
+        if label in parts:
+            return label
+    # Fallback to parent folder name for custom mesh variants.
+    return parts[-2] if len(parts) >= 2 else 'UnknownMesh'
+
+
+UBEND_SA_MESH_LABEL = _infer_mesh_label_from_path(mesh_files['MESH_DIRECTORY'])
+UBEND_SA_RESULTS_ROOT = f'Results/U-Bend_SA/{UBEND_SA_MESH_LABEL}'
+# Warm-start source can be the same mesh (default) or another U-bend mesh label
+# (e.g. 'Coarse' to accelerate a 'Medium' run via interpolation/projection).
+# Change 'UBEND_SA_WARM_START_LABEL' to desired mesh label.
+UBEND_SA_WARM_START_LABEL = 'Coarse_WallRefinement'
+UBEND_SA_WARM_START_ROOT = f'Results/U-Bend_SA/{UBEND_SA_WARM_START_LABEL}'
+UBEND_SA_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/mesh.xdmf'
+UBEND_SA_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/facet.xdmf'
 
 # Specify type of boundaries
 boundary_markers = {
@@ -11,18 +32,19 @@ boundary_markers = {
     'OUTFLOW': [3],
     'WALLS': [4]
 }
-# -----------------
+
+# ------------------------
 # 2D U-bend
-# -----------------
+# ------------------------
 
-# pipe radius R = 14 mm
-# pipe diameter D = 2 * R = 28 mm
+# pipe radius R_PIPE = 14 mm
+# pipe diameter D_PIPE = 2 * R_PIPE = 28 mm
 # radius of curvature R_c = 125 mm
-# straight section length H_LEG = 30 * D = 840 mm
+# straight section length H_LEG = 30 * D_PIPE = 840 mm
 
-# hydraulic diameter D_h = 2 * R = 0.028 m
+# hydraulic diameter D_h = 2 * R_PIPE = 28 mm
 
-# inlet bulk velocity U = 1.42 m/s
+# inlet bulk velocity U_ref = 1.42 m/s
 
 # 'VISCOSITY' ν = 8.9e-7 
 
@@ -73,7 +95,7 @@ boundary_conditions = {
 
 # Physical quantities
 physical_prm = {
-    'VISCOSITY': 8.9e-7,  
+    'VISCOSITY': 8.9e-7, # kinematic viscosity ν
     'FORCE': (0.0, 0.0, 0.0)
 }
 
@@ -86,54 +108,77 @@ physical_prm = {
 simulation_prm_SA = {
     'QUADRATURE_DEGREE': 6,
     'MAX_ITERATIONS': 9000,
+
+    # Tolerances:
     'TOLERANCE': 1e-6,
     # Optional field-specific tolerances (defaults fall back to TOLERANCE if omitted).
-    # Practical tail settings for this U-bend SA case:
-    'TOLERANCE_U': 1e-5,
-    'TOLERANCE_P': 5e-6,
+    # Keep U/p tolerances stricter for mesh-comparison runs; the medium mesh can
+    # otherwise stop early and look artificially over-diffusive at the probe line.
+    'TOLERANCE_U': 2e-5,
+    'TOLERANCE_P': 1.5e-5,
     'TOLERANCE_NU_TILDE': 1e-6,
 
-    'CFL_RELAXATION': 0.3,
-    'U_RELAXATION_FACTOR': 0.7, # 'U_RELAXATION_FACTOR': 1.0
-    'NUT_RELAXATION_FACTOR': 0.7, # 'NUT_RELAXATION_FACTOR': 1.0
+    # Relaxation factors:
+    'U_RELAXATION_FACTOR': 0.7, 
+    'NUT_RELAXATION_FACTOR': 0.7, 
 
     # Number of SA solves per outer NS/SA coupling iteration.
     'SA_INNER_ITERS': 5,
-    # One-way runtime optimization: drop SA inner iterations in the convergence tail.
+    # Safe staged tail reduction: 'SA_INNER_ITERS' -> 'SA_INNER_ITERS_MID' -> 'SA_INNER_ITERS_MIN' 
+    # (avoid dropping to 1 for U-bend).
+    'SA_INNER_ITERS_MID': 3,
+    # Keep a non-trivial SA coupling in the tail; dropping to 1 inner solve can
+    # flatten the medium-mesh velocity profile before the turbulence field catches up.
     'SA_INNER_ITERS_MIN': 2,
-    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1,
+    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1, # Switch from 'SA_INNER_ITERS' to 'SA_INNER_ITERS_MID' when nu_tilde1 - nu_tilde0 < 0.1 * 'TOLERANCE_NU_TILDE' 
+    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR_FINAL': 0.01, # # Switch from 'SA_INNER_ITERS_MID' to 'SA_INNER_ITERS_MIN' when nu_tilde1 - nu_tilde0 < 0.01 * 'TOLERANCE_NU_TILDE' 
     'SA_INNER_ITERS_REDUCE_STREAK': 20,
+    'SA_INNER_ITERS_REDUCE_STREAK_FINAL': 20,
 
     # Wall-distance model:
     #   'OriginalEikonal'    -> original smoothed Eikonal distance
     #   'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
     'WALL_DISTANCE_METHOD': 'RelaxedWallEikonal',
-
     'WALL_DISTANCE_EIKONAL_RELAXATION': 0.01,
-
-    # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHOD='RelaxedWallEikonal')
+    # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHO = 'RelaxedWallEikonal')
     'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses 0.1
     'WALL_DISTANCE_YOON_G0': 20.0,          # [1/m], reference reciprocal distance (Eq. 15)
     'WALL_DISTANCE_YOON_G_FLOOR': 1.0e-12,  # numerical floor for G
     
-    'STEP_SIZE': 5e-4,
+    # Time-stepping parameters (using CFL condition)
+    'CFL_RELAXATION': 0.3, # maximum CFL number
+    'STEP_SIZE': 5e-4, # initial time step
     'MIN_STEP_SIZE': 1e-5,
     'MAX_STEP_SIZE': 1e-3,
+    # Runtime output cadence (for live monitoring while the solver runs).
+    # 0 disables runtime snapshots; set e.g. 20 to write every 20 iterations.
+    'RUNTIME_WRITE_INTERVAL': 50,
+    'RUNTIME_WRITE_PVD': True,
+    'RUNTIME_WRITE_RESIDUALS': True,
+    # Pseudo-transient convergence guard for mesh-comparison runs.
+    # Finer meshes use smaller CFL time steps; without this, update-based stopping
+    # can trigger before nu_tilde has time to develop through the bend.
+    'MIN_PSEUDO_TIME': 0.025,
 
     # Optional warm-start from saved H5 fields (same mesh/function spaces required).
-    'WARM_START_ENABLED': False,
-    'WARM_START_U_H5': 'Results/U-Bend_SA/H5 files/u.h5',
-    'WARM_START_P_H5': 'Results/U-Bend_SA/H5 files/p.h5',
-    # Optional SA warm-start 'Results/U-Bend_SA/H5 files/nu_tilde.h5.
-    'WARM_START_NU_TILDE_H5': 'Results/U-Bend_SA/H5 files/nu_tilde.h5',
+    # Set to False to disable warm-start.
+    'WARM_START_ENABLED': True,
+    'WARM_START_SOURCE_MESH_XDMF': UBEND_SA_WARM_START_MESH_XDMF,
+    'WARM_START_SOURCE_FACET_XDMF': UBEND_SA_WARM_START_FACET_XDMF,
+    # Velocity warm-start
+    'WARM_START_U_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/u.h5',
+    # Pressure warm-start
+    'WARM_START_P_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/p.h5',
+    # Modified turbulent viscosity warm-start
+    'WARM_START_NU_TILDE_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/nu_tilde.h5',
 
 }
 
 # Specify where results are saved for SA model
 saving_directory_SA = {
-    'PVD_FILES': 'Results/U-Bend_SA/PVD files/',
-    'H5_FILES':  'Results/U-Bend_SA/H5 files/',
-    'RESIDUALS': 'Results/U-Bend_SA/Residual files/'
+    'PVD_FILES': f'{UBEND_SA_RESULTS_ROOT}/PVD files/',
+    'H5_FILES':  f'{UBEND_SA_RESULTS_ROOT}/H5 files/',
+    'RESIDUALS': f'{UBEND_SA_RESULTS_ROOT}/Residual files/'
 }
 
 # Specify what to do after simulation

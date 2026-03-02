@@ -12,10 +12,14 @@ boundary_markers = {
     'WALLS': [4]
 }
 
-# 2D U-bend (Ansys Manual VMFL048)
-# radius R = 14 mm
-# radius of curvature = 125 mm
-# straight section lenghts = 1555 mm
+# ----------------
+# 2D U-bend 
+# ----------------
+
+# pipe radius R = 14 mm
+# pipe diameter D = 2 * R = 28 mm
+# radius of curvature R_c = 125 mm
+# straight section lengths H_LEG = 30 * D = 840 mm
 
 # hydraulic diameter D_h = 2 * R = 0.028 m
 
@@ -23,7 +27,7 @@ boundary_markers = {
 
 # choose turbulence intensity I = 5%
 
-# set turbulent length scale l ≈ 0.07*D = 2.0 mm
+# set turbulent length scale l ≈ 0.07 * D = 2.0 mm
 
 # initial & inflow boundary conditions for K & E:
 # K = 1.5 * (U * I)^2 = 0.008
@@ -67,19 +71,19 @@ physical_prm = {
     'FORCE': (0.0, 0.0, 0.0)
 }
 
-# -----------------------------------------------------------------------
-# Reynolds number: Re = U * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 x 10^4
-# -----------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Reynolds number: Re = U_ref * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 x 10^4
+# --------------------------------------------------------------------------
 
 # Simulation parameters
 simulation_prm = {
     'QUADRATURE_DEGREE': 2,
     'MAX_ITERATIONS': 3000,
     'TOLERANCE': 1e-6,
-    'CFL_RELAXATION': 0.1, # 'CFL_RELAXATION': 0.25
+    'CFL_RELAXATION': 0.1, 
     'U_RELAXATION_FACTOR': 0.7,
     'TURB_RELAXATION_FACTOR': 0.7,
-    'STEP_SIZE': 5e-4 # 'STEP_SIZE': 0.005
+    'STEP_SIZE': 5e-4 
 }
 
 # Specify where results are saved

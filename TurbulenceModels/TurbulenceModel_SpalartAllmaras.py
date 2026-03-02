@@ -1,9 +1,9 @@
 from dolfin import *
 from Utilities import *
 
-#---------------------------------------#
-### Spalart-Allmaras turbulence model ###
-#---------------------------------------#
+# --------------------------------- #
+# Spalart-Allmaras turbulence model #
+# --------------------------------- #
 
 class SpalartAllmarasGeneral:
     def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field, sa_options=None):
@@ -17,7 +17,8 @@ class SpalartAllmarasGeneral:
         self._dx = custom_dx
         self._ds = custom_ds
         self._y = distance_field 
-        # This Spalart-Allmaras implementation (without TO) uses a smoothened Eikonal equation for the wall-distance field (in Utilities.py)
+        # This Spalart-Allmaras implementation (without TO) uses a relaxed wall Eikonal equation for the wall-distance field (in Utilities.py)
+        # According to Yoon et al. (2016)
         self._sa_options = {} if sa_options is None else dict(sa_options)
 
         self._construct_functions()
@@ -83,7 +84,7 @@ class SpalartAllmarasGeneral:
 
         # Wall distance with safety epsilon
         y_safe = self._y + DOLFIN_EPS
-        # "calculate_Distance_field" in "Utilities.py" solves the Eikonal equation for the wall distance function
+        # calculate_Distance_field in Utilities.py solves the Eikonal equation for the wall-distance function
         kappa = 0.41
 
         # Modified strain rate S_tilde (standard SA piecewise definition).

@@ -3,6 +3,7 @@ from mpi4py import MPI
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+
 # ---------------------------------------------------- #
 # Utilities.py originally present in GitHub repository #
 # ---------------------------------------------------- #
@@ -88,8 +89,10 @@ def calculate_cfl_time_step(u, delta_x, delta_y, relax, mesh):
     
     a = (abs(u_x) / delta_x + abs(u_y) / delta_y)
 
-    local_cfl  = project(1. / a, FunctionSpace(mesh, "DG", 0))
-    global_cfl = np.min(local_cfl.vector()[:])
+    local_cfl = project(1. / a, FunctionSpace(mesh, "DG", 0))
+    local_vals = local_cfl.vector().get_local()
+    local_min = float(np.min(local_vals)) if local_vals.size else float("inf")
+    global_cfl = MPI.COMM_WORLD.allreduce(local_min, op=MPI.MIN)
     return relax * global_cfl
 
 def bound_from_bellow(f, lb):
@@ -332,7 +335,7 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     y = project(Constant(1.0) / (G + g_floor_const) - Constant(1.0) / g0_const, Space)
     return bound_from_bellow(y, 0.0)
 
-# Smoothened (with relaxation) Eikonal equation for wall-distance
+# Relaxed wall-distance Eikonal equation (Yoon 2016 Eq. 19)
 def calculate_Distance_field(
     Space,
     mf,
