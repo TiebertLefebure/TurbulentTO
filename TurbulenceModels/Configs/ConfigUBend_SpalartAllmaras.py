@@ -69,7 +69,7 @@ NU_TILDE_INLET = C_MU * (K_EPSILON_INLET ** 2) / E_EPSILON_INLET
 
 # Initial conditions
 initial_conditions = {
-    'U': (0.0, 0.0, 0.0), 
+    'U': (0.0, 0.0),
     'P': 0.0,
     'NU_TILDE': NU_TILDE_INLET 
 }
@@ -77,7 +77,7 @@ initial_conditions = {
 # Boundary conditions
 boundary_conditions = {
     'INFLOW':{
-        'U': (0.0, -1.42, 0.0), 
+        'U': (0.0, -1.42),
         'P': None, 
         'NU_TILDE': NU_TILDE_INLET
     },
@@ -87,7 +87,7 @@ boundary_conditions = {
         'NU_TILDE': None
     },
     'WALLS':{
-        'U': (0.0, 0.0, 0.0),
+        'U': (0.0, 0.0),
         'P': None,
         'NU_TILDE': 0.0
     }
@@ -95,13 +95,13 @@ boundary_conditions = {
 
 # Physical quantities
 physical_prm = {
-    'VISCOSITY': 8.9e-7, # kinematic viscosity ν
-    'FORCE': (0.0, 0.0, 0.0)
+    'VISCOSITY': 8.9e-7, # kinematic viscosity ν (m^2/s)
+    'FORCE': (0.0, 0.0)
 }
 
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------
 # Reynolds number: Re = U_ref * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 × 10^4
-# ------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------
 
 
 # Simulation parameters for SA model
@@ -109,7 +109,9 @@ simulation_prm_SA = {
     'QUADRATURE_DEGREE': 6,
     'MAX_ITERATIONS': 9000,
 
-    # Tolerances:
+    # ---------------
+    # Tolerances
+    # ---------------
     'TOLERANCE': 1e-6,
     # Optional field-specific tolerances (defaults fall back to TOLERANCE if omitted).
     # Keep U/p tolerances stricter for mesh-comparison runs; the medium mesh can
@@ -118,10 +120,30 @@ simulation_prm_SA = {
     'TOLERANCE_P': 1.5e-5,
     'TOLERANCE_NU_TILDE': 1e-6,
 
-    # Relaxation factors:
+    # ----------------------
+    # Relaxation factors
+    # ----------------------
     'U_RELAXATION_FACTOR': 0.7, 
     'NUT_RELAXATION_FACTOR': 0.7, 
 
+    # ---------------------
+    # Linear solver
+    # --------------------- 
+    # Separate linear-solver controls for NS and SA.
+    # NS (pressure-correction blocks F1, F2, F3):
+    # Keep NS_LINEAR_SOLVER='mumps' + NS_LINEAR_PRECONDITIONER=None for robustness
+    # For lower RAM try: NS_LINEAR_SOLVER='bicgstab' + NS_LINEAR_PRECONDITIONER='hypre_amg' (or 'ilu').
+    'NS_LINEAR_SOLVER': 'mumps',
+    'NS_LINEAR_PRECONDITIONER': None,
+    # SA (nu_tilde transport equation):
+    # SA_LINEAR_SOLVER='default' + SA_LINEAR_PRECONDITIONER='default' uses DOLFIN backend default solve(A,x,b).
+    # For explicit control, set e.g. SA_LINEAR_SOLVER='bicgstab' + SA_LINEAR_PRECONDITIONER='hypre_amg'.
+    'SA_LINEAR_SOLVER': 'default',
+    'SA_LINEAR_PRECONDITIONER': 'default',
+
+    # ----------------------------
+    # SA iterations parameters
+    # ----------------------------
     # Number of SA solves per outer NS/SA coupling iteration.
     'SA_INNER_ITERS': 5,
     # Safe staged tail reduction: 'SA_INNER_ITERS' -> 'SA_INNER_ITERS_MID' -> 'SA_INNER_ITERS_MIN' 
@@ -135,34 +157,41 @@ simulation_prm_SA = {
     'SA_INNER_ITERS_REDUCE_STREAK': 20,
     'SA_INNER_ITERS_REDUCE_STREAK_FINAL': 20,
 
-    # Wall-distance model:
-    #   'OriginalEikonal'    -> original smoothed Eikonal distance
-    #   'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
+    # ------------------------
+    # Wall-distance model
+    # ------------------------
+    # 'OriginalEikonal'    -> original smoothed Eikonal distance
+    # 'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
     'WALL_DISTANCE_METHOD': 'RelaxedWallEikonal',
     'WALL_DISTANCE_EIKONAL_RELAXATION': 0.01,
     # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHO = 'RelaxedWallEikonal')
-    'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses 0.1
+    'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses sigma_w = 0.1
     'WALL_DISTANCE_YOON_G0': 20.0,          # [1/m], reference reciprocal distance (Eq. 15)
     'WALL_DISTANCE_YOON_G_FLOOR': 1.0e-12,  # numerical floor for G
     
+    # ------------------------------------------------
     # Time-stepping parameters (using CFL condition)
+    # ------------------------------------------------
     'CFL_RELAXATION': 0.3, # maximum CFL number
     'STEP_SIZE': 5e-4, # initial time step
     'MIN_STEP_SIZE': 1e-5,
     'MAX_STEP_SIZE': 1e-3,
+
+    # -------------------------
+    # Live monitoring 
+    # -------------------------
     # Runtime output cadence (for live monitoring while the solver runs).
     # 0 disables runtime snapshots; set e.g. 20 to write every 20 iterations.
     'RUNTIME_WRITE_INTERVAL': 50,
     'RUNTIME_WRITE_PVD': True,
     'RUNTIME_WRITE_RESIDUALS': True,
-    # Pseudo-transient convergence guard for mesh-comparison runs.
-    # Finer meshes use smaller CFL time steps; without this, update-based stopping
-    # can trigger before nu_tilde has time to develop through the bend.
-    'MIN_PSEUDO_TIME': 0.025,
 
+    # -------------------------
+    # Warm-start
+    # -------------------------
     # Optional warm-start from saved H5 fields (same mesh/function spaces required).
     # Set to False to disable warm-start.
-    'WARM_START_ENABLED': True,
+    'WARM_START_ENABLED': False,
     'WARM_START_SOURCE_MESH_XDMF': UBEND_SA_WARM_START_MESH_XDMF,
     'WARM_START_SOURCE_FACET_XDMF': UBEND_SA_WARM_START_FACET_XDMF,
     # Velocity warm-start

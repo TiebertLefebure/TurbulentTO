@@ -55,6 +55,22 @@ physical_prm = {
     'FORCE': (0.0, 0.0)
 }
 
+# Reynolds-number reference lengths from the actual BackStep mesh markers (Fine mesh):
+#   inflow marker [4]: x = -32.5, y in [0.0, 2.0]      -> inlet opening height H_in = 2.0
+#   outflow marker [2]: x =  12.5, y in [-0.25, 2.0]   -> outlet height H_out = 2.25
+#   step drop at x = -27.5: upstream lower boundary y=0.0 to downstream lower wall y=-0.25
+#       -> step height h = 0.25
+#
+# With U_ref = 25.0 m/s and nu = 1.81818e-4 m^2/s:
+#   Re_h      = U_ref * h     / nu ≈ 3.44e4   (common Backward-Facing Step definition)
+#   Re_Hin    = U_ref * H_in  / nu ≈ 2.75e5
+#   Re_Dh,in  = U_ref * Dh_in / nu ≈ 5.50e5   with Dh_in = 2 * H_in (2D channel convention)
+# Use the same reference length as the benchmark/paper you compare against.
+
+# -----------------------------------------------------------------------------------
+# Reynolds number: Re_h = U_ref * h / ν = 25.0 * 0.25 / 0.000181818 = 3.44 x 10^4
+# -----------------------------------------------------------------------------------
+
 # Simulation parameters
 simulation_prm = {
     'QUADRATURE_DEGREE': 2,

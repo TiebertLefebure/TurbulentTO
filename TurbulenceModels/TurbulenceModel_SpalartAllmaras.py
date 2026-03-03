@@ -31,11 +31,24 @@ class SpalartAllmarasGeneral:
         """Constructs the variational forms. Must be implemented in subclasses."""
         raise NotImplementedError("This method must be implemented in subclasses.")
 
+    # Solve the SA transport equation (with chosen linear solver and preconditioner)
     def solve_turbulence_model(self):
         """Solves the transport equation for nu_tilde."""
         A_NT = assemble(self._a_nt); b_nt = assemble(self._l_nt)
         [bc.apply(A_NT,b_nt) for bc in self._bcn]
-        solve(A_NT, self._nu_tilde1.vector(), b_nt)
+        sa_linear_solver = self._sa_options.get('LINEAR_SOLVER', 'default')
+        sa_linear_preconditioner = self._sa_options.get('LINEAR_PRECONDITIONER', 'default')
+
+        if sa_linear_solver in (None, '', 'default'):
+            if sa_linear_preconditioner in (None, '', 'default'):
+                solve(A_NT, self._nu_tilde1.vector(), b_nt)
+            else:
+                solve(A_NT, self._nu_tilde1.vector(), b_nt, 'default', sa_linear_preconditioner)
+        else:
+            if sa_linear_preconditioner in (None, '', 'default'):
+                solve(A_NT, self._nu_tilde1.vector(), b_nt, sa_linear_solver)
+            else:
+                solve(A_NT, self._nu_tilde1.vector(), b_nt, sa_linear_solver, sa_linear_preconditioner)
 
         # Enforce positivity
         self._nu_tilde1 = bound_from_bellow(self._nu_tilde1, 1e-16)
@@ -69,18 +82,8 @@ class SpalartAllmarasGeneral:
         f_t2 = Constant(0.0)
 
         # SA model uses vorticity magnitude in S_tilde.
-        # On some meshes in this repo (e.g. U-bend), the geometry is stored as an
-        # embedded 2D surface in XYZ coordinates. For SA, using skew(nabla_grad(u))
-        # on such meshes can under-predict the in-plane vorticity magnitude and
-        # suppress turbulence production. For 2D domains, compute the in-plane curl
-        # directly from (u_x, u_y) so XY and XYZ planar meshes behave consistently.
-        mesh = self._N.mesh()
-        if mesh.topology().dim() == 2 and external_u1.ufl_shape[0] >= 2:
-            omega = Dx(external_u1[1], 0) - Dx(external_u1[0], 1)
-            S = sqrt(omega**2 + DOLFIN_EPS)
-        else:
-            omega_sq = 2 * inner(skew(nabla_grad(external_u1)), skew(nabla_grad(external_u1)))
-            S = sqrt(omega_sq + DOLFIN_EPS) # Add epsilon for robustness
+        omega = Dx(external_u1[1], 0) - Dx(external_u1[0], 1)
+        S = sqrt(omega**2 + DOLFIN_EPS)
 
         # Wall distance with safety epsilon
         y_safe = self._y + DOLFIN_EPS
@@ -114,9 +117,9 @@ class SpalartAllmarasGeneral:
         self._nu_t = self._nu_tilde0 * f_v1
 
 
-        # ----------------------------------------------------
-        # --- Terms for the SA nu_tilde transport equation ---
-        # ----------------------------------------------------
+        # --------------------------------------------------
+        # Terms for the SA nu_tilde transport equation 
+        # --------------------------------------------------
         
         # Model constants
         sigma = 2.0/3.0
@@ -124,16 +127,20 @@ class SpalartAllmarasGeneral:
         cb2 = 0.622
         cw1 = cb1/kappa**2 + (1 + cb2)/sigma
 
+    
         # Production term (explicit source)
+        # ----------------------------------
         # P = cb1 * S_tilde * nu_tilde
         # Yoon 2016 has f_t2 = 0
         prod_nt = cb1 * (1 - f_t2) * S_tilde * self._nu_tilde0
         
         # Destruction term (linearized for implicit sink)
-        # D = cw1 * f_w * (nu_tilde/y)^2 ~= (cw1 * f_w * nu_tilde_0 / y^2) * nu_tilde
+        # ------------------------------------------------
+        # D = cw1 * f_w * (nu_tilde/y)^2 ≈ (cw1 * f_w * nu_tilde_0 / y^2) * nu_tilde
         self._react_nt = cw1 * f_w * (self._nu_tilde0 / y_safe**2)
         
         # Cross-diffusion term (explicit source)
+        # ---------------------------------------
         # This is the second SA diffusion contribution (cb2/sigma * |grad(nu_tilde)|^2).
         # The first diffusion contribution is the divergence term that appears in the
         # weak form as inner(((nu + nu_tilde0)/sigma) * grad(nu_tilde), grad(test)).
@@ -142,27 +149,6 @@ class SpalartAllmarasGeneral:
         # Combine all explicit source terms
         self._source_nt = prod_nt + cross_diff_nt
 
-        # SA debug expressions (all scalar UFL expressions, evaluated/projected on demand).
-        self._sa_debug_expressions = {
-            'S': S,
-            'S_bar': S_bar,
-            'S_tilde': S_tilde,
-            'r_arg': r_arg,
-            'r': r,
-            'f_w': f_w,
-            'f_v1': f_v1,
-            'f_v2': f_v2,
-            'nu_t': self._nu_t,
-            'prod_nt': prod_nt,
-            'cross_diff_nt': cross_diff_nt,
-            'destroy_nt': self._react_nt * self._nu_tilde0,
-            'react_nt': self._react_nt,
-            'source_nt': self._source_nt,
-            'neg_sbar_branch': conditional(lt(S_bar, -cv2 * S), Constant(1.0), Constant(0.0)),
-            'r_arg_lt0': conditional(lt(r_arg, Constant(0.0)), Constant(1.0), Constant(0.0)),
-            'r_arg_gt10': conditional(gt(r_arg, Constant(10.0)), Constant(1.0), Constant(0.0)),
-            'S_tilde_lt0': conditional(lt(S_tilde, Constant(0.0)), Constant(1.0), Constant(0.0)),
-        }
 
     @property
     def nu_t(self):
@@ -178,12 +164,6 @@ class SpalartAllmarasGeneral:
     def nu_tilde1(self):
         """Value of nu_tilde for current iteration."""
         return self._nu_tilde1
-
-    @property
-    def sa_debug_expressions(self):
-        """Scalar UFL expressions for inspecting SA production/destruction balance."""
-        return getattr(self, '_sa_debug_expressions', {})
-
 
 class SpalartAllmarasSteadyState(SpalartAllmarasGeneral):
     def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field, sa_options=None):

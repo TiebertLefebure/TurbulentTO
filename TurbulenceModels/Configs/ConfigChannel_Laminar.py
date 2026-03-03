@@ -13,10 +13,10 @@ boundary_markers = {
     'SYMMETRY': None
 }
 
-# inlet bulk velocity U = 0.2 m/s
+# inlet bulk velocity U_ref = 0.2 m/s
 # channel height H = 1.0 m
 
-# hydraulic diameter D = 2 * H = 2.0 m
+# hydraulic diameter D_h = 2 * H = 2.0 m
 
 
 # Initial conditions
@@ -54,19 +54,20 @@ boundary_conditions = {
         'E': None
     }
 }
-# 'VISCOSITY' ν = 0.00181818
+# kinematic 'VISCOSITY' ν = 0.00181818
 # 
 # for laminar flow: Poiseuille flow with parabolic velocity profile
-# 'FORCE' = 12 * ν * U_avg / H^2 
+# 'FORCE' = 12 * ν * U_ref / H^2 
 
 # Physical quantities
 physical_prm = {
     'VISCOSITY': 0.00181818, # kinematic viscosity 
-    'FORCE': (0.004363632, 0.0) # 'FORCE' = 12 * ν * U_avg / H^2 with U_avg = 0.2 m/s, H = 1 m
+    'FORCE': (0.004363632, 0.0) # 'FORCE' = 12 * ν * U_avg / H^2 with U_ref = 0.2 m/s, H = 1 m
 }
 
-# Reynolds number:
-# Re = U * D / ν = 0.2 * 2.0 / 0.001818 ≈ 2.2 x 10^2
+# ------------------------------------------------------------------------------
+# Reynolds number: Re = U_ref * D_h / ν = 0.2 * 2.0 / 0.001818 ≈ 2.2 x 10^2
+# ------------------------------------------------------------------------------
 
 
 # Simulation parameters

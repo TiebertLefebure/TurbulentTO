@@ -27,7 +27,7 @@ boundary_markers = {
 
 # Initial conditions
 initial_conditions = {
-    'U': (0.0, 0.0, 0.0), 
+    'U': (0.0, 0.0), 
     'P': 0.0,
     'K': 1e-10,
     'E': 1e-10,
@@ -36,7 +36,7 @@ initial_conditions = {
 # Boundary conditions
 boundary_conditions = {
     'INFLOW':{
-        'U': (0.0, -0.02, 0.0),
+        'U': (0.0, -0.02),
         'P': None, 
         'K': None,
         'E': None,
@@ -48,7 +48,7 @@ boundary_conditions = {
         'E': None,
     },
     'WALLS':{
-        'U': (0.0, 0.0, 0.0),
+        'U': (0.0, 0.0),
         'P': None,
         'K': None,
         'E': None,
@@ -58,7 +58,7 @@ boundary_conditions = {
 # Physical quantities
 physical_prm = {
     'VISCOSITY': 8.9e-7,  # kinematic viscosity 
-    'FORCE': (0.0, 0.0, 0.0)
+    'FORCE': (0.0, 0.0)
 }
 
 # Reynolds number:

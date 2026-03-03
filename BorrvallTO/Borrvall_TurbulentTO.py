@@ -451,9 +451,9 @@ def pde_filter(input_field, output_field):
     return output_field
 
 
-# ------------------------------------------------------------
+# ---------------------------------------------------------------
 # SA model setup (penalized wall distance + penalized nu_tilde)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------
 AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
 rho_effective = projection(rho_f, ETA_I)
 
@@ -922,7 +922,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         except RuntimeError:
             initialize_forward_guess_with_stokes()
             solve_forward_once()
-
+        
         # Adjoint solve (coupled NS+SA, with G frozen)
         solve_adjoint_once()
 

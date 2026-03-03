@@ -1,6 +1,7 @@
 import meshio
 import argparse
 import sys
+import numpy as np
 
 def convert_msh_to_xdmf(msh_file, output_prefix=""):
     """
@@ -18,6 +19,14 @@ def convert_msh_to_xdmf(msh_file, output_prefix=""):
 
     # Point coordinates
     points = msh.points
+    # Keep U-bend meshes strictly 2D in coordinates (XY) for lower memory in FEniCS.
+    if points.shape[1] >= 3:
+        max_abs_z = float(np.max(np.abs(points[:, 2])))
+        if max_abs_z > 1.0e-12:
+            raise RuntimeError(
+                f"Mesh appears non-planar (max |z| = {max_abs_z:.3e}); refusing XY projection."
+            )
+        points = points[:, :2].copy()
 
     # Connectivity of cells (1D lines, 2D triangles, etc.)
     cells_dict = msh.cells_dict
@@ -76,20 +85,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     convert_msh_to_xdmf(args.msh_file)
-
-
-# 3) gmsh_to_xdmf.py
-
-# INPUT
-
-# python3 gmsh_to_xdmf.py
-
-# OUTPUT
-
-# mesh.xdmf
-# mesh.h5
-# facet.xdmf
-# facet.h5
-
-# "Wrote mesh.xdmf (triangles + cell_tags)"
-# "Wrote facet.xdmf (lines + facet_tags)"

@@ -82,14 +82,16 @@ def load_list(directory):
 
 # ---------------------- Solver utilities ----------------------- #
 
-def calculate_cfl_time_step(u, delta_x, delta_y, relax, mesh):
+def calculate_cfl_time_step(u, delta_x, delta_y, relax, mesh, cfl_space=None):
     '''calculate time dt step base on cfl condition'''
     u_x = u[0]
     u_y = u[1]
     
     a = (abs(u_x) / delta_x + abs(u_y) / delta_y)
 
-    local_cfl = project(1. / a, FunctionSpace(mesh, "DG", 0))
+    if cfl_space is None:
+        cfl_space = FunctionSpace(mesh, "DG", 0)
+    local_cfl = project(1. / a, cfl_space)
     local_vals = local_cfl.vector().get_local()
     local_min = float(np.min(local_vals)) if local_vals.size else float("inf")
     global_cfl = MPI.COMM_WORLD.allreduce(local_min, op=MPI.MIN)
@@ -97,10 +99,12 @@ def calculate_cfl_time_step(u, delta_x, delta_y, relax, mesh):
 
 def bound_from_bellow(f, lb):
     '''bounds function f from bellow by lb'''
-    new_f = Function(f.function_space())
-    dimension = len(f.vector().get_local())      
-    new_f.vector()[:] = np.max([f.vector()[:], lb * np.ones(dimension)], axis=0)
-    return new_f
+    vec = f.vector()
+    local_values = vec.get_local()
+    np.maximum(local_values, lb, out=local_values)
+    vec.set_local(local_values)
+    vec.apply("insert")
+    return f
 
 # ------------------- Visualization utilities ------------------- #
 
@@ -265,6 +269,7 @@ def _build_wall_bcs(Space, mf, wall_index, value):
     wall_markers = sorted(_normalize_wall_markers(wall_index))
     return [DirichletBC(Space, Constant(value), mf, marker) for marker in wall_markers]
 
+# Original Eikonal equation (for initialization) -> Yoon 2016 Eq. 16
 def _calculate_eikonal_distance_field(Space, mf, wall_index, relax):
     '''Smoothened (with relaxation) Eikonal equation for wall-distance.'''
     bcy = _build_wall_bcs(Space, mf, wall_index, 0.0)
@@ -288,6 +293,7 @@ def _calculate_eikonal_distance_field(Space, mf, wall_index, relax):
     solver.solve()
     return y
 
+# Relaxed wall equation -> Yoon 2016 Eq. 19
 def calculate_relaxed_wall_distance_field_yoon_eq19(
     Space,
     mf,
