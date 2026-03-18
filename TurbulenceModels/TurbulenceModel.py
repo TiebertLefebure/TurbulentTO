@@ -6,7 +6,7 @@ from Utilities import *
 # -----------------------------------------#
 
 class KEpsilonGeneral:
-    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field):
+    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field, ke_options=None):
         # K-epsilon model parameters
         self._K = K
         self._bck = bck
@@ -20,6 +20,7 @@ class KEpsilonGeneral:
         self._dx = custom_dx
         self._ds = custom_ds
         self._y = distance_field  # distance function
+        self._ke_options = {} if ke_options is None else dict(ke_options)
 
         # Initialize all functions
         self._construct_functions()
@@ -31,18 +32,37 @@ class KEpsilonGeneral:
 
     def construct_forms(self):
         raise NotImplementedError("This method must be implemented in subclasses.")
+
+    def _solve_linear_system(self, A, x, b, linear_solver_key, linear_preconditioner_key):
+        linear_solver = self._ke_options.get(
+            linear_solver_key, self._ke_options.get('LINEAR_SOLVER', 'default')
+        )
+        linear_preconditioner = self._ke_options.get(
+            linear_preconditioner_key, self._ke_options.get('LINEAR_PRECONDITIONER', 'default')
+        )
+
+        if linear_solver in (None, '', 'default'):
+            if linear_preconditioner in (None, '', 'default'):
+                solve(A, x, b)
+            else:
+                solve(A, x, b, 'default', linear_preconditioner)
+        else:
+            if linear_preconditioner in (None, '', 'default'):
+                solve(A, x, b, linear_solver)
+            else:
+                solve(A, x, b, linear_solver, linear_preconditioner)
     
     def solve_turbulence_model(self):
         """Solves the turbulence model equations for k and e."""
         # solve k 
         A_K = assemble(self._a_k); b_k = assemble(self._l_k)
         [bc.apply(A_K,b_k) for bc in self._bck]
-        solve(A_K, self._k1.vector(), b_k)
+        self._solve_linear_system(A_K, self._k1.vector(), b_k, 'K_LINEAR_SOLVER', 'K_LINEAR_PRECONDITIONER')
 
         # solve e
         A_E = assemble(self._a_e); b_e = assemble(self._l_e)
         [bc.apply(A_E,b_e) for bc in self._bce]
-        solve(A_E, self._e1.vector(), b_e)
+        self._solve_linear_system(A_E, self._e1.vector(), b_e, 'E_LINEAR_SOLVER', 'E_LINEAR_PRECONDITIONER')
 
         # bound from bellow
         self._k1 = bound_from_bellow(self._k1, 1e-16)
@@ -96,8 +116,8 @@ class KEpsilonGeneral:
 
 
 class KEpsilonSteadyState(KEpsilonGeneral):
-    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field):
-        super().__init__(K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field)   
+    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field, ke_options=None):
+        super().__init__(K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field, ke_options=ke_options)   
                 
     def construct_forms(self, external_u1):
         self._construct_turbulent_quantities(external_u1)
@@ -118,9 +138,9 @@ class KEpsilonSteadyState(KEpsilonGeneral):
 
 
 class KEpsilonTransient(KEpsilonGeneral):
-    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, dt, distance_field):
+    def __init__(self, K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, dt, distance_field, ke_options=None):
         self._dt = dt
-        super().__init__(K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field)       
+        super().__init__(K, bck, bce, k_init, e_init, nu, force, custom_dx, custom_ds, distance_field, ke_options=ke_options)       
         
     def construct_forms(self, external_u1):
         self._construct_turbulent_quantities(external_u1)
@@ -155,4 +175,3 @@ class KEpsilonTransient(KEpsilonGeneral):
             - dot(self._prod_e, self._psi)*self._dx \
             + dot(self._react_e * self._e, self._psi)*self._dx + F_supg_e
         self._a_e = lhs(FE); self._l_e = rhs(FE)
-

@@ -16,6 +16,7 @@ D_PIPE = 2.0 * R_PIPE        # pipe diameter = 28 mm
 H_LEG = 30.0 * D_PIPE        # straight-leg length = 30D = 840 mm
 
 LC = D_PIPE / 40.0            # fine mesh size (uniform, no wall refinement)
+                              # D_PIPE / 40 = 7.0e-4 m
 
 
 def create_fine_mesh(output_filename="u_bend_2d.msh"):

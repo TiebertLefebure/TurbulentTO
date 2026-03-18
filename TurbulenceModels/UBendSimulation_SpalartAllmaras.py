@@ -27,17 +27,12 @@ def _try_load_warm_start(target_function, path, label):
             print(f'Warm-start {label} skipped (file not found): {path}')
         return False
 
-    h5_file = None
     try:
-        h5_file = HDF5File(MPI.COMM_WORLD, path, "r")
-        h5_file.read(target_function, "/f")
+        load_h5_into_function(target_function, path, label=f'warm-start {label}')
     except Exception as exc:
         if IS_ROOT:
             print(f'Warm-start {label} skipped (failed to load {path}): {type(exc).__name__}: {exc}')
         return False
-    finally:
-        if h5_file is not None:
-            h5_file.close()
     if IS_ROOT:
         print(f'Warm-start loaded for {label}: {path}')
     return True
@@ -62,7 +57,7 @@ def _try_transfer_warm_start_between_meshes(target_function, target_space, sourc
         return False
 
     try:
-        source_function = load_H5_files(source_space, path)
+        source_function = load_H5_files(source_space, path, label=f'warm-start source {label}')
     except Exception as exc:
         if IS_ROOT:
             print(f'Warm-start {label} skipped (failed to load source {path}): {type(exc).__name__}: {exc}')
@@ -159,7 +154,7 @@ NS_LINEAR_PRECONDITIONER = simulation_prm.get(
 )
 SA_LINEAR_SOLVER = simulation_prm.get('SA_LINEAR_SOLVER', 'default')
 SA_LINEAR_PRECONDITIONER = simulation_prm.get('SA_LINEAR_PRECONDITIONER', 'default')
-wall_distance_method = simulation_prm.get('WALL_DISTANCE_METHOD', 'RelaxedWallEikonal')
+wall_distance_method = simulation_prm.get('WALL_DISTANCE_METHOD', 'OriginalEikonal')
 wall_distance_relax = simulation_prm.get('WALL_DISTANCE_EIKONAL_RELAXATION', 0.01)
 wall_distance_sigma_w = simulation_prm.get('WALL_DISTANCE_YOON_SIGMA_W', 0.1)
 wall_distance_g0 = simulation_prm.get('WALL_DISTANCE_YOON_G0', 20.0)
@@ -361,12 +356,20 @@ sa_inner_reduce_counter = 0
 interrupted = False
 last_completed_iter = 0
 runtime_pvd_files = {}
+runtime_pvd_directory = None
 if post_processing.get('SAVE', False) and RUNTIME_WRITE_INTERVAL > 0 and RUNTIME_WRITE_PVD:
+    runtime_pvd_directory = os.path.join(
+        saving_directory['PVD_FILES'],
+        f'runtime_{time.strftime("%Y%m%d_%H%M%S")}',
+    )
+    os.makedirs(runtime_pvd_directory, exist_ok=True)
     runtime_pvd_files = {
-        'u': File(saving_directory['PVD_FILES'] + 'u_runtime.pvd'),
-        'p': File(saving_directory['PVD_FILES'] + 'p_runtime.pvd'),
-        'nu_tilde': File(saving_directory['PVD_FILES'] + 'nu_tilde_runtime.pvd'),
+        'u': File(os.path.join(runtime_pvd_directory, 'u_runtime.pvd')),
+        'p': File(os.path.join(runtime_pvd_directory, 'p_runtime.pvd')),
+        'nu_tilde': File(os.path.join(runtime_pvd_directory, 'nu_tilde_runtime.pvd')),
     }
+    if IS_ROOT:
+        print(f'Runtime PVD snapshots will be written under: {runtime_pvd_directory}')
 try:
     if IS_ROOT:
         if NS_LINEAR_PRECONDITIONER in (None, '', 'default'):
@@ -464,9 +467,18 @@ try:
             if ((iter + 1) % RUNTIME_WRITE_INTERVAL == 0) or break_flag:
                 output_step = float(iter + 1)
                 if runtime_pvd_files:
-                    runtime_pvd_files['u'] << (u1, output_step)
-                    runtime_pvd_files['p'] << (p1, output_step)
-                    runtime_pvd_files['nu_tilde'] << (turbulence_model.nu_tilde1, output_step)
+                    try:
+                        runtime_pvd_files['u'] << (u1, output_step)
+                        runtime_pvd_files['p'] << (p1, output_step)
+                        runtime_pvd_files['nu_tilde'] << (turbulence_model.nu_tilde1, output_step)
+                    except Exception as exc:
+                        runtime_pvd_files = {}
+                        if IS_ROOT:
+                            print(
+                                'Warning: runtime PVD snapshot write failed; '
+                                'disabling further intermediate PVD writes for this run. '
+                                f'{type(exc).__name__}: {exc}'
+                            )
                 if RUNTIME_WRITE_RESIDUALS:
                     for (key, values) in residuals.items():
                         save_list(values, saving_directory['RESIDUALS'] + key + '.txt')

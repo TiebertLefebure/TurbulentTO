@@ -1,9 +1,29 @@
 
+import os
+
 # File paths for mesh and boundary data
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/U-Bend/Coarse/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/U-Bend/Coarse/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/facet.xdmf'
 }
+
+
+def _infer_mesh_label_from_path(path):
+    parts = os.path.normpath(path).split(os.sep)
+    for label in ('Coarse', 'Medium', 'Fine'):
+        if label in parts:
+            return label
+    return parts[-2] if len(parts) >= 2 else 'UnknownMesh'
+
+
+UBEND_KE_MESH_LABEL = _infer_mesh_label_from_path(mesh_files['MESH_DIRECTORY'])
+UBEND_KE_RESULTS_ROOT = f'Results/U-Bend/{UBEND_KE_MESH_LABEL}'
+# Fine runs are much cheaper to start from a converged coarse field than from zero.
+# Change to 'Medium' if you generate and prefer medium-mesh warm-start data later.
+UBEND_KE_WARM_START_LABEL = 'Fine'
+UBEND_KE_WARM_START_ROOT = f'Results/U-Bend/{UBEND_KE_WARM_START_LABEL}'
+UBEND_KE_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_KE_WARM_START_LABEL}/mesh.xdmf'
+UBEND_KE_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_KE_WARM_START_LABEL}/facet.xdmf'
 
 # Specify type of boundaries
 boundary_markers = {
@@ -80,17 +100,46 @@ simulation_prm = {
     'QUADRATURE_DEGREE': 2,
     'MAX_ITERATIONS': 3000,
     'TOLERANCE': 1e-6,
-    'CFL_RELAXATION': 0.1, 
+    # Optional field-specific tolerances. If omitted, each falls back to TOLERANCE.
+    'TOLERANCE_U': 1e-6,
+    'TOLERANCE_P': 1e-5,
+    'TOLERANCE_K': 1e-6,
+    'TOLERANCE_E': 1e-5,
+    'CFL_RELAXATION': 0.3,
+    'STEP_SIZE': 5e-4,
+    'MIN_STEP_SIZE': 1e-5,
+    'MAX_STEP_SIZE': 1e-3,
+
+    # Relaxation factors
     'U_RELAXATION_FACTOR': 0.7,
     'TURB_RELAXATION_FACTOR': 0.7,
-    'STEP_SIZE': 5e-4 
+
+    # Linear solvers
+    'NS_LINEAR_SOLVER': 'mumps',
+    'NS_LINEAR_PRECONDITIONER': None,
+    'KE_LINEAR_SOLVER': 'default',
+    'KE_LINEAR_PRECONDITIONER': 'default',
+
+    # Runtime output for long fine-mesh runs
+    'RUNTIME_WRITE_INTERVAL': 25,
+    'RUNTIME_WRITE_PVD': True,
+    'RUNTIME_WRITE_RESIDUALS': True,
+
+    # Optional warm-start from saved fields (same mesh or cross-mesh transfer)
+    'WARM_START_ENABLED': False,
+    'WARM_START_SOURCE_MESH_XDMF': UBEND_KE_WARM_START_MESH_XDMF,
+    'WARM_START_SOURCE_FACET_XDMF': UBEND_KE_WARM_START_FACET_XDMF,
+    'WARM_START_U_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/u.h5',
+    'WARM_START_P_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/p.h5',
+    'WARM_START_K_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/k.h5',
+    'WARM_START_E_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/e.h5',
 }
 
 # Specify where results are saved
 saving_directory = {
-    'PVD_FILES': 'Results/U-Bend/PVD files/',
-    'H5_FILES':  'Results/U-Bend/H5 files/',
-    'RESIDUALS': 'Results/U-Bend/Residual files/'
+    'PVD_FILES': f'{UBEND_KE_RESULTS_ROOT}/PVD files/',
+    'H5_FILES':  f'{UBEND_KE_RESULTS_ROOT}/H5 files/',
+    'RESIDUALS': f'{UBEND_KE_RESULTS_ROOT}/Residual files/'
 }
 
 # Specify what to do after simulation
@@ -98,4 +147,3 @@ post_processing = {
     'PLOT': True,
     'SAVE': True,
 }
-

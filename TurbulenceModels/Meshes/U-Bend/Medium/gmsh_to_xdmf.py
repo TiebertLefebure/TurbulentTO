@@ -2,6 +2,7 @@ import meshio
 import argparse
 import sys
 import numpy as np
+from pathlib import Path
 
 def convert_msh_to_xdmf(msh_file, output_prefix=""):
     """
@@ -50,7 +51,8 @@ def convert_msh_to_xdmf(msh_file, output_prefix=""):
         cell_data={"cell_tags": [triangle_tags]},
     )
 
-    volume_file = f"{output_prefix}mesh.xdmf"
+    output_dir = Path(msh_file).resolve().parent
+    volume_file = output_dir / "mesh.xdmf" if output_prefix == "" else Path(f"{output_prefix}mesh.xdmf")
     meshio.write(volume_file, volume_mesh)
     print(f"Wrote {volume_file} (triangles + cell_tags)")
 
@@ -69,7 +71,7 @@ def convert_msh_to_xdmf(msh_file, output_prefix=""):
         cell_data={"facet_tags": [line_tags]},
     )
 
-    facet_file = f"{output_prefix}facet.xdmf"
+    facet_file = output_dir / "facet.xdmf" if output_prefix == "" else Path(f"{output_prefix}facet.xdmf")
     meshio.write(facet_file, facet_mesh)
     print(f"Wrote {facet_file} (lines + facet_tags)")
 

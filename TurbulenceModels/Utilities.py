@@ -3,10 +3,13 @@ from mpi4py import MPI
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import shutil
+import tempfile
+import xml.etree.ElementTree as ET
 
-# ---------------------------------------------------- #
-# Utilities.py originally present in GitHub repository #
-# ---------------------------------------------------- #
+# ----------------------------------------- #
+# Utilities for all turbulence simulations  #
+# ----------------------------------------- #
 
 
 
@@ -56,12 +59,52 @@ def save_h5_file(f, directory):
     fFile.write(f,"/f")
     fFile.close()
 
-def load_H5_files(Space, directory):
-    '''Loads function from .h5 file to Space'''
-    f = Function(Space)
+def _read_h5_into_function(target_function, directory, dataset_name="/f"):
+    '''Read an HDF5 dataset into an existing Function.'''
     fFile = HDF5File(MPI.COMM_WORLD, directory, "r")
-    fFile.read(f,"/f")
-    fFile.close()
+    try:
+        fFile.read(target_function, dataset_name)
+    finally:
+        fFile.close()
+
+def load_h5_into_function(target_function, directory, dataset_name="/f", label="HDF5 field"):
+    '''
+    Read an HDF5 dataset into target_function.
+
+    If direct access fails on a Docker bind mount or cloud-synced folder,
+    retry from a temporary local copy under /tmp.
+    '''
+    try:
+        _read_h5_into_function(target_function, directory, dataset_name)
+        return target_function
+    except Exception as direct_exc:
+        try:
+            with tempfile.TemporaryDirectory(prefix="fenics_h5_") as tmpdir:
+                staged_h5_path = os.path.join(tmpdir, os.path.basename(os.path.abspath(directory)))
+                shutil.copy2(os.path.abspath(directory), staged_h5_path)
+                _read_h5_into_function(target_function, staged_h5_path, dataset_name)
+        except Exception as staged_exc:
+            raise RuntimeError(
+                "Direct HDF5 read failed.\n"
+                f"H5 path: {os.path.abspath(directory)}\n"
+                f"HDF5_USE_FILE_LOCKING={os.environ.get('HDF5_USE_FILE_LOCKING')!r}\n"
+                "Common cause: HDF5 access on a Docker bind-mounted or cloud-synced folder.\n"
+                "Try running with HDF5_USE_FILE_LOCKING=FALSE or staging the file under /tmp.\n"
+                f"Direct read exception: {type(direct_exc).__name__}: {direct_exc}\n"
+                f"Staged local-copy retry exception: {type(staged_exc).__name__}: {staged_exc}"
+            ) from direct_exc
+
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            print(
+                f"Warning: Loaded {label} via a temporary local copy after shared-folder access "
+                f"failed for {os.path.abspath(directory)}."
+            )
+        return target_function
+
+def load_H5_files(Space, directory, dataset_name="/f", label="HDF5 field"):
+    '''Loads function from .h5 file to Space.'''
+    f = Function(Space)
+    load_h5_into_function(f, directory, dataset_name=dataset_name, label=label)
     return f
 
 def save_list(dataset, directory):
@@ -157,11 +200,15 @@ def _apply_initial_condition(Space, initial_condition):
     if isinstance(initial_condition, Function):
         applied_condition = initial_condition  
 
-    elif isinstance(initial_condition, Constant):
-        applied_condition = project(initial_condition, Space)
-
     else:
-        applied_condition = project(Constant(initial_condition), Space)
+        if not isinstance(initial_condition, Constant):
+            initial_condition = Constant(initial_condition)
+        # Interpolation avoids an expensive global solve and is exact for constants.
+        try:
+            applied_condition = interpolate(initial_condition, Space)
+        except Exception:
+            # Fallback for non-interpolable inputs.
+            applied_condition = project(initial_condition, Space)
     return applied_condition
 
 def initialize_functions(Space, initial_condition=None):
@@ -235,6 +282,60 @@ def _raise_xdmf_load_error(label, xdmf_path, exc):
 
     raise RuntimeError("\n".join(message)) from exc
 
+def _get_xdmf_attribute_name(xdmf_path):
+    '''Return the first XDMF Attribute name, if present.'''
+    try:
+        root = ET.parse(xdmf_path).getroot()
+    except ET.ParseError:
+        return None
+
+    for element in root.iter():
+        if element.tag.endswith("Attribute"):
+            return element.get("Name")
+    return None
+
+def _copy_xdmf_pair_to_directory(xdmf_path, destination_directory):
+    '''Copy an XDMF file and its sibling .h5 file into destination_directory.'''
+    xdmf_abs_path = os.path.abspath(xdmf_path)
+    h5_abs_path = os.path.splitext(xdmf_abs_path)[0] + '.h5'
+
+    staged_xdmf_path = os.path.join(destination_directory, os.path.basename(xdmf_abs_path))
+    shutil.copy2(xdmf_abs_path, staged_xdmf_path)
+
+    if os.path.exists(h5_abs_path):
+        staged_h5_path = os.path.join(destination_directory, os.path.basename(h5_abs_path))
+        shutil.copy2(h5_abs_path, staged_h5_path)
+
+    return staged_xdmf_path
+
+def _load_xdmf_with_local_copy_fallback(label, xdmf_path, load_callback):
+    '''
+    Load an XDMF/HDF5 pair, retrying from a temporary local copy if the original
+    path fails. This avoids common Docker bind-mount and cloud-sync HDF5 issues.
+    '''
+    try:
+        with XDMFFile(xdmf_path) as infile:
+            load_callback(infile)
+        return
+    except Exception as direct_exc:
+        try:
+            with tempfile.TemporaryDirectory(prefix="fenics_xdmf_") as tmpdir:
+                staged_xdmf_path = _copy_xdmf_pair_to_directory(xdmf_path, tmpdir)
+                with XDMFFile(staged_xdmf_path) as infile:
+                    load_callback(infile)
+        except Exception as staged_exc:
+            raise RuntimeError(
+                "Direct XDMF/HDF5 read failed.\n"
+                f"Direct read exception: {type(direct_exc).__name__}: {direct_exc}\n"
+                f"Staged local-copy retry exception: {type(staged_exc).__name__}: {staged_exc}"
+            ) from direct_exc
+
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            print(
+                f"Warning: Loaded {label} via a temporary local copy after shared-folder access "
+                f"failed for {os.path.abspath(xdmf_path)}."
+            )
+
 def load_mesh_from_file(mesh_directory, facet_directory):
     '''Loads .xdmf mesh and faces mesh'''
     if not os.path.exists(mesh_directory):
@@ -244,15 +345,29 @@ def load_mesh_from_file(mesh_directory, facet_directory):
 
     mesh = Mesh()
     try:
-        with XDMFFile(mesh_directory) as infile:
-            infile.read(mesh)
+        _load_xdmf_with_local_copy_fallback(
+            "mesh",
+            mesh_directory,
+            lambda infile: infile.read(mesh),
+        )
     except Exception as exc:
         _raise_xdmf_load_error("mesh", mesh_directory, exc)
 
     mvc = MeshValueCollection("size_t", mesh, 1)
     try:
-        with XDMFFile(facet_directory) as infile:
-            infile.read(mvc)
+        facet_attribute_name = _get_xdmf_attribute_name(facet_directory)
+        if facet_attribute_name:
+            _load_xdmf_with_local_copy_fallback(
+                "facet markers",
+                facet_directory,
+                lambda infile: infile.read(mvc, facet_attribute_name),
+            )
+        else:
+            _load_xdmf_with_local_copy_fallback(
+                "facet markers",
+                facet_directory,
+                lambda infile: infile.read(mvc),
+            )
     except Exception as exc:
         _raise_xdmf_load_error("facet markers", facet_directory, exc)
     marked_facets = cpp.mesh.MeshFunctionSizet(mesh, mvc)
@@ -338,7 +453,7 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     solver.solve()
     G.vector()[:] = np.maximum(G.vector()[:], float(g_floor))
 
-    y = project(Constant(1.0) / (G + g_floor_const) - Constant(1.0) / g0_const, Space)
+    y = project(Constant(1.0) / G - Constant(1.0) / g0_const, Space)
     return bound_from_bellow(y, 0.0)
 
 # Relaxed wall-distance Eikonal equation (Yoon 2016 Eq. 19)

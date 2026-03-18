@@ -2,8 +2,8 @@ import os
 
 # File paths for mesh and boundary data
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/U-Bend/Medium_WallRefinement/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/U-Bend/Medium_WallRefinement/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/facet.xdmf'
 }
 
 
@@ -18,10 +18,11 @@ def _infer_mesh_label_from_path(path):
 
 UBEND_SA_MESH_LABEL = _infer_mesh_label_from_path(mesh_files['MESH_DIRECTORY'])
 UBEND_SA_RESULTS_ROOT = f'Results/U-Bend_SA/{UBEND_SA_MESH_LABEL}'
+UBEND_SA_STEADY_RESULTS_ROOT = f'{UBEND_SA_RESULTS_ROOT}_Steady'
 # Warm-start source can be the same mesh (default) or another U-bend mesh label
 # (e.g. 'Coarse' to accelerate a 'Medium' run via interpolation/projection).
 # Change 'UBEND_SA_WARM_START_LABEL' to desired mesh label.
-UBEND_SA_WARM_START_LABEL = 'Coarse_WallRefinement'
+UBEND_SA_WARM_START_LABEL = 'Fine'
 UBEND_SA_WARM_START_ROOT = f'Results/U-Bend_SA/{UBEND_SA_WARM_START_LABEL}'
 UBEND_SA_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/mesh.xdmf'
 UBEND_SA_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/facet.xdmf'
@@ -46,7 +47,7 @@ boundary_markers = {
 
 # inlet bulk velocity U_ref = 1.42 m/s
 
-# 'VISCOSITY' ν = 8.9e-7 
+# kinematic viscosity ν = 8.9e-7 m^2/s
 
 # Spalart-Allmaras inlet estimate from ANSYS inlet specification:
 # turbulence intensity I = 5% and hydraulic diameter D_h = 28 mm.
@@ -116,8 +117,8 @@ simulation_prm_SA = {
     # Optional field-specific tolerances (defaults fall back to TOLERANCE if omitted).
     # Keep U/p tolerances stricter for mesh-comparison runs; the medium mesh can
     # otherwise stop early and look artificially over-diffusive at the probe line.
-    'TOLERANCE_U': 2e-5,
-    'TOLERANCE_P': 1.5e-5,
+    'TOLERANCE_U': 1e-5,
+    'TOLERANCE_P': 1e-5,
     'TOLERANCE_NU_TILDE': 1e-6,
 
     # ----------------------
@@ -125,6 +126,8 @@ simulation_prm_SA = {
     # ----------------------
     'U_RELAXATION_FACTOR': 0.7, 
     'NUT_RELAXATION_FACTOR': 0.7, 
+    # Used by steady Picard solver (UBendSimulation_SpalartAllmaras_Steady.py).
+    'PICARD_RELAXATION': 0.2,
 
     # ---------------------
     # Linear solver
@@ -155,14 +158,14 @@ simulation_prm_SA = {
     'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1, # Switch from 'SA_INNER_ITERS' to 'SA_INNER_ITERS_MID' when nu_tilde1 - nu_tilde0 < 0.1 * 'TOLERANCE_NU_TILDE' 
     'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR_FINAL': 0.01, # # Switch from 'SA_INNER_ITERS_MID' to 'SA_INNER_ITERS_MIN' when nu_tilde1 - nu_tilde0 < 0.01 * 'TOLERANCE_NU_TILDE' 
     'SA_INNER_ITERS_REDUCE_STREAK': 20,
-    'SA_INNER_ITERS_REDUCE_STREAK_FINAL': 20,
+    'SA_INNER_ITERS_REDUCE_STREAK_FINAL': 10,
 
     # ------------------------
     # Wall-distance model
     # ------------------------
     # 'OriginalEikonal'    -> original smoothed Eikonal distance
     # 'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
-    'WALL_DISTANCE_METHOD': 'RelaxedWallEikonal',
+    'WALL_DISTANCE_METHOD': 'OriginalEikonal',
     'WALL_DISTANCE_EIKONAL_RELAXATION': 0.01,
     # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHO = 'RelaxedWallEikonal')
     'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses sigma_w = 0.1
@@ -181,10 +184,10 @@ simulation_prm_SA = {
     # Live monitoring 
     # -------------------------
     # Runtime output cadence (for live monitoring while the solver runs).
-    # 0 disables runtime snapshots; set e.g. 20 to write every 20 iterations.
+    # RUNTIME_WRITE_INTERVAL = 0 disables runtime snapshots; set e.g. 20 to write every 20 iterations.
     'RUNTIME_WRITE_INTERVAL': 50,
     'RUNTIME_WRITE_PVD': True,
-    'RUNTIME_WRITE_RESIDUALS': True,
+    'RUNTIME_WRITE_RESIDUALS': False,
 
     # -------------------------
     # Warm-start
@@ -208,6 +211,13 @@ saving_directory_SA = {
     'PVD_FILES': f'{UBEND_SA_RESULTS_ROOT}/PVD files/',
     'H5_FILES':  f'{UBEND_SA_RESULTS_ROOT}/H5 files/',
     'RESIDUALS': f'{UBEND_SA_RESULTS_ROOT}/Residual files/'
+}
+
+# Separate output folders for strict steady SA runs.
+saving_directory_SA_STEADY = {
+    'PVD_FILES': f'{UBEND_SA_STEADY_RESULTS_ROOT}/PVD files/',
+    'H5_FILES':  f'{UBEND_SA_STEADY_RESULTS_ROOT}/H5 files/',
+    'RESIDUALS': f'{UBEND_SA_STEADY_RESULTS_ROOT}/Residual files/'
 }
 
 # Specify what to do after simulation

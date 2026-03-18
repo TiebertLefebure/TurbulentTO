@@ -52,7 +52,7 @@ for boundary_name, markers in boundary_markers.items():
 # Initialize constants and expressions
 nu = Constant(physical_prm['VISCOSITY'])
 force = Constant(physical_prm['FORCE'])
-wall_distance_method = simulation_prm.get('WALL_DISTANCE_METHOD', 'RelaxedWallEikonal')
+wall_distance_method = simulation_prm.get('WALL_DISTANCE_METHOD', 'OriginalEikonal')
 wall_distance_relax = simulation_prm.get('WALL_DISTANCE_EIKONAL_RELAXATION', 0.01)
 wall_distance_sigma_w = simulation_prm.get('WALL_DISTANCE_YOON_SIGMA_W', 0.1)
 wall_distance_g0 = simulation_prm.get('WALL_DISTANCE_YOON_G0', 20.0)
