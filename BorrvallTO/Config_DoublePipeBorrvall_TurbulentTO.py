@@ -1,9 +1,25 @@
-from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
+import os
+from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
 
 
 # -------------------------------------------------------------------
 # Configuration file for Borrvall Double Pipe case (Turbulent)
 # -------------------------------------------------------------------
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mesh files
+# Generate via: cd Meshes/DoublePipe && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/DoublePipe/mesh.xdmf'),
+}
+
+
+def create_design_mesh():
+    mesh = Mesh()
+    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
+        xf.read(mesh)
+    return mesh
 
 
 # Domain and mesh
@@ -11,9 +27,6 @@ DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = 1.5
 DOMAIN_Y_MAX = 1.0
-NX = 150
-NY = 100
-MESH_DIAGONAL = "crossed"
 TOL = DOLFIN_EPS
 
 # Port layout on left/right boundaries
@@ -36,24 +49,25 @@ OUTLET_SEGMENTS = [
 ]
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-5
+MU_FLUID_VALUE = 1.0e-1
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
-
-# -----------------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.66 x 10^4
-# -----------------------------------------------------------------------------------------------------
-
+# ----------------------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.66
+# ----------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
-SA_NU_TILDE_INLETS = [1.0e-3, 1.0e-3]
-SA_NU_TILDE_INITIAL = 1.0e-3
-SA_DISTANCE_RELAXATION = 0.01 # Relaxation for calculate_distance_field function
-SA_SMOOTH_ABS_EPS = 1.0e-12
+# Low-Re proof setup: keep the full turbulent/SA solve active, but prescribe
+# zero turbulence content at the inlet and in the initial field so the SA
+# equation admits the laminar state as its exact solution.
+SA_NU_TILDE_INLETS = [0.0, 0.0]
+SA_NU_TILDE_INITIAL = 0.0
+SA_DISTANCE_RELAXATION = 0.01
+SA_SMOOTH_ABS_EPS = 0.0
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
-SA_NU_TILDE_FLOOR = 1.0e-12
+SA_NU_TILDE_FLOOR = 0.0
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -68,31 +82,31 @@ SA_WALL_G_FLOOR = 1.0e-8
 # Topology optimization settings
 VOL_FRAC = 1.0 / 3.0
 MAX_INNER_ITERATIONS = 80
-OBJECTIVE_CONVERGENCE_TOL = 1e-4
+OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3]
-MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.004, 0.003, 0.0025, 0.002]
-BETA_PROJ_SCHEDULE = [0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0]
-SNES_LINEAR_SOLVER = "mumps"
-INLET_RAMP_STEPS = 100
-FROZEN_PICARD_STEPS = 2
-FORWARD_SNES_METHOD = "newtontr"
-FORWARD_SNES_MAX_ITERS = 300
-FORWARD_SNES_RTOL = 1.0e-3
-FORWARD_SNES_ATOL = 1.0e-6 # Relax if too many SNES iterations
-ADJOINT_SNES_RTOL = 1.0e-3
-ADJOINT_SNES_ATOL = 1.0e-6
-NUT_RELAXATION_FACTOR = 0.7
+Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
+MOVE_LIMIT_SCHEDULE = [0.03, 0.03, 0.02, 0.015, 0.01]
+BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0]
 
-BETA_PROJ_VALUE = 0.5 # Initial value
+SNES_LINEAR_SOLVER = "mumps"
+FROZEN_PICARD_STEPS = 1
+NUT_RELAXATION_FACTOR = 0.7
+FORWARD_SNES_METHOD = "newtonls"
+FORWARD_SNES_MAX_ITERS = 200
+FORWARD_SNES_RTOL = 5.0e-7
+FORWARD_SNES_ATOL = 1.0e-9
+ADJOINT_SNES_RTOL = 5.0e-7
+ADJOINT_SNES_ATOL = 1.0e-9
+
+BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
-FILTER_RADIUS_IN_CELLS = 2.0
+FILTER_RADIUS_IN_CELLS = 3.0
 
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "DoublePipeTO_Results_Turbulent"
+RESULTS_ROOT_NAME = "Results_DoublePipe_TurbulentTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 
@@ -143,36 +157,13 @@ class WallsBoundary(SubDomain):
         )
 
 
-def _validate_port_configuration():
-    inlet_markers = list(MARK["inlet"])
-    outlet_markers = list(MARK["outlet"])
-    if len(inlet_markers) != len(INLET_SEGMENTS):
-        raise ValueError("MARK['inlet'] length must match INLET_SEGMENTS length.")
-    if len(outlet_markers) != len(OUTLET_SEGMENTS):
-        raise ValueError("MARK['outlet'] length must match OUTLET_SEGMENTS length.")
-    if len(U_MAX_INLETS) != len(INLET_SEGMENTS):
-        raise ValueError("U_MAX_INLETS length must match INLET_SEGMENTS length.")
-    if len(U_MAX_OUTLETS) != len(OUTLET_SEGMENTS):
-        raise ValueError("U_MAX_OUTLETS length must match OUTLET_SEGMENTS length.")
-    if len(SA_NU_TILDE_INLETS) != len(INLET_SEGMENTS):
-        raise ValueError("SA_NU_TILDE_INLETS length must match INLET_SEGMENTS length.")
-
-
-_validate_port_configuration()
-
-
 def mark_boundaries(mesh):
     boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
     boundaries.set_all(MARK["generic"])
 
     WallsBoundary(
-        DOMAIN_X_MIN,
-        DOMAIN_X_MAX,
-        DOMAIN_Y_MIN,
-        DOMAIN_Y_MAX,
-        TOL,
-        INLET_SEGMENTS,
-        OUTLET_SEGMENTS,
+        DOMAIN_X_MIN, DOMAIN_X_MAX, DOMAIN_Y_MIN, DOMAIN_Y_MAX,
+        TOL, INLET_SEGMENTS, OUTLET_SEGMENTS,
     ).mark(boundaries, MARK["walls"])
 
     for marker, segment in zip(MARK["inlet"], INLET_SEGMENTS):
@@ -187,10 +178,7 @@ def _build_horizontal_profile(u_max, y_min, y_max):
     width = y_max - y_min
     return Expression(
         ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=u_max,
-        y_c=y_center,
-        width=width,
+        degree=2, u_max=u_max, y_c=y_center, width=width,
     )
 
 

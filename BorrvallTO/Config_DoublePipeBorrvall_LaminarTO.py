@@ -1,16 +1,33 @@
-from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
+import os
+from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
 
 
 # -----------------------------------------------------------------
 # Configuration file for Borrvall Double Pipe case (Laminar)
 # -----------------------------------------------------------------
 
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mesh files
+# Generate via: cd Meshes/DoublePipe && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/DoublePipe/mesh.xdmf'),
+}
+
+
+def create_design_mesh():
+    mesh = Mesh()
+    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
+        xf.read(mesh)
+    return mesh
+
+
 # Domain and mesh
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
-DOMAIN_X_MAX = 1.5 # DOMAIN_X_MAX = 1.0 for square design domain
+DOMAIN_X_MAX = 1.5  # DOMAIN_X_MAX = 1.0 for square design domain
 DOMAIN_Y_MAX = 1.0
-NX = 150 # NX = 100 for square design domain
+NX = 150  # reference resolution used to generate the Gmsh mesh
 NY = 100
 TOL = DOLFIN_EPS
 
@@ -56,7 +73,6 @@ MOVE_LIMIT_SCHEDULE = [0.03, 0.03, 0.02, 0.015, 0.01]
 BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0]
 
 SNES_LINEAR_SOLVER = "mumps"
-INLET_RAMP_STEPS = 40
 FILTER_RADIUS_IN_CELLS = 3.0
 FORWARD_SNES_RTOL = 5.0e-7
 FORWARD_SNES_ATOL = 1.0e-9
@@ -69,7 +85,7 @@ ETA_I = 0.50
 
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "DoublePipeTO_Results_Laminar"
+RESULTS_ROOT_NAME = "Results_DoublePipe_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

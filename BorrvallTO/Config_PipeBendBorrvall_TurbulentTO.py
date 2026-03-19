@@ -1,18 +1,29 @@
-from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
+import os
+from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
 
 
 # --------------------------------------------------------------
 # Configuration file for Borrvall Pipe Bend case (Turbulent)
-# -------------------------------------------------------------- 
+# --------------------------------------------------------------
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mesh files
+# Generate via: cd Meshes/PipeBend && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/PipeBend/mesh.xdmf'),
+}
 
 
-# ------------------------------------------------------------
-# User parameters
-# ------------------------------------------------------------
+def create_design_mesh():
+    mesh = Mesh()
+    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
+        xf.read(mesh)
+    return mesh
+
+
+# Domain parameters
 L = 1.0
-N = 96
-NX = 96
-NY = 96
 TOL = DOLFIN_EPS
 
 # Geometry parameters (Borrvall 2003 pipe bend case)
@@ -22,14 +33,14 @@ OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-5 # MU_FLUID_VALUE = 1.0e-4 for Re = 2.0 x 10^3
+MU_FLUID_VALUE = 1.0e-1
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
-# ----------------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2.0 x 10^4
-# ----------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2
+# -------------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
 SA_NU_TILDE_INLET = 1.0e-3
@@ -38,8 +49,8 @@ SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e3 # Penalization value α_nut for SA transport equation -> Yoon 2016 Eq.(27)
-SA_NU_TILDE_PENALTY_N = 3.0 # Penalization factor n_nut for SA transport equation -> Yoon 2016 Eq.(27)
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_PENALTY_N = 3.0
 
 # Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
 SA_USE_PENALIZED_WALL_DISTANCE = True
@@ -51,27 +62,32 @@ SA_WALL_G_FLOOR = 1.0e-8
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 80 # MAX_INNER_ITERATIONS = 60
-OBJECTIVE_CONVERGENCE_TOL = 1e-4 # OBJECTIVE_CONVERGENCE_TOL = 1e-3
+MAX_INNER_ITERATIONS = 30
+OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.05, 0.1, 0.2, 0.3]
-MOVE_LIMIT_SCHEDULE = [0.01, 0.008, 0.006, 0.005, 0.004, 0.003, 0.0025, 0.0025, 0.002, 0.002]
-BETA_PROJ_SCHEDULE = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]
+Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.08, 0.1, 0.15, 0.2]
+BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0]
+
 SNES_LINEAR_SOLVER = "mumps"
-INLET_RAMP_STEPS = 1
-FROZEN_PICARD_STEPS = 2 # FROZEN_PICARD_STEPS = 1
+FROZEN_PICARD_STEPS = 1
+NUT_RELAXATION_FACTOR = 0.7
 FORWARD_SNES_METHOD = "newtontr"
 FORWARD_SNES_MAX_ITERS = 300
 FORWARD_SNES_RTOL = 1.0e-3
 FORWARD_SNES_ATOL = 1.0e-6
 ADJOINT_SNES_RTOL = 1.0e-3
 ADJOINT_SNES_ATOL = 1.0e-6
-NUT_RELAXATION_FACTOR = 0.7
 
-BETA_PROJ_VALUE = 0.5 
+BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
+FILTER_RADIUS_IN_CELLS = 3.0
+
+ENABLE_PRESSURE_PIN = True
+PRESSURE_PIN_POINT = (0.0, 0.0)
+RESULTS_ROOT_NAME = "Results_PipeBend_TurbulentTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 
@@ -138,43 +154,30 @@ class WallsBoundary(SubDomain):
         )
 
 
-def mark_pipe_bend_boundaries(mesh, l_box, tol, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max):
+def mark_boundaries(mesh):
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+    )
     boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
     boundaries.set_all(MARK["generic"])
-    WallsBoundary(l_box, tol, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max).mark(
-        boundaries, MARK["walls"]
-    )
-    InletBoundary(tol, inlet_y_min, inlet_y_max).mark(boundaries, MARK["inlet"])
-    OutletBoundary(tol, outlet_x_min, outlet_x_max).mark(boundaries, MARK["outlet"])
+    WallsBoundary(L, TOL, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max).mark(boundaries, MARK["walls"])
+    InletBoundary(TOL, inlet_y_min, inlet_y_max).mark(boundaries, MARK["inlet"])
+    OutletBoundary(TOL, outlet_x_min, outlet_x_max).mark(boundaries, MARK["outlet"])
     return boundaries
 
 
-def build_velocity_profiles(
-    u_max_inlet,
-    u_max_outlet,
-    inlet_y_min,
-    inlet_y_max,
-    outlet_x_min,
-    outlet_x_max,
-    inlet_width,
-    outlet_width,
-):
+def build_velocity_profile_sets():
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+    )
     y_inlet_center = 0.5 * (inlet_y_min + inlet_y_max)
     u_inlet = Expression(
         ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=u_max_inlet,
-        y_c=y_inlet_center,
-        width=inlet_width,
+        degree=2, u_max=U_MAX_INLET, y_c=y_inlet_center, width=INLET_WIDTH,
     )
-
     x_outlet_center = 0.5 * (outlet_x_min + outlet_x_max)
     u_outlet = Expression(
         ("0.0", "-u_max * (1 - pow(2.0 * (x[0] - x_c) / width, 2))"),
-        degree=2,
-        u_max=u_max_outlet,
-        x_c=x_outlet_center,
-        width=outlet_width,
+        degree=2, u_max=U_MAX_OUTLET, x_c=x_outlet_center, width=OUTLET_WIDTH,
     )
-
-    return u_inlet, u_outlet
+    return [u_inlet], [u_outlet]

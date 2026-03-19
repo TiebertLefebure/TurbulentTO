@@ -79,14 +79,13 @@ def build_penalized_wall_distance_solver(
     newton_rtol=1.0e-8,
     newton_atol=1.0e-10,
     newton_max_iters=80,
-    newton_relax=1.0,
+    newton_relax=0.5,
 ):
     """
     Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25) in terms of G.
 
     Returns:
     - wall_distance: UFL expression for y reconstructed from G
-    - reciprocal_distance: Function G
     - update_reciprocal_distance: callback to re-solve G for the current design
     """
     g0_constant = Constant(g0_value)
@@ -153,7 +152,30 @@ def build_penalized_wall_distance_solver(
     )
 
     def update_reciprocal_distance():
-        solver.solve()
-        enforce_scalar_floor(reciprocal_distance, g_floor_value)
+        previous_values = reciprocal_distance.vector().get_local().copy()
+        relaxation_candidates = []
+        for candidate in (float(newton_relax), 0.5 * float(newton_relax), 0.25 * float(newton_relax), 0.1):
+            if candidate > 0.0 and candidate not in relaxation_candidates:
+                relaxation_candidates.append(candidate)
 
-    return wall_distance, reciprocal_distance, update_reciprocal_distance
+        last_error = None
+        for candidate in relaxation_candidates:
+            reciprocal_distance.vector().set_local(previous_values)
+            reciprocal_distance.vector().apply("insert")
+            solver.parameters["newton_solver"]["relaxation_parameter"] = candidate
+            try:
+                solver.solve()
+                enforce_scalar_floor(reciprocal_distance, g_floor_value)
+                return
+            except RuntimeError as err:
+                last_error = err
+
+        reciprocal_distance.vector().set_local(previous_values)
+        reciprocal_distance.vector().apply("insert")
+        print(
+            "Warning: penalized wall-distance update did not converge; reusing previous wall-distance field."
+        )
+        if last_error is not None:
+            print("  Last wall-distance solve error: {}".format(last_error))
+
+    return wall_distance, update_reciprocal_distance

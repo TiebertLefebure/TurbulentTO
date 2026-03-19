@@ -6,14 +6,6 @@ import shutil
 from dolfin import MPI
 
 
-def normalize_module_name(module_name):
-    normalized = module_name.strip()
-    if normalized.endswith(".py"):
-        normalized = normalized[:-3]
-    normalized = normalized.replace(os.sep, ".")
-    return normalized
-
-
 def load_config_module_from_cli():
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
@@ -22,18 +14,13 @@ def load_config_module_from_cli():
         help="Python module name for solver configuration (required).",
     )
     args, _unknown = parser.parse_known_args()
-    module_name = normalize_module_name(args.config)
+    config_str = args.config.strip()
+    if config_str.endswith(".py"):
+        config_str = config_str[:-3]
+    module_name = config_str.replace(os.sep, ".")
     if not module_name:
         raise ValueError("Empty config module name is not allowed.")
     return module_name, importlib.import_module(module_name)
-
-
-def float_scalar(value):
-    if hasattr(value, "values"):
-        values = value.values()
-        if len(values) == 1:
-            return float(values[0])
-    return float(value)
 
 
 def as_list(value):
@@ -42,30 +29,16 @@ def as_list(value):
     return [value]
 
 
-def match_count(values, target_size):
-    values = as_list(values)
-    if len(values) == target_size:
-        return values
-    if len(values) == 1:
-        return values * target_size
-    if len(values) < target_size:
-        return values + [values[-1]] * (target_size - len(values))
-    return values[:target_size]
-
-
-def expand_to_match(values, target_size, label):
-    values = as_list(values)
-    if len(values) == target_size:
-        return values
-    if len(values) == 1 and target_size > 1:
-        return values * target_size
+def create_design_mesh_from_config(config_values):
+    mesh_builder = config_values.get("create_design_mesh")
+    if callable(mesh_builder):
+        return mesh_builder()
     raise ValueError(
-        "{} count ({}) must match marker count ({})".format(label, len(values), target_size)
+        "Config module must define a callable create_design_mesh() to keep the Meshes + Utilities + Config workflow explicit."
     )
 
 
 def ensure_clean_dir(path, comm=MPI.comm_world):
-    # Avoid MPI races where multiple ranks delete/create the same folder.
     if MPI.rank(comm) == 0:
         if os.path.exists(path):
             shutil.rmtree(path)
@@ -88,30 +61,6 @@ def compute_filter_base_length_from_config(config_values):
     nx = int(config_values.get("NX", config_values.get("N", 1)))
     ny = int(config_values.get("NY", config_values.get("N", 1)))
     return min((x_max - x_min) / float(max(nx, 1)), (y_max - y_min) / float(max(ny, 1)))
-
-
-def compute_legacy_port_extents_from_config(config_values):
-    port_extent_builder = config_values.get("compute_port_extents")
-    if not callable(port_extent_builder):
-        return None
-
-    required = [
-        "L",
-        "INLET_TOP_OFFSET",
-        "INLET_WIDTH",
-        "OUTLET_RIGHT_OFFSET",
-        "OUTLET_WIDTH",
-    ]
-    if any(name not in config_values for name in required):
-        return None
-
-    return port_extent_builder(
-        config_values["L"],
-        config_values["INLET_TOP_OFFSET"],
-        config_values["INLET_WIDTH"],
-        config_values["OUTLET_RIGHT_OFFSET"],
-        config_values["OUTLET_WIDTH"],
-    )
 
 
 def build_pressure_pin_expression_from_config(config_values):

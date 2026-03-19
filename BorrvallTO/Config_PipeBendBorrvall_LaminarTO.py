@@ -1,16 +1,32 @@
-from dolfin import DOLFIN_EPS, Expression, MeshFunction, SubDomain, near
+import os
+from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
 
 
 # ----------------------------------------------------------
 # Configuration file for Borrvall Pipe Bend case (Laminar)
 # ----------------------------------------------------------
 
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mesh files
+# Generate via: cd Meshes/PipeBend && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/PipeBend/mesh.xdmf'),
+}
+
+
+def create_design_mesh():
+    mesh = Mesh()
+    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
+        xf.read(mesh)
+    return mesh
+
 
 # ------------------------------------------------------------
 # User parameters
 # ------------------------------------------------------------
-L = 1.0 # L x L square design domain
-N = 120
+L = 1.0  # L x L square design domain
+N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 TOL = DOLFIN_EPS
 
 # Geometry parameters
@@ -20,14 +36,14 @@ OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-3
+MU_FLUID_VALUE = 1.0e-1
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
 
 # -------------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 200
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2
 # -------------------------------------------------------------------------------------------------
 
 
@@ -38,20 +54,23 @@ OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
 Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.03, 0.03, 0.02, 0.015, 0.01]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.08, 0.1, 0.15, 0.2]
 BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0]
 
 SNES_LINEAR_SOLVER = "mumps"
-INLET_RAMP_STEPS = 40
 FILTER_RADIUS_IN_CELLS = 3.0
-FORWARD_SNES_RTOL = 5.0e-7
+FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-9
-ADJOINT_SNES_RTOL = 5.0e-7
+ADJOINT_SNES_RTOL = 1.0e-6
 ADJOINT_SNES_ATOL = 1.0e-9
 SNES_MAX_ITERS = 200
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
+
+ENABLE_PRESSURE_PIN = True
+PRESSURE_PIN_POINT = (0.0, 0.0)
+RESULTS_ROOT_NAME = "Results_PipeBend_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 
@@ -118,43 +137,30 @@ class WallsBoundary(SubDomain):
         )
 
 
-def mark_pipe_bend_boundaries(mesh, l_box, tol, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max):
+def mark_boundaries(mesh):
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+    )
     boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
     boundaries.set_all(MARK["generic"])
-    WallsBoundary(l_box, tol, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max).mark(
-        boundaries, MARK["walls"]
-    )
-    InletBoundary(tol, inlet_y_min, inlet_y_max).mark(boundaries, MARK["inlet"])
-    OutletBoundary(tol, outlet_x_min, outlet_x_max).mark(boundaries, MARK["outlet"])
+    WallsBoundary(L, TOL, inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max).mark(boundaries, MARK["walls"])
+    InletBoundary(TOL, inlet_y_min, inlet_y_max).mark(boundaries, MARK["inlet"])
+    OutletBoundary(TOL, outlet_x_min, outlet_x_max).mark(boundaries, MARK["outlet"])
     return boundaries
 
 
-def build_velocity_profiles(
-    u_max_inlet,
-    u_max_outlet,
-    inlet_y_min,
-    inlet_y_max,
-    outlet_x_min,
-    outlet_x_max,
-    inlet_width,
-    outlet_width,
-):
+def build_velocity_profile_sets():
+    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+    )
     y_inlet_center = 0.5 * (inlet_y_min + inlet_y_max)
     u_inlet = Expression(
         ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=u_max_inlet,
-        y_c=y_inlet_center,
-        width=inlet_width,
+        degree=2, u_max=U_MAX_INLET, y_c=y_inlet_center, width=INLET_WIDTH,
     )
-
     x_outlet_center = 0.5 * (outlet_x_min + outlet_x_max)
     u_outlet = Expression(
         ("0.0", "-u_max * (1 - pow(2.0 * (x[0] - x_c) / width, 2))"),
-        degree=2,
-        u_max=u_max_outlet,
-        x_c=x_outlet_center,
-        width=outlet_width,
+        degree=2, u_max=U_MAX_OUTLET, x_c=x_outlet_center, width=OUTLET_WIDTH,
     )
-
-    return u_inlet, u_outlet
+    return [u_inlet], [u_outlet]

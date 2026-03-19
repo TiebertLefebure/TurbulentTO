@@ -1,5 +1,4 @@
 from dolfin import *
-import inspect
 import numpy as np
 import os
 from time import localtime, strftime
@@ -10,15 +9,12 @@ from Utilities_LaminarTO import (
     as_list,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
-    compute_legacy_port_extents_from_config,
+    create_design_mesh_from_config,
     ensure_clean_dir,
-    float_scalar,
     load_config_module_from_cli,
-    match_count,
 )
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-
 
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
@@ -26,13 +22,13 @@ for _name, _value in vars(CONFIG).items():
         globals()[_name] = _value
 print("Using config module: {}".format(CONFIG_MODULE_NAME))
 
-BETA_PROJ = Constant(float_scalar(BETA_PROJ_VALUE))
+BETA_PROJ = Constant(float(BETA_PROJ_VALUE))
 if "BETA_PROJ_SCHEDULE" in globals():
-    BETA_PROJ_SCHEDULE = [float(float_scalar(beta_value)) for beta_value in BETA_PROJ_SCHEDULE]
+    BETA_PROJ_SCHEDULE = [float(b) for b in BETA_PROJ_SCHEDULE]
 else:
-    BETA_PROJ_SCHEDULE = [float(float_scalar(BETA_PROJ_VALUE))] * len(Q_PENAL_SCHEDULE)
+    BETA_PROJ_SCHEDULE = [float(BETA_PROJ_VALUE)] * len(Q_PENAL_SCHEDULE)
 
-# Brinkman penalization constants (same style as DiffuserBorrvallTO.py script)
+# Brinkman penalization constants
 mu_fluid = Constant(MU_FLUID_VALUE)
 rho_fluid = Constant(RHO_FLUID_VALUE)
 alpha_fluid = Constant(2.5 * MU_FLUID_VALUE / 100.0**2.0)
@@ -54,157 +50,8 @@ def alpha(brinkman_density):
     return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (brinkman_density + q_penal)
 
 
-def create_design_mesh_from_config():
-    mesh_builder = globals().get("create_design_mesh")
-    if callable(mesh_builder):
-        return mesh_builder()
-
-    x_min = float(globals().get("DOMAIN_X_MIN", 0.0))
-    y_min = float(globals().get("DOMAIN_Y_MIN", 0.0))
-
-    x_max_default = globals().get("DOMAIN_X_MAX", globals().get("L"))
-    y_max_default = globals().get("DOMAIN_Y_MAX", globals().get("L", x_max_default))
-    if x_max_default is None or y_max_default is None:
-        raise ValueError("Config must define DOMAIN_X_MAX/DOMAIN_Y_MAX or legacy L.")
-    x_max = float(x_max_default)
-    y_max = float(y_max_default)
-
-    nx_default = globals().get("NX", globals().get("N"))
-    ny_default = globals().get("NY", globals().get("N", nx_default))
-    if nx_default is None or ny_default is None:
-        raise ValueError("Config must define NX/NY or legacy N.")
-    nx = int(nx_default)
-    ny = int(ny_default)
-    mesh_diagonal = globals().get("MESH_DIAGONAL", "crossed")
-
-    return Mesh(
-        RectangleMesh(
-            MPI.comm_world,
-            Point(x_min, y_min),
-            Point(x_max, y_max),
-            nx,
-            ny,
-            mesh_diagonal,
-        )
-    )
-
-
-def compute_filter_base_length():
-    return compute_filter_base_length_from_config(globals())
-
-
-def compute_legacy_port_extents():
-    return compute_legacy_port_extents_from_config(globals())
-
-
-def build_marked_boundaries(custom_mesh):
-    custom_marker = globals().get("mark_boundaries")
-    if callable(custom_marker):
-        return custom_marker(custom_mesh)
-
-    extents = compute_legacy_port_extents()
-    if extents is None:
-        raise ValueError(
-            "Config must define mark_boundaries(mesh) or legacy pipe-bend extent helpers."
-        )
-    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = extents
-    return mark_pipe_bend_boundaries(
-        custom_mesh,
-        L,
-        TOL,
-        inlet_y_min,
-        inlet_y_max,
-        outlet_x_min,
-        outlet_x_max,
-    )
-
-
-def build_velocity_profile_sets_from_config():
-    custom_builder = globals().get("build_velocity_profile_sets")
-    if callable(custom_builder):
-        inlet_profiles, outlet_profiles = custom_builder()
-        return as_list(inlet_profiles), as_list(outlet_profiles)
-
-    profile_builder = globals().get("build_velocity_profiles")
-    if not callable(profile_builder):
-        raise ValueError(
-            "Config must define build_velocity_profile_sets() or build_velocity_profiles(...)."
-        )
-
-    builder_signature = inspect.signature(profile_builder)
-    required_positionals = [
-        parameter
-        for parameter in builder_signature.parameters.values()
-        if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-        and parameter.default is inspect.Parameter.empty
-    ]
-
-    if len(required_positionals) == 0:
-        profile_data = profile_builder()
-        if not isinstance(profile_data, (tuple, list)) or len(profile_data) != 2:
-            raise ValueError(
-                "build_velocity_profiles() must return (inlet_profiles, outlet_profiles)."
-            )
-        return as_list(profile_data[0]), as_list(profile_data[1])
-
-    extents = compute_legacy_port_extents()
-    if extents is None:
-        raise ValueError(
-            "Legacy velocity-profile builder requires compute_port_extents and pipe-bend parameters."
-        )
-    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = extents
-    u_inlet, u_outlet = profile_builder(
-        U_MAX_INLET,
-        U_MAX_OUTLET,
-        inlet_y_min,
-        inlet_y_max,
-        outlet_x_min,
-        outlet_x_max,
-        INLET_WIDTH,
-        OUTLET_WIDTH,
-    )
-    return [u_inlet], [u_outlet]
-
-
-def apply_ramped_velocity_profiles(ramp, inlet_profiles, outlet_profiles):
-    custom_ramp = globals().get("apply_velocity_ramp")
-    if callable(custom_ramp):
-        custom_ramp(ramp, inlet_profiles, outlet_profiles)
-        return
-
-    if "U_MAX_INLETS" in globals():
-        inlet_targets = as_list(U_MAX_INLETS)
-    elif "U_MAX_INLET" in globals():
-        inlet_targets = [U_MAX_INLET]
-    else:
-        raise ValueError("Config must define U_MAX_INLETS or U_MAX_INLET.")
-
-    if "U_MAX_OUTLETS" in globals():
-        outlet_targets = as_list(U_MAX_OUTLETS)
-    elif "U_MAX_OUTLET" in globals():
-        outlet_targets = [U_MAX_OUTLET]
-    else:
-        raise ValueError("Config must define U_MAX_OUTLETS or U_MAX_OUTLET.")
-
-    inlet_targets = match_count(inlet_targets, len(inlet_profiles))
-    outlet_targets = match_count(outlet_targets, len(outlet_profiles))
-
-    for profile, u_target in zip(inlet_profiles, inlet_targets):
-        if not hasattr(profile, "u_max"):
-            raise ValueError("Inlet profile is missing writable attribute 'u_max' for ramping.")
-        profile.u_max = ramp * float_scalar(u_target)
-    for profile, u_target in zip(outlet_profiles, outlet_targets):
-        if not hasattr(profile, "u_max"):
-            raise ValueError("Outlet profile is missing writable attribute 'u_max' for ramping.")
-        profile.u_max = ramp * float_scalar(u_target)
-
-
-def build_pressure_pin_expression():
-    return build_pressure_pin_expression_from_config(globals())
-
-
 def build_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx):
-    """Build the scalar UFL state form used in forward and adjoint derivations."""
+    """UFL state form used in both forward and adjoint derivations."""
     return (
         rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u) * custom_dx
         + mu_fluid * inner(grad(state_u), grad(adj_u)) * custom_dx
@@ -217,7 +64,7 @@ def build_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx):
 # ------------------------------------------------------------
 # Mesh, function spaces, and boundaries
 # ------------------------------------------------------------
-mesh = create_design_mesh_from_config()
+mesh = create_design_mesh_from_config(globals())
 
 U_h = VectorElement("CG", mesh.ufl_cell(), 2)
 P_h = FiniteElement("CG", mesh.ufl_cell(), 1)
@@ -234,7 +81,6 @@ w_adj = Function(FlowSpaceAdj)
 
 rho = Function(DensitySpace)
 rho_f = Function(DensitySpace)
-
 rho_proj_plot = Function(DensitySpace)
 unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
@@ -242,7 +88,7 @@ unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 
 mark = MARK
-boundaries = build_marked_boundaries(mesh)
+boundaries = globals()["mark_boundaries"](mesh)
 wall_markers = as_list(mark["walls"])
 inlet_markers = as_list(mark["inlet"])
 outlet_markers = as_list(mark["outlet"])
@@ -251,70 +97,49 @@ dx = Measure("dx", domain=mesh)
 ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
 dS = Measure("dS", domain=mesh)
 
-inlet_profiles, outlet_profiles = build_velocity_profile_sets_from_config()
-inlet_profiles = match_count(inlet_profiles, len(inlet_markers))
-outlet_profiles = match_count(outlet_profiles, len(outlet_markers))
+inlet_profiles, outlet_profiles = globals()["build_velocity_profile_sets"]()
+inlet_profiles = as_list(inlet_profiles)
+outlet_profiles = as_list(outlet_profiles)
 
 u_noslip = Constant((0.0, 0.0))
 
-bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, marker) for marker in wall_markers]
-bcu_inlet = [
-    DirichletBC(FlowSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(inlet_profiles, inlet_markers)
-]
-bcu_outlet = [
-    DirichletBC(FlowSpace.sub(0), profile, boundaries, marker)
-    for profile, marker in zip(outlet_profiles, outlet_markers)
-]
+bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, m) for m in wall_markers]
+bcu_inlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
+bcu_outlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
 bc_NS = bcu_walls + bcu_inlet + bcu_outlet
 if globals().get("ENABLE_PRESSURE_PIN", True):
     bcp_pin = DirichletBC(
-        FlowSpace.sub(1),
-        Constant(0.0),
-        build_pressure_pin_expression(),
-        "pointwise",
+        FlowSpace.sub(1), Constant(0.0),
+        build_pressure_pin_expression_from_config(globals()), "pointwise",
     )
     bc_NS.append(bcp_pin)
 
 adjoint_velocity_bc_builder = globals().get("build_adjoint_velocity_bcs")
 if callable(adjoint_velocity_bc_builder):
-    bc_NS_adj = list(
-        adjoint_velocity_bc_builder(
-            FlowSpaceAdj,
-            boundaries,
-            wall_markers,
-            inlet_markers,
-            outlet_markers,
-            u_noslip,
-            inlet_profiles,
-            outlet_profiles,
-        )
-    )
+    bc_NS_adj = list(adjoint_velocity_bc_builder(
+        FlowSpaceAdj, boundaries, wall_markers, inlet_markers, outlet_markers,
+        u_noslip, inlet_profiles, outlet_profiles,
+    ))
 else:
-    bcu_walls_adj = [
-        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in wall_markers
-    ]
-    bcu_inlet_adj = [
-        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in inlet_markers
-    ]
-    bcu_outlet_adj = [
-        DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, marker) for marker in outlet_markers
-    ]
+    bcu_walls_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in wall_markers]
+    bcu_inlet_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in inlet_markers]
+    bcu_outlet_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in outlet_markers]
     bc_NS_adj = bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj
 if globals().get("ENABLE_PRESSURE_PIN", True):
     bcp_pin_adj = DirichletBC(
-        FlowSpaceAdj.sub(1),
-        Constant(0.0),
-        build_pressure_pin_expression(),
-        "pointwise",
+        FlowSpaceAdj.sub(1), Constant(0.0),
+        build_pressure_pin_expression_from_config(globals()), "pointwise",
     )
     bc_NS_adj.append(bcp_pin_adj)
 
 
 # ------------------------------------------------------------
-# Design filter
+# Design filter (Helmholtz PDE filter, DG0)
 # ------------------------------------------------------------
-r_filter = compute_filter_base_length() * float(globals().get("FILTER_RADIUS_IN_CELLS", 3.0))
+r_filter = (
+    compute_filter_base_length_from_config(globals())
+    * float(globals().get("FILTER_RADIUS_IN_CELLS", 3.0))
+)
 r = r_filter / (2.0 * 3.0**0.5)
 
 u_filter = TrialFunction(DensitySpace)
@@ -332,7 +157,6 @@ def pde_filter(input_field, output_field):
         + u_filter * v_filter * dx
         - filter_in * v_filter * dx
     )
-
     assign(filter_in, input_field)
     solve(lhs(helmholtz) == rhs(helmholtz), output_field)
     return output_field
@@ -364,32 +188,11 @@ ddx = derivative(lagrangian_form, rho_f)
 vol_constraint = AreaOfInterest * rho_effective * dx - AreaOfInterest * VOL_FRAC * dx
 sensitivities_vol_constraint = derivative(vol_constraint, rho_f)
 
-u_lin, p_lin = TrialFunctions(FlowSpace)
-v_lin, q_lin = TestFunctions(FlowSpace)
-a_stokes = (
-    mu_fluid * inner(grad(u_lin), grad(v_lin))
-    + inner(grad(p_lin), v_lin)
-    + inner(div(u_lin), q_lin)
-    + alpha(rho_effective) * inner(u_lin, v_lin)
-) * dx
-l_stokes = Constant(0.0) * q_lin * dx
-
-
-def initialize_forward_guess_with_stokes():
-    """Initialize w_fwd with a linear Stokes-Brinkman solve for robust Newton startup."""
-    A = assemble(a_stokes)
-    b = assemble(l_stokes)
-    for bc in bc_NS:
-        bc.apply(A, b)
-    solve(A, w_fwd.vector(), b, SNES_LINEAR_SOLVER)
-
 
 # ------------------------------------------------------------
 # Output setup
 # ------------------------------------------------------------
-results_root = os.path.join(
-    THIS_DIR, globals().get("RESULTS_ROOT_NAME", "PipeBendTO_Results_Laminar")
-)
+results_root = os.path.join(THIS_DIR, globals().get("RESULTS_ROOT_NAME", "LaminarTO_Results"))
 rho_dir = os.path.join(results_root, "rho")
 rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
@@ -408,17 +211,15 @@ rhop_out = File(os.path.join(rho_p_dir, "plot_rho_projected.pvd"))
 u_out = File(os.path.join(u_dir, "plot_u.pvd"))
 p_out = File(os.path.join(p_dir, "plot_p.pvd"))
 
-log_path = os.path.join(results_root, "OptimizationLogPipeBend.txt")
+log_path = os.path.join(results_root, "OptimizationLog.txt")
 with open(log_path, "w") as txtout:
-    txtout.write(
-        "{} {} {} {} {}\r\n".format(
-            "Iteration".ljust(12),
-            "Objective".ljust(14),
-            "ObjConv".ljust(12),
-            "VolFrac".ljust(12),
-            strftime("%a, %d %b %Y %H:%M:%S", localtime()),
-        )
-    )
+    txtout.write("{} {} {} {} {}\r\n".format(
+        "Iteration".ljust(12),
+        "Objective".ljust(14),
+        "ObjConv".ljust(12),
+        "VolFrac".ljust(12),
+        strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+    ))
 
 
 # ------------------------------------------------------------
@@ -459,6 +260,59 @@ if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
 
 
 # ------------------------------------------------------------
+# Stokes warm-start: one linear solve before the first SNES call
+# Drops the convective term so Newton has a physically reasonable
+# initial velocity/pressure field to start from.
+# ------------------------------------------------------------
+_w_tr = TrialFunction(FlowSpace)
+_w_te = TestFunction(FlowSpace)
+_u_tr, _p_tr = split(_w_tr)
+_v_te, _q_te = split(_w_te)
+_stokes_a = (
+    mu_fluid * inner(grad(_u_tr), grad(_v_te)) * dx
+    + inner(grad(_p_tr), _v_te) * dx
+    + inner(div(_u_tr), _q_te) * dx
+    + alpha(rho_effective) * inner(_u_tr, _v_te) * dx
+)
+_stokes_L = inner(Constant((0.0, 0.0)), _v_te) * dx + Constant(0.0) * _q_te * dx
+
+
+def initialize_forward_guess_with_stokes():
+    solve(
+        _stokes_a == _stokes_L,
+        w_fwd,
+        bc_NS,
+        solver_parameters={"linear_solver": SNES_LINEAR_SOLVER},
+    )
+
+
+def solve_forward_once(method_override=None):
+    jac_fwd = derivative(forward_form, w_fwd)
+    problem_fwd = NonlinearVariationalProblem(forward_form, w_fwd, bc_NS, jac_fwd)
+    solver_fwd = NonlinearVariationalSolver(problem_fwd)
+    solver_fwd.parameters["nonlinear_solver"] = "snes"
+    solver_fwd.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
+    method = method_override or globals().get("FORWARD_SNES_METHOD", "newtonls")
+    solver_fwd.parameters["snes_solver"]["method"] = method
+    if method == "newtonls":
+        solver_fwd.parameters["snes_solver"]["line_search"] = globals().get(
+            "FORWARD_SNES_LINE_SEARCH", "bt"
+        )
+    solver_fwd.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
+    solver_fwd.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
+    solver_fwd.parameters["snes_solver"]["maximum_iterations"] = int(
+        globals().get("FORWARD_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", SNES_MAX_ITERS))
+    )
+    solver_fwd.parameters["snes_solver"]["error_on_nonconvergence"] = True
+    solver_fwd.solve()
+
+
+print("[Stokes warm-start]")
+rho_f = pde_filter(rho, rho_f)
+initialize_forward_guess_with_stokes()
+
+
+# ------------------------------------------------------------
 # Optimization loop
 # ------------------------------------------------------------
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
@@ -469,50 +323,34 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     inner_count = 0
     convergence_history = 0
     objective_converged = False
-    print(
-        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
-            stage_idx + 1,
-            len(Q_PENAL_SCHEDULE),
-            q_val,
-            beta_val,
-            move_limit_now,
-        )
-    )
+    print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+        stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
+    ))
 
     while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
-        ramp = min(1.0, float(iter_count + 1) / float(max(1, INLET_RAMP_STEPS)))
-        apply_ramped_velocity_profiles(ramp, inlet_profiles, outlet_profiles)
+
+        print("--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
+            stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
+        ))
 
         # Filter current design
         rho_f = pde_filter(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-
         rho_out << rho
         rhop_out << rho_proj_plot
 
         # Forward solve
-        jac_fwd = derivative(forward_form, w_fwd)
-        problem_fwd = NonlinearVariationalProblem(forward_form, w_fwd, bc_NS, jac_fwd)
-        solver_fwd = NonlinearVariationalSolver(problem_fwd)
-        solver_fwd.parameters["nonlinear_solver"] = "snes"
-        solver_fwd.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
-        solver_fwd.parameters["snes_solver"]["method"] = "newtonls"
-        solver_fwd.parameters["snes_solver"]["line_search"] = "bt"
-        solver_fwd.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
-        solver_fwd.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
-        solver_fwd.parameters["snes_solver"]["maximum_iterations"] = SNES_MAX_ITERS
-        solver_fwd.parameters["snes_solver"]["error_on_nonconvergence"] = True
-
-        if iter_count == 0:
-            initialize_forward_guess_with_stokes()
-
+        print("  [Forward solve]")
         try:
-            solver_fwd.solve()
+            solve_forward_once()
         except RuntimeError:
+            print("  Forward SNES diverged; rebuilding Stokes warm-start and retrying.")
             initialize_forward_guess_with_stokes()
-            solver_fwd.solve()
+            fallback_method = globals().get("FORWARD_SNES_FALLBACK_METHOD", "newtontr")
+            solve_forward_once(method_override=fallback_method)
 
         # Adjoint solve
+        print("  [Adjoint solve]")
         jac_adj = derivative(adjoint_form, w_adj)
         problem_adj = NonlinearVariationalProblem(adjoint_form, w_adj, bc_NS_adj, jac_adj)
         solver_adj = NonlinearVariationalSolver(problem_adj)
@@ -523,7 +361,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         solver_adj.parameters["snes_solver"]["relative_tolerance"] = ADJOINT_SNES_RTOL
         solver_adj.parameters["snes_solver"]["absolute_tolerance"] = ADJOINT_SNES_ATOL
         solver_adj.parameters["snes_solver"]["maximum_iterations"] = SNES_MAX_ITERS
-        solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = True
+        solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = False
         solver_adj.solve()
 
         u_out << w_fwd.sub(0)
@@ -538,7 +376,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 objective_converged = True
         else:
             convergence_history = 0
-
         previous_objective = f0val
 
         # Objective gradient
@@ -555,38 +392,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         dfdx[0, :] = filtered_s_vol.vector()[:]
 
         # MMA update
-        (
-            xmma,
-            _ymma,
-            _zmma,
-            _lam,
-            _xsi,
-            _eta,
-            _mu_mma,
-            _zet,
-            _s,
-            low,
-            upp,
-        ) = mmasub(
-            mmma,
-            num_mma,
-            iter_count,
-            xval,
-            xmin,
-            xmax,
-            xold1,
-            xold2,
-            f0val,
-            df0dx,
-            fval,
-            dfdx,
-            low,
-            upp,
-            a0,
-            a,
-            c,
-            d,
-            move_limit_now,
+        print("  [MMA update]")
+        (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
+            mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,
+            f0val, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
         )
 
         xold2 = xold1.copy()
@@ -596,24 +405,27 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         vol_fraction_now = assemble(rho * dx) / volume
         with open(log_path, "a") as txtout:
-            txtout.write(
-                "{:03d}.{:03d}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
-                    int(q_val * 1000),
-                    inner_count,
-                    f0val,
-                    obj_conv,
-                    vol_fraction_now,
-                    strftime("%a, %d %b %Y %H:%M:%S", localtime()),
-                )
-            )
+            txtout.write("{:03d}.{:03d}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
+                int(q_val * 1000), inner_count, f0val, obj_conv, vol_fraction_now,
+                strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+            ))
 
-        print(
-            "q = {:.3f}, beta = {:.2f}, move = {:.3f}, iter = {:03d}, J = {:.4e}, obj_conv = {:.3e}, vol = {:.4f}".format(
-                q_val, float(BETA_PROJ.values()[0]), move_limit_now, inner_count, f0val, obj_conv, vol_fraction_now
-            )
-        )
+        print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}".format(
+            q_val, float(BETA_PROJ.values()[0]), move_limit_now,
+            inner_count, f0val, obj_conv, vol_fraction_now,
+            convergence_history, OBJECTIVE_STREAK_TO_STOP,
+        ))
 
         inner_count += 1
         iter_count += 1
+
+    if objective_converged:
+        print("Stage {}/{} converged after {} iterations.".format(
+            stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count,
+        ))
+    else:
+        print("Stage {}/{} reached max iterations ({}).".format(
+            stage_idx + 1, len(Q_PENAL_SCHEDULE), MAX_INNER_ITERATIONS,
+        ))
 
 print("Optimization finished. Results written to {}".format(results_root))

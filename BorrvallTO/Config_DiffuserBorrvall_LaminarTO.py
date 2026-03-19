@@ -1,14 +1,30 @@
-from dolfin import DOLFIN_EPS, DirichletBC, Expression, MeshFunction, SubDomain, inner, nabla_grad, near
+import os
+from dolfin import DOLFIN_EPS, DirichletBC, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, inner, nabla_grad, near
 
 
 # -------------------------------------------------------------------
 # Configuration file for Borrvall Diffuser case (Laminar baseline)
 # -------------------------------------------------------------------
 
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mesh files
+# Generate via: cd Meshes/Diffuser && python3 diffuser_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/Diffuser/mesh.xdmf'),
+}
+
+
+def create_design_mesh():
+    mesh = Mesh()
+    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
+        xf.read(mesh)
+    return mesh
+
 
 # Domain and mesh
 L = 1.0
-N = 120
+N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = L
@@ -40,11 +56,12 @@ OBJECTIVE_STREAK_TO_STOP = 5
 Q_PENAL_SCHEDULE = [0.1]
 MOVE_LIMIT_SCHEDULE = [0.2]
 
-SNES_LINEAR_SOLVER = "lu"
-INLET_RAMP_STEPS = 1
+SNES_LINEAR_SOLVER = "mumps"
 FILTER_RADIUS_IN_CELLS = 2.0
+# Forward solve
 FORWARD_SNES_RTOL = 1.0e-4
 FORWARD_SNES_ATOL = 1.0e-6
+# Adjoint solve
 ADJOINT_SNES_RTOL = 1.0e-4
 ADJOINT_SNES_ATOL = 1.0e-6
 SNES_MAX_ITERS = 200
@@ -54,7 +71,7 @@ ETA_I = 0.50
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "DiffuserTO_Results_Laminar"
+RESULTS_ROOT_NAME = "Results_Diffuser_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

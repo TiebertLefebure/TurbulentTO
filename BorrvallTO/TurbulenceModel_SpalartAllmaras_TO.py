@@ -1,5 +1,8 @@
-from dolfin import *
-from Utilities import *
+from dolfin import (
+    Constant, DOLFIN_EPS, Function, TestFunction, TrialFunction,
+    assemble, dot, exp, grad, inner, interpolate, lhs, nabla_grad, rhs, skew, solve, sqrt,
+)
+
 
 # -------------------------------------------------------------------------- #
 # Spalart-Allmaras turbulence model  (adjustments for Topology Optimization) #
@@ -17,12 +20,9 @@ def sa_min(a, b, smooth_abs_eps=None):
 
 
 def sa_turbulent_viscosity(nu_tilde, nu_laminar, smooth_abs_eps=None):
-    """
-    SA eddy viscosity from nu_tilde.
-    If smooth_abs_eps is provided, returns a positive smoothed viscosity.
-    """
+    """SA eddy viscosity from nu_tilde."""
     chi = nu_tilde / (nu_laminar + DOLFIN_EPS)
-    f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
+    f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
     nu_t_raw = nu_tilde * f_v1
     if smooth_abs_eps is None:
         return nu_t_raw
@@ -40,11 +40,10 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
     cw1 = cb1 / kappa**2 + (Constant(1.0) + cb2) / sigma
 
     chi = nu_tilde / (nu_laminar + DOLFIN_EPS)
-    f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
+    f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
     f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
     f_t2 = Constant(1.2) * exp(Constant(-0.5) * chi**2)
 
-    # SA model uses vorticity magnitude in S_tilde.
     omega_sq = Constant(2.0) * inner(skew(nabla_grad(external_velocity)), skew(nabla_grad(external_velocity)))
     S = sqrt(omega_sq + DOLFIN_EPS)
 
@@ -55,7 +54,7 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
     r = sa_min(r_arg, Constant(10.0), smooth_abs_eps=smooth_abs_eps)
 
     g = r + cw2 * (r**6 - r)
-    f_w = g * ((Constant(1.0) + cw3**6) / (g**6 + cw3**6)) ** (Constant(1.0) / Constant(6.0))
+    f_w = g * ((Constant(1.0) + cw3**6) / (g**6 + cw3**6))**(Constant(1.0) / Constant(6.0))
 
     prod_nt = cb1 * (Constant(1.0) - f_t2) * S_tilde * nu_tilde
     react_nt = cw1 * f_w * (nu_tilde / y_safe**2)
@@ -64,174 +63,66 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
     return sigma, react_nt, source_nt
 
 
-class SpalartAllmarasGeneral:
+class SpalartAllmarasSteadyState:
     def __init__(
         self,
-        N,
-        bcn,
+        space,
+        bcs,
         nu_tilde_init,
-        nu,
+        nu_laminar,
         force,
         custom_dx,
         custom_ds,
-        distance_field,
+        wall_distance,
         nu_tilde_penalty_reaction=None,
     ):
-        """Base class for the Spalart-Allmaras one-equation turbulence model."""
-        self._N = N
-        self._bcn = bcn
-        self._nu_tilde_init = nu_tilde_init
-
-        self._nu = nu
-        self._force = force
+        self._space = space
+        self._bcs = bcs
+        self._nu_laminar = nu_laminar
         self._dx = custom_dx
-        self._ds = custom_ds
-        self._y = distance_field
+        self._wall_distance = wall_distance
         self._nu_tilde_penalty_reaction = nu_tilde_penalty_reaction
 
-        self._construct_functions()
+        self._nu_tilde = TrialFunction(space)
+        self._xi = TestFunction(space)
+        self._nu_tilde1 = Function(space)
+        self._nu_tilde0 = interpolate(Constant(nu_tilde_init), space)
 
-    def _construct_functions(self):
-        """Construct model functions for the modified turbulent viscosity."""
-        self._nu_tilde, self._xi, self._nu_tilde1, self._nu_tilde0 = initialize_functions(self._N, Constant(self._nu_tilde_init))
+    def construct_forms(self, external_velocity):
+        self._nu_t = sa_turbulent_viscosity(self._nu_tilde0, self._nu_laminar)
+        sigma, react_nt, source_nt = sa_transport_terms(
+            external_velocity, self._nu_tilde0, self._nu_laminar, self._wall_distance,
+        )
+        penalty_react = self._nu_tilde_penalty_reaction if self._nu_tilde_penalty_reaction is not None else Constant(0.0)
 
-    def construct_forms(self):
-        """Constructs the variational forms. Must be implemented in subclasses."""
-        raise NotImplementedError("This method must be implemented in subclasses.")
+        # Steady-state SA transport equation (Yoon 2016 Eq. 27 for TO penalization)
+        FNT = (
+            dot(external_velocity, nabla_grad(self._nu_tilde)) * self._xi * self._dx
+            + inner((self._nu_laminar + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi)) * self._dx
+            + (react_nt + penalty_react) * self._nu_tilde * self._xi * self._dx
+            - source_nt * self._xi * self._dx
+        )
+        self._a_nt = lhs(FNT)
+        self._l_nt = rhs(FNT)
 
     def solve_turbulence_model(self):
-        """Solves the transport equation for nu_tilde."""
-        A_NT = assemble(self._a_nt); b_nt = assemble(self._l_nt)
-        [bc.apply(A_NT,b_nt) for bc in self._bcn]
+        A_NT = assemble(self._a_nt)
+        b_nt = assemble(self._l_nt)
+        for bc in self._bcs:
+            bc.apply(A_NT, b_nt)
         solve(A_NT, self._nu_tilde1.vector(), b_nt)
 
-        # Enforce positivity
-        self._nu_tilde1 = bound_from_bellow(self._nu_tilde1, 1e-16)
-
-    def update_variables(self, relaxation = 1.0):
-        """Update nu_tilde variable with relaxation."""
-        # The assign method can handle linear combinations of Functions.
-        # This is more readable and consistent with the k-epsilon implementation.
+    def update_variables(self, relaxation=1.0):
         self._nu_tilde0.assign(relaxation * self._nu_tilde1 + (1.0 - relaxation) * self._nu_tilde0)
-
-    def _construct_turbulent_quantities(self, external_u1):
-        """
-        Constructs the various terms (production, destruction, etc.) for the
-        Spalart-Allmaras transport equation.
-        This uses a stable formulation where production is an explicit source
-        and destruction is an implicit sink.
-        """
-        self._nu_t = sa_turbulent_viscosity(self._nu_tilde0, self._nu)
-        self._sigma, self._react_nt, self._source_nt = sa_transport_terms(
-            external_u1,
-            self._nu_tilde0,
-            self._nu,
-            self._y,
-        )
 
     @property
     def nu_t(self):
-        """Turbulent eddy viscosity."""
         return self._nu_t
 
     @property
     def nu_tilde0(self):
-        """Value of nu_tilde from previous iteration."""
         return self._nu_tilde0
 
     @property
     def nu_tilde1(self):
-        """Value of nu_tilde for current iteration."""
         return self._nu_tilde1
-
-
-class SpalartAllmarasSteadyState(SpalartAllmarasGeneral):
-    def __init__(
-        self,
-        N,
-        bcn,
-        nu_tilde_init,
-        nu,
-        force,
-        custom_dx,
-        custom_ds,
-        distance_field,
-        nu_tilde_penalty_reaction=None,
-    ):
-        super().__init__(
-            N,
-            bcn,
-            nu_tilde_init,
-            nu,
-            force,
-            custom_dx,
-            custom_ds,
-            distance_field,
-            nu_tilde_penalty_reaction=nu_tilde_penalty_reaction,
-        )
-
-    def construct_forms(self, external_u1):
-        self._construct_turbulent_quantities(external_u1)
-        penalty_react = self._nu_tilde_penalty_reaction
-        if penalty_react is None:
-            penalty_react = Constant(0.0)
-
-        # Weak form for steady-state SA model
-        FNT  = dot(dot(external_u1, nabla_grad(self._nu_tilde)), self._xi)*self._dx \
-            + inner((self._nu + self._nu_tilde0) / self._sigma * grad(self._nu_tilde), grad(self._xi))*self._dx \
-            + dot((self._react_nt + penalty_react) * self._nu_tilde, self._xi)*self._dx \
-            - dot(self._source_nt, self._xi)*self._dx
-        self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
-        # added penalization term to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)
-
-class SpalartAllmarasTransient(SpalartAllmarasGeneral):
-    def __init__(
-        self,
-        N,
-        bcn,
-        nu_tilde_init,
-        nu,
-        force,
-        custom_dx,
-        custom_ds,
-        dt,
-        distance_field,
-        nu_tilde_penalty_reaction=None,
-    ):
-        self._dt = dt
-        super().__init__(
-            N,
-            bcn,
-            nu_tilde_init,
-            nu,
-            force,
-            custom_dx,
-            custom_ds,
-            distance_field,
-            nu_tilde_penalty_reaction=nu_tilde_penalty_reaction,
-        )
-
-    def construct_forms(self, external_u1):
-        self._construct_turbulent_quantities(external_u1)
-        penalty_react = self._nu_tilde_penalty_reaction
-        if penalty_react is None:
-            penalty_react = Constant(0.0)
-        mesh = self._nu_tilde.function_space().mesh()
-        h = CellDiameter(mesh)
-        u_mag = sqrt(dot(external_u1, external_u1) + 1e-10)
-        tau = h / (2.0 * u_mag)
-
-        # Residual used in SUPG stabilization (same style as k-epsilon model)
-        res_nt = (self._nu_tilde - self._nu_tilde0) / self._dt \
-               + dot(external_u1, nabla_grad(self._nu_tilde)) \
-               + (self._react_nt + penalty_react) * self._nu_tilde - self._source_nt
-        F_supg_nt = inner(tau * dot(external_u1, nabla_grad(self._xi)), res_nt) * self._dx
-
-        # Weak form for transient SA model
-        FNT  = dot((self._nu_tilde - self._nu_tilde0) / self._dt, self._xi)*self._dx \
-            + dot(dot(external_u1, nabla_grad(self._nu_tilde)), self._xi)*self._dx \
-            + inner((self._nu + self._nu_tilde0) / self._sigma * grad(self._nu_tilde), grad(self._xi))*self._dx \
-            + dot((self._react_nt + penalty_react) * self._nu_tilde, self._xi)*self._dx \
-            - dot(self._source_nt, self._xi)*self._dx + F_supg_nt
-        self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
-        # added penalty_react to the Spalart-Allmaras transport equation -> Yoon 2016 Eq.(27)

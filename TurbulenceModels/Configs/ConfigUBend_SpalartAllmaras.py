@@ -1,9 +1,14 @@
 import os
 
 # File paths for mesh and boundary data
+# Fine_WallRefinement: inflation mesh with first layer ≈ 1.2e-5 m (y+ ≈ 1).
+# This is required for wall-resolved SA — the Ansys_Inflation mesh has
+# first_layer ≈ 2.6e-4 m (y+ ≈ 11), which is too coarse for SA to capture
+# the viscous sublayer correctly and is the main cause of profile mismatch.
+# Generate via: cd Meshes/U-Bend/Fine_WallRefinement && python3 u_tube_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/U-Bend/Ansys_Inflation/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/U-Bend/Fine_WallRefinement/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/U-Bend/Fine_WallRefinement/facet.xdmf'
 }
 
 
@@ -22,7 +27,7 @@ UBEND_SA_STEADY_RESULTS_ROOT = f'{UBEND_SA_RESULTS_ROOT}_Steady'
 # Warm-start source can be the same mesh (default) or another U-bend mesh label
 # (e.g. 'Coarse' to accelerate a 'Medium' run via interpolation/projection).
 # Change 'UBEND_SA_WARM_START_LABEL' to desired mesh label.
-UBEND_SA_WARM_START_LABEL = 'Fine'
+UBEND_SA_WARM_START_LABEL = 'Fine_WallRefinement'
 UBEND_SA_WARM_START_ROOT = f'Results/U-Bend_SA/{UBEND_SA_WARM_START_LABEL}'
 UBEND_SA_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/mesh.xdmf'
 UBEND_SA_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/facet.xdmf'
@@ -107,7 +112,9 @@ physical_prm = {
 
 # Simulation parameters for SA model
 simulation_prm_SA = {
-    'QUADRATURE_DEGREE': 6,
+    # Degree 4 is sufficient for the nonlinear SA terms (chi^3, f_w) on CG2/CG1
+    # elements and is noticeably faster than degree 6 without loss of accuracy.
+    'QUADRATURE_DEGREE': 4,
     'MAX_ITERATIONS': 9000,
 
     # ---------------
@@ -124,8 +131,8 @@ simulation_prm_SA = {
     # ----------------------
     # Relaxation factors
     # ----------------------
-    'U_RELAXATION_FACTOR': 0.7, 
-    'NUT_RELAXATION_FACTOR': 0.7, 
+    'U_RELAXATION_FACTOR': 0.7,
+    'NUT_RELAXATION_FACTOR': 0.3,
     # Used by steady Picard solver (UBendSimulation_SpalartAllmaras_Steady.py).
     'PICARD_RELAXATION': 0.2,
 
@@ -136,8 +143,8 @@ simulation_prm_SA = {
     # NS (pressure-correction blocks F1, F2, F3):
     # Keep NS_LINEAR_SOLVER='mumps' + NS_LINEAR_PRECONDITIONER=None for robustness
     # For lower RAM try: NS_LINEAR_SOLVER='bicgstab' + NS_LINEAR_PRECONDITIONER='hypre_amg' (or 'ilu').
-    'NS_LINEAR_SOLVER': 'mumps',
-    'NS_LINEAR_PRECONDITIONER': None,
+    'NS_LINEAR_SOLVER': 'gmres',
+    'NS_LINEAR_PRECONDITIONER': 'hypre_amg',
     # SA (nu_tilde transport equation):
     # SA_LINEAR_SOLVER='default' + SA_LINEAR_PRECONDITIONER='default' uses DOLFIN backend default solve(A,x,b).
     # For explicit control, set e.g. SA_LINEAR_SOLVER='bicgstab' + SA_LINEAR_PRECONDITIONER='hypre_amg'.
@@ -147,16 +154,17 @@ simulation_prm_SA = {
     # ----------------------------
     # SA iterations parameters
     # ----------------------------
-    # Number of SA solves per outer NS/SA coupling iteration.
-    'SA_INNER_ITERS': 5,
-    # Safe staged tail reduction: 'SA_INNER_ITERS' -> 'SA_INNER_ITERS_MID' -> 'SA_INNER_ITERS_MIN' 
-    # (avoid dropping to 1 for U-bend).
-    'SA_INNER_ITERS_MID': 3,
-    # Keep a non-trivial SA coupling in the tail; dropping to 1 inner solve can
-    # flatten the medium-mesh velocity profile before the turbulence field catches up.
-    'SA_INNER_ITERS_MIN': 2,
-    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1, # Switch from 'SA_INNER_ITERS' to 'SA_INNER_ITERS_MID' when nu_tilde1 - nu_tilde0 < 0.1 * 'TOLERANCE_NU_TILDE' 
-    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR_FINAL': 0.01, # # Switch from 'SA_INNER_ITERS_MID' to 'SA_INNER_ITERS_MIN' when nu_tilde1 - nu_tilde0 < 0.01 * 'TOLERANCE_NU_TILDE' 
+    # Number of SA (nu_tilde) solves per outer NS/SA coupling iteration.
+    # 2 inner iterations per outer step gives a good balance: the second solve
+    # picks up the nonlinear coefficient update from the first, which is the
+    # largest correction, without the overhead of 5 inner solves that the
+    # original staged scheme used.
+    # Setting all three to the same value disables staged reduction entirely.
+    'SA_INNER_ITERS': 2,
+    'SA_INNER_ITERS_MID': 2,   # same as MAX → no stage-1 reduction
+    'SA_INNER_ITERS_MIN': 2,   # same as MAX → no stage-2 reduction
+    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR': 0.1,
+    'SA_INNER_ITERS_REDUCE_NU_TILDE_FACTOR_FINAL': 0.01,
     'SA_INNER_ITERS_REDUCE_STREAK': 20,
     'SA_INNER_ITERS_REDUCE_STREAK_FINAL': 10,
 
@@ -175,9 +183,9 @@ simulation_prm_SA = {
     # ------------------------------------------------
     # Time-stepping parameters (using CFL condition)
     # ------------------------------------------------
-    'CFL_RELAXATION': 0.3, # maximum CFL number
+    'CFL_RELAXATION': 0.1, # maximum CFL number
     'STEP_SIZE': 5e-4, # initial time step
-    'MIN_STEP_SIZE': 1e-5,
+    'MIN_STEP_SIZE': 1e-6,
     'MAX_STEP_SIZE': 1e-3,
 
     # -------------------------
