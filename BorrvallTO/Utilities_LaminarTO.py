@@ -1,9 +1,11 @@
 import argparse
 import importlib
 import os
+import re
 import shutil
+import tempfile
 
-from dolfin import MPI
+from dolfin import MPI, Mesh, XDMFFile
 
 
 def load_config_module_from_cli():
@@ -36,6 +38,38 @@ def create_design_mesh_from_config(config_values):
     raise ValueError(
         "Config module must define a callable create_design_mesh() to keep the Meshes + Utilities + Config workflow explicit."
     )
+
+
+def load_mesh_from_xdmf(mesh_xdmf_path, comm=MPI.comm_world):
+    mesh = Mesh()
+    try:
+        with XDMFFile(comm, mesh_xdmf_path) as xf:
+            xf.read(mesh)
+        return mesh
+    except Exception as err:
+        if MPI.rank(comm) == 0:
+            print(
+                "Warning: direct XDMF/HDF5 mesh read failed for {}. Retrying from /tmp.".format(
+                    mesh_xdmf_path
+                )
+            )
+            print("  Original read error: {}".format(err))
+
+        xdmf_dir = os.path.dirname(mesh_xdmf_path)
+        with open(mesh_xdmf_path, "r", encoding="utf-8") as handle:
+            xdmf_text = handle.read()
+
+        h5_refs = sorted(set(re.findall(r">([^<>]+\\.h5):/", xdmf_text)))
+        tmp_dir = tempfile.mkdtemp(prefix="fenics_xdmf_", dir="/tmp")
+        tmp_xdmf_path = os.path.join(tmp_dir, os.path.basename(mesh_xdmf_path))
+        shutil.copy2(mesh_xdmf_path, tmp_xdmf_path)
+        for h5_name in h5_refs:
+            shutil.copy2(os.path.join(xdmf_dir, h5_name), os.path.join(tmp_dir, h5_name))
+
+        mesh_retry = Mesh()
+        with XDMFFile(comm, tmp_xdmf_path) as xf:
+            xf.read(mesh_retry)
+        return mesh_retry
 
 
 def ensure_clean_dir(path, comm=MPI.comm_world):

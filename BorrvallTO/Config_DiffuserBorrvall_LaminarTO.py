@@ -1,5 +1,6 @@
 import os
 from dolfin import DOLFIN_EPS, DirichletBC, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, inner, nabla_grad, near
+from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # -------------------------------------------------------------------
@@ -16,10 +17,7 @@ mesh_files = {
 
 
 def create_design_mesh():
-    mesh = Mesh()
-    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
-        xf.read(mesh)
-    return mesh
+    return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
 # Domain and mesh

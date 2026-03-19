@@ -1,5 +1,6 @@
 import os
 from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # -------------------------------------------------------------------
@@ -16,10 +17,7 @@ mesh_files = {
 
 
 def create_design_mesh():
-    mesh = Mesh()
-    with XDMFFile(MPI.comm_world, mesh_files['MESH_DIRECTORY']) as xf:
-        xf.read(mesh)
-    return mesh
+    return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
 # Domain and mesh
@@ -27,6 +25,8 @@ DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = 1.5
 DOMAIN_Y_MAX = 1.0
+NX = 150  # reference resolution used to generate the Gmsh mesh
+NY = 100
 TOL = DOLFIN_EPS
 
 # Port layout on left/right boundaries
