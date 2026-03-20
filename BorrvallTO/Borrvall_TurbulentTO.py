@@ -169,7 +169,18 @@ if globals().get("ENABLE_PRESSURE_PIN", True):
         build_pressure_pin_expression_from_config(globals()), "pointwise",
     ))
 
-nu_tilde_inlet_bc_values = [Constant(0.0) for _ in inlet_markers]
+if "SA_NU_TILDE_INLETS" in globals():
+    _sa_nu_tilde_targets = [float(value) for value in as_list(SA_NU_TILDE_INLETS)]
+else:
+    _sa_nu_tilde_targets = [float(SA_NU_TILDE_INLET)]
+if len(_sa_nu_tilde_targets) != len(inlet_markers):
+    raise ValueError(
+        "Expected {} SA inlet nu_tilde values, got {}.".format(
+            len(inlet_markers), len(_sa_nu_tilde_targets),
+        )
+    )
+
+nu_tilde_inlet_bc_values = [Constant(value) for value in _sa_nu_tilde_targets]
 bcn_turbulence = (
     [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_inlet_bc_values, inlet_markers)]
     + [DirichletBC(TurbulenceSpace, Constant(0.0), boundaries, m) for m in wall_markers]
@@ -238,13 +249,7 @@ else:
     def update_wall_distance_field():
         return None
 
-if "SA_NU_TILDE_INLETS" in globals():
-    _sa_nu_tilde_targets = as_list(SA_NU_TILDE_INLETS)
-else:
-    _sa_nu_tilde_targets = [SA_NU_TILDE_INLET]
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", float(_sa_nu_tilde_targets[0])))
-for _bc_val, _target in zip(nu_tilde_inlet_bc_values, _sa_nu_tilde_targets):
-    _bc_val.assign(float(_target))
 
 nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
 sa_nu_tilde_penalty_reaction = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))) * (

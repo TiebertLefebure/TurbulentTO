@@ -62,12 +62,12 @@ U_MAX_OUTLETS = [1.0, 1.0]
 # Low-Re proof setup: keep the full turbulent/SA solve active, but prescribe
 # zero turbulence content at the inlet and in the initial field so the SA
 # equation admits the laminar state as its exact solution.
-SA_NU_TILDE_INLETS = [0.0, 0.0]
-SA_NU_TILDE_INITIAL = 0.0
+SA_NU_TILDE_INLETS = [1e-3, 1e-3] 
+SA_NU_TILDE_INITIAL = 1e-3 
 SA_DISTANCE_RELAXATION = 0.01
-SA_SMOOTH_ABS_EPS = 0.0
+SA_SMOOTH_ABS_EPS = 1.0e-12 
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
-SA_NU_TILDE_FLOOR = 0.0
+SA_NU_TILDE_FLOOR = 1.0e-12 
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 

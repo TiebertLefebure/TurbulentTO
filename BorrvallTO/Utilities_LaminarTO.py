@@ -3,6 +3,7 @@ import importlib
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 
 from dolfin import MPI, Mesh, XDMFFile
@@ -55,16 +56,34 @@ def load_mesh_from_xdmf(mesh_xdmf_path, comm=MPI.comm_world):
             )
             print("  Original read error: {}".format(err))
 
+        tmp_dir = tempfile.mkdtemp(prefix="fenics_xdmf_", dir="/tmp")
+        tmp_xdmf_path = os.path.join(tmp_dir, os.path.basename(mesh_xdmf_path))
+
+        def _copy_to_tmp(src_path, dst_path):
+            try:
+                shutil.copy2(src_path, dst_path)
+            except Exception:
+                # Some host-mounted filesystems exposed inside containers can fail on
+                # direct Python reads while shell-level copy still succeeds.
+                subprocess.check_call(["cp", src_path, dst_path])
+
         xdmf_dir = os.path.dirname(mesh_xdmf_path)
-        with open(mesh_xdmf_path, "r", encoding="utf-8") as handle:
+        _copy_to_tmp(mesh_xdmf_path, tmp_xdmf_path)
+
+        # Read the local tmp copy, not the mounted source file, to discover HDF
+        # sidecars without re-triggering shared-folder IO issues.
+        with open(tmp_xdmf_path, "r", encoding="utf-8") as handle:
             xdmf_text = handle.read()
 
         h5_refs = sorted(set(re.findall(r">([^<>]+\\.h5):/", xdmf_text)))
-        tmp_dir = tempfile.mkdtemp(prefix="fenics_xdmf_", dir="/tmp")
-        tmp_xdmf_path = os.path.join(tmp_dir, os.path.basename(mesh_xdmf_path))
-        shutil.copy2(mesh_xdmf_path, tmp_xdmf_path)
+        if not h5_refs:
+            h5_refs = sorted(
+                fname for fname in os.listdir(xdmf_dir)
+                if fname.endswith(".h5")
+            )
+
         for h5_name in h5_refs:
-            shutil.copy2(os.path.join(xdmf_dir, h5_name), os.path.join(tmp_dir, h5_name))
+            _copy_to_tmp(os.path.join(xdmf_dir, h5_name), os.path.join(tmp_dir, h5_name))
 
         mesh_retry = Mesh()
         with XDMFFile(comm, tmp_xdmf_path) as xf:

@@ -32,13 +32,13 @@ OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-1
+MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
 # -------------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 200
 # -------------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
@@ -61,7 +61,7 @@ SA_WALL_G_FLOOR = 1.0e-8
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 30
+MAX_INNER_ITERATIONS = 80
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
