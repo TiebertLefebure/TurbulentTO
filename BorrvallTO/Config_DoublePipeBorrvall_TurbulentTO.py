@@ -49,25 +49,22 @@ OUTLET_SEGMENTS = [
 ]
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-1
+MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.66
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 166
 # ----------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
-# Low-Re proof setup: keep the full turbulent/SA solve active, but prescribe
-# zero turbulence content at the inlet and in the initial field so the SA
-# equation admits the laminar state as its exact solution.
-SA_NU_TILDE_INLETS = [1e-3, 1e-3] 
-SA_NU_TILDE_INITIAL = 1e-3 
+SA_NU_TILDE_INLETS = [1.0e-3, 1.0e-3]
+SA_NU_TILDE_INITIAL = 1.0e-3
 SA_DISTANCE_RELAXATION = 0.01
-SA_SMOOTH_ABS_EPS = 1.0e-12 
+SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
-SA_NU_TILDE_FLOOR = 1.0e-12 
+SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -91,13 +88,13 @@ BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0]
 
 SNES_LINEAR_SOLVER = "mumps"
 FROZEN_PICARD_STEPS = 1
-NUT_RELAXATION_FACTOR = 0.7
-FORWARD_SNES_METHOD = "newtonls"
-FORWARD_SNES_MAX_ITERS = 200
-FORWARD_SNES_RTOL = 5.0e-7
-FORWARD_SNES_ATOL = 1.0e-9
-ADJOINT_SNES_RTOL = 5.0e-7
-ADJOINT_SNES_ATOL = 1.0e-9
+NUT_RELAXATION_FACTOR = 0.5
+FORWARD_SNES_METHOD = "newtontr"
+FORWARD_SNES_MAX_ITERS = 300
+FORWARD_SNES_RTOL = 1.0e-4
+FORWARD_SNES_ATOL = 1.0e-6
+ADJOINT_SNES_RTOL = 1.0e-4
+ADJOINT_SNES_ATOL = 1.0e-6
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50

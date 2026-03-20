@@ -325,10 +325,31 @@ def initialize_forward_guess_with_stokes():
     sa_model.nu_tilde1.assign(nu_guess)
 
 
-def solve_forward_once():
-    method = globals().get("FORWARD_SNES_METHOD", "newtonls")
-    line_search = globals().get("FORWARD_SNES_LINE_SEARCH", "bt")
-    max_it = int(globals().get("FORWARD_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 200)))
+def _snapshot_function(function):
+    return function.vector().get_local().copy()
+
+
+def _restore_function(function, values):
+    function.vector().set_local(values)
+    function.vector().apply("insert")
+
+
+def solve_forward_once(
+    method_override=None,
+    line_search_override=None,
+    rtol_override=None,
+    atol_override=None,
+    max_it_override=None,
+):
+    method = method_override or globals().get("FORWARD_SNES_METHOD", "newtonls")
+    line_search = line_search_override or globals().get("FORWARD_SNES_LINE_SEARCH", "bt")
+    max_it = int(
+        max_it_override
+        if max_it_override is not None
+        else globals().get("FORWARD_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 200))
+    )
+    rtol = float(FORWARD_SNES_RTOL if rtol_override is None else rtol_override)
+    atol = float(FORWARD_SNES_ATOL if atol_override is None else atol_override)
     jac = derivative(forward_form, w_fwd)
     problem = NonlinearVariationalProblem(forward_form, w_fwd, bc_NS, jac)
     solver = NonlinearVariationalSolver(problem)
@@ -337,11 +358,51 @@ def solve_forward_once():
     solver.parameters["snes_solver"]["method"] = method
     if method == "newtonls":
         solver.parameters["snes_solver"]["line_search"] = line_search
-    solver.parameters["snes_solver"]["relative_tolerance"] = FORWARD_SNES_RTOL
-    solver.parameters["snes_solver"]["absolute_tolerance"] = FORWARD_SNES_ATOL
+    solver.parameters["snes_solver"]["relative_tolerance"] = rtol
+    solver.parameters["snes_solver"]["absolute_tolerance"] = atol
     solver.parameters["snes_solver"]["maximum_iterations"] = max_it
     solver.parameters["snes_solver"]["error_on_nonconvergence"] = True
     solver.solve()
+
+
+def solve_forward_with_recovery():
+    state_before_solve = _snapshot_function(w_fwd)
+    primary_method = globals().get("FORWARD_SNES_METHOD", "newtonls")
+
+    try:
+        solve_forward_once()
+        return
+    except RuntimeError:
+        print("    Forward SNES diverged with method={}; restoring previous iterate.".format(primary_method))
+
+    fallback_method = globals().get("FORWARD_SNES_FALLBACK_METHOD")
+    if fallback_method is None and primary_method != "newtontr":
+        fallback_method = "newtontr"
+
+    fallback_kwargs = {}
+    if "FORWARD_SNES_FALLBACK_LINE_SEARCH" in globals():
+        fallback_kwargs["line_search_override"] = globals()["FORWARD_SNES_FALLBACK_LINE_SEARCH"]
+    if "FORWARD_SNES_FALLBACK_RTOL" in globals():
+        fallback_kwargs["rtol_override"] = globals()["FORWARD_SNES_FALLBACK_RTOL"]
+    if "FORWARD_SNES_FALLBACK_ATOL" in globals():
+        fallback_kwargs["atol_override"] = globals()["FORWARD_SNES_FALLBACK_ATOL"]
+    if "FORWARD_SNES_FALLBACK_MAX_ITERS" in globals():
+        fallback_kwargs["max_it_override"] = globals()["FORWARD_SNES_FALLBACK_MAX_ITERS"]
+
+    if fallback_method is not None:
+        _restore_function(w_fwd, state_before_solve)
+        try:
+            print("    Retrying forward solve with fallback method={}.".format(fallback_method))
+            solve_forward_once(method_override=fallback_method, **fallback_kwargs)
+            return
+        except RuntimeError:
+            print("    Fallback method also diverged; rebuilding Stokes warm-start.")
+
+    initialize_forward_guess_with_stokes()
+    if fallback_method is not None:
+        solve_forward_once(method_override=fallback_method, **fallback_kwargs)
+        return
+    solve_forward_once()
 
 
 # ------------------------------------------------------------
@@ -452,11 +513,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         print("  [Forward solve]")
         for _ in range(max(1, int(globals().get("FROZEN_PICARD_STEPS", 1)))):
-            try:
-                solve_forward_once()
-            except RuntimeError:
-                initialize_forward_guess_with_stokes()
-                solve_forward_once()
+            solve_forward_with_recovery()
 
             velocity_for_sa = w_fwd.sub(0, deepcopy=True)
             sa_model.construct_forms(velocity_for_sa)
@@ -468,11 +525,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
         # Final momentum solve with updated nu_tilde_frozen
-        try:
-            solve_forward_once()
-        except RuntimeError:
-            initialize_forward_guess_with_stokes()
-            solve_forward_once()
+        solve_forward_with_recovery()
 
         # Adjoint solve (frozen turbulence: nu_tilde_frozen fixed, only NS adjoint)
         print("  [Adjoint solve]")

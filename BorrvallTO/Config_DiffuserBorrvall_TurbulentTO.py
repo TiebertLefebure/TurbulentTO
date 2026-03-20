@@ -34,13 +34,13 @@ OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-5
+MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
 
 # ------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 100,000
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 10,000
 # ------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings

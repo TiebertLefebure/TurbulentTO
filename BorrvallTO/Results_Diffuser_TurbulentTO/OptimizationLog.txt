@@ -1,2 +1,0 @@
-Iteration    Objective      ObjConv      VolFrac      Fri, 20 Mar 2026 13:56:22
-100.000   5.4112804169e-01   1.0000000000e+00   4.9835501556e-01   Fri, 20 Mar 2026 13:57:17
