@@ -120,7 +120,7 @@ NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
 #   rtol_u                    : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
 FORWARD_IPCS_DT                 = 2.0e-4
 FORWARD_IPCS_MAX_ITERS          = 400
-FORWARD_IPCS_RTOL               = 3.0e-4
+FORWARD_IPCS_RTOL               = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL      = 1.0e-3
 FORWARD_IPCS_U_RELAXATION       = 0.4
 FORWARD_IPCS_P_RELAXATION       = 0.15
