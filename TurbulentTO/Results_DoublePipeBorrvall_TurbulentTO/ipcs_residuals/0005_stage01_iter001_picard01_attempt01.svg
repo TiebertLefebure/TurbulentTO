@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect x="0" y="0" width="920" height="520" fill="white"/>
+  <text x="85" y="32" font-size="20" font-family="monospace" fill="#111111">0005_stage01_iter001_picard01_attempt01</text>
+  <text x="85" y="52" font-size="13" font-family="monospace" fill="#555555">IPCS residual history (log10 scale)</text>
+  <rect x="85" y="65" width="805" height="390" fill="none" stroke="#222222" stroke-width="1.2"/>
+  <line x1="85" y1="455.00" x2="890" y2="455.00" stroke="#d9d9d9" stroke-width="1"/>
+  <text x="75" y="455.00" font-size="12" font-family="monospace" fill="#333333" text-anchor="end" dominant-baseline="middle">1.0e-04</text>
+  <line x1="85" y1="325.00" x2="890" y2="325.00" stroke="#d9d9d9" stroke-width="1"/>
+  <text x="75" y="325.00" font-size="12" font-family="monospace" fill="#333333" text-anchor="end" dominant-baseline="middle">1.0e-03</text>
+  <line x1="85" y1="195.00" x2="890" y2="195.00" stroke="#d9d9d9" stroke-width="1"/>
+  <text x="75" y="195.00" font-size="12" font-family="monospace" fill="#333333" text-anchor="end" dominant-baseline="middle">1.0e-02</text>
+  <line x1="85" y1="65.00" x2="890" y2="65.00" stroke="#d9d9d9" stroke-width="1"/>
+  <text x="75" y="65.00" font-size="12" font-family="monospace" fill="#333333" text-anchor="end" dominant-baseline="middle">1.0e-01</text>
+  <line x1="85.00" y1="65" x2="85.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="85.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">1</text>
+  <line x1="246.00" y1="65" x2="246.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="246.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">11</text>
+  <line x1="407.00" y1="65" x2="407.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="407.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">21</text>
+  <line x1="568.00" y1="65" x2="568.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="568.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">32</text>
+  <line x1="729.00" y1="65" x2="729.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="729.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">42</text>
+  <line x1="890.00" y1="65" x2="890.00" y2="455" stroke="#e6e6e6" stroke-width="1"/>
+  <text x="890.00" y="479" font-size="12" font-family="monospace" fill="#333333" text-anchor="middle">52</text>
+  <line x1="85" y1="392.97" x2="890" y2="392.97" stroke="#0b6efd" stroke-width="1.2" stroke-dasharray="6 4"/>
+  <line x1="85" y1="325.00" x2="890" y2="325.00" stroke="#d63384" stroke-width="1.2" stroke-dasharray="6 4"/>
+  <polyline fill="none" stroke="#0b6efd" stroke-width="2.2" points="85.00,396.07 100.78,396.08 116.57,396.09 132.35,396.11 148.14,396.12 163.92,396.13 179.71,396.15 195.49,396.16 211.27,396.17 227.06,396.18 242.84,396.20 258.63,396.21 274.41,396.22 290.20,396.23 305.98,396.25 321.76,396.26 337.55,396.27 353.33,396.28 369.12,396.29 384.90,396.31 400.69,396.32 416.47,396.33 432.25,396.34 448.04,396.35 463.82,396.37 479.61,396.38 495.39,396.39 511.18,396.40 526.96,396.41 542.75,396.42 558.53,396.44 574.31,396.45 590.10,396.46 605.88,396.47 621.67,396.48 637.45,396.49 653.24,396.51 669.02,396.52 684.80,396.53 700.59,396.54 716.37,396.55 732.16,396.56 747.94,396.57 763.73,396.59 779.51,396.60 795.29,396.61 811.08,396.62 826.86,396.63 842.65,396.64 858.43,396.65 874.22,396.66 890.00,396.68"/>
+  <polyline fill="none" stroke="#d63384" stroke-width="2.2" points="85.00,191.22 100.78,197.16 116.57,203.14 132.35,209.17 148.14,215.24 163.92,221.33 179.71,227.40 195.49,233.44 211.27,239.40 227.06,245.25 242.84,250.96 258.63,256.51 274.41,261.85 290.20,266.97 305.98,271.83 321.76,276.43 337.55,280.75 353.33,284.78 369.12,288.51 384.90,291.94 400.69,295.09 416.47,297.95 432.25,300.54 448.04,302.88 463.82,304.99 479.61,306.88 495.39,308.57 511.18,310.09 526.96,311.44 542.75,312.66 558.53,313.75 574.31,314.73 590.10,315.62 605.88,316.42 621.67,317.15 637.45,317.83 653.24,318.45 669.02,319.03 684.80,319.57 700.59,320.08 716.37,320.56 732.16,321.02 747.94,321.47 763.73,321.90 779.51,322.31 795.29,322.72 811.08,323.12 826.86,323.52 842.65,323.91 858.43,324.30 874.22,324.68 890.00,325.06"/>
+  <text x="882" y="503" font-size="12" font-family="monospace" fill="#222222">step</text>
+  <text x="24" y="260.0" font-size="12" font-family="monospace" fill="#222222" transform="rotate(-90 24,260.0)">residual</text>
+  <line x1="85" y1="494" x2="121" y2="494" stroke="#0b6efd" stroke-width="2.2"/>
+  <text x="129" y="498" font-size="12" font-family="monospace" fill="#222222">u residual</text>
+  <line x1="255" y1="494" x2="291" y2="494" stroke="#d63384" stroke-width="2.2"/>
+  <text x="299" y="498" font-size="12" font-family="monospace" fill="#222222">p residual</text>
+</svg>
