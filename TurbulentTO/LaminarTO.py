@@ -16,12 +16,22 @@ from Utilities_LaminarTO import (
 )
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+# The DG Helmholtz filter uses interior-facet terms (dS), which require
+# ghosted mesh entities for parallel assembly.
+parameters["ghost_mode"] = "shared_facet"
+COMM = MPI.comm_world
+IS_ROOT = MPI.rank(COMM) == 0
+
+
+def root_print(message):
+    if IS_ROOT:
+        print(message)
 
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
-print("Using config module: {}".format(CONFIG_MODULE_NAME))
+root_print("Using config module: {}".format(CONFIG_MODULE_NAME))
 
 BETA_PROJ = Constant(float(BETA_PROJ_VALUE))
 if "BETA_PROJ_SCHEDULE" in globals():
@@ -132,7 +142,7 @@ def build_density_bounds_from_config():
     if num_fixed > 0:
         num_fixed_fluid = int(np.count_nonzero(fixed_cells & (lower_values > 0.5)))
         num_fixed_solid = int(np.count_nonzero(fixed_cells & (upper_values < 0.5)))
-        print(
+        root_print(
             "Density bounds: {} passive cells ({} fluid, {} solid).".format(
                 num_fixed, num_fixed_fluid, num_fixed_solid,
             )
@@ -360,7 +370,7 @@ def solve_forward_once(method_override=None):
     solver_fwd.solve()
 
 
-print("[Stokes warm-start]")
+root_print("[Stokes warm-start]")
 rho_f = pde_filter(rho, rho_f)
 initialize_forward_guess_with_stokes()
 
@@ -376,13 +386,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     inner_count = 0
     convergence_history = 0
     objective_converged = False
-    print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+    root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
     ))
 
     while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
 
-        print("--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
+        root_print("--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
         ))
 
@@ -393,17 +403,17 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         rhop_out << rho_proj_plot
 
         # Forward solve
-        print("  [Forward solve]")
+        root_print("  [Forward solve]")
         try:
             solve_forward_once()
         except RuntimeError:
-            print("  Forward SNES diverged; rebuilding Stokes warm-start and retrying.")
+            root_print("  Forward SNES diverged; rebuilding Stokes warm-start and retrying.")
             initialize_forward_guess_with_stokes()
             fallback_method = globals().get("FORWARD_SNES_FALLBACK_METHOD", "newtontr")
             solve_forward_once(method_override=fallback_method)
 
         # Adjoint solve
-        print("  [Adjoint solve]")
+        root_print("  [Adjoint solve]")
         jac_adj = derivative(adjoint_form, w_adj)
         problem_adj = NonlinearVariationalProblem(adjoint_form, w_adj, bc_NS_adj, jac_adj)
         solver_adj = NonlinearVariationalSolver(problem_adj)
@@ -447,7 +457,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         dfdx[0, :] = filtered_s_vol.vector()[:]
 
         # MMA update
-        print("  [MMA update]")
+        root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
             mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,
             f0val, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
@@ -473,7 +483,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             vol_residual_now,
         )
 
-        print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
             inner_count, f0val, obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
@@ -483,12 +493,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         iter_count += 1
 
     if objective_converged:
-        print("Stage {}/{} converged after {} iterations.".format(
+        root_print("Stage {}/{} converged after {} iterations.".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count,
         ))
     else:
-        print("Stage {}/{} reached max iterations ({}).".format(
+        root_print("Stage {}/{} reached max iterations ({}).".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), MAX_INNER_ITERATIONS,
         ))
 
-print("Optimization finished. Results written to {}".format(results_root))
+root_print("Optimization finished. Results written to {}".format(results_root))

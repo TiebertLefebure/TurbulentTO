@@ -15,13 +15,13 @@ def load_config_module_from_cli():
     parser.add_argument(
         "--config",
         required=True,
-        help="Python module name for solver configuration (required).",
+        help="Python module name or repo-relative path for solver configuration (required).",
     )
     args, _unknown = parser.parse_known_args()
     config_str = args.config.strip()
     if config_str.endswith(".py"):
         config_str = config_str[:-3]
-    module_name = config_str.replace(os.sep, ".")
+    module_name = config_str.replace("\\", ".").replace("/", ".").strip(".")
     if not module_name:
         raise ValueError("Empty config module name is not allowed.")
     return module_name, importlib.import_module(module_name)
@@ -139,10 +139,12 @@ def initialize_optimization_log(log_path):
         ("VolResid", 12),
         ("Timestamp", 24),
     )
-    with open(log_path, "w") as txtout:
-        txtout.write(
-            " ".join(label.ljust(width) for label, width in header_fields) + "\r\n"
-        )
+    if MPI.rank(MPI.comm_world) == 0:
+        with open(log_path, "w") as txtout:
+            txtout.write(
+                " ".join(label.ljust(width) for label, width in header_fields) + "\r\n"
+            )
+    MPI.barrier(MPI.comm_world)
 
 
 def append_optimization_log_entry(
@@ -157,18 +159,19 @@ def append_optimization_log_entry(
     volume_fraction,
     volume_residual,
 ):
-    with open(log_path, "a") as txtout:
-        txtout.write(
-            "{:<7d} {:<7.3f} {:<7.2f} {:<10d} {:<11d} {:.10e}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
-                int(stage_idx),
-                float(q_value),
-                float(beta_value),
-                int(inner_iter),
-                int(global_iter),
-                float(objective),
-                float(objective_convergence),
-                float(volume_fraction),
-                float(volume_residual),
-                strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+    if MPI.rank(MPI.comm_world) == 0:
+        with open(log_path, "a") as txtout:
+            txtout.write(
+                "{:<7d} {:<7.3f} {:<7.2f} {:<10d} {:<11d} {:.10e}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
+                    int(stage_idx),
+                    float(q_value),
+                    float(beta_value),
+                    int(inner_iter),
+                    int(global_iter),
+                    float(objective),
+                    float(objective_convergence),
+                    float(volume_fraction),
+                    float(volume_residual),
+                    strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+                )
             )
-        )
