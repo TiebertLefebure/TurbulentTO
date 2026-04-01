@@ -39,13 +39,13 @@ OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-3
+MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
 
 # ------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,000
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 10,000
 # ------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
@@ -67,13 +67,16 @@ SA_WALL_G_FLOOR = 1.0e-8
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 80
-OBJECTIVE_CONVERGENCE_TOL = 1e-5
-OBJECTIVE_STREAK_TO_STOP = 5
+OBJECTIVE_CONVERGENCE_TOL = 5e-6
+OBJECTIVE_STREAK_TO_STOP = 8
 
-Q_PENAL_SCHEDULE = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.01, 0.005]
-BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+# The original diffuser continuation stopped with broad gray zones because the
+# Brinkman penalization never increased beyond q=0.1. Push q up in the later
+# stages and give the sharper stages more iterations to settle.
+Q_PENAL_SCHEDULE = [0.1, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 3.0]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
+BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
 # Monolithic full-state solver settings
 SNES_LINEAR_SOLVER = "mumps"

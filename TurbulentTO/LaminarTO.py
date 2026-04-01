@@ -13,6 +13,7 @@ from Utilities_LaminarTO import (
     ensure_clean_dir,
     initialize_optimization_log,
     load_config_module_from_cli,
+    reset_vtk_series,
 )
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -273,10 +274,10 @@ ensure_clean_dir(u_dir)
 ensure_clean_dir(p_dir)
 ensure_clean_dir(design_dir)
 
-rho_out = File(os.path.join(rho_dir, "plot_rho.pvd"))
-rhop_out = File(os.path.join(rho_p_dir, "plot_rho_projected.pvd"))
-u_out = File(os.path.join(u_dir, "plot_u.pvd"))
-p_out = File(os.path.join(p_dir, "plot_p.pvd"))
+rho_out = File(reset_vtk_series(os.path.join(rho_dir, "plot_rho.pvd"), COMM))
+rhop_out = File(reset_vtk_series(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), COMM))
+u_out = File(reset_vtk_series(os.path.join(u_dir, "plot_u.pvd"), COMM))
+p_out = File(reset_vtk_series(os.path.join(p_dir, "plot_p.pvd"), COMM))
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 initialize_optimization_log(log_path)

@@ -17,6 +17,7 @@ from Utilities_LaminarTO import (
     ensure_clean_dir,
     initialize_optimization_log,
     load_config_module_from_cli,
+    ResilientVTKFile,
 )
 from Utilities_TurbulentTO_Full import (
     build_penalized_wall_distance_solver,
@@ -69,8 +70,10 @@ else:
 
 mu_fluid = Constant(MU_FLUID_VALUE)
 rho_fluid = Constant(RHO_FLUID_VALUE)
-alpha_fluid = Constant(2.5 * MU_FLUID_VALUE / 100.0 ** 2.0)
-alpha_solid = Constant(2.5 * MU_FLUID_VALUE / 0.01 ** 2.0)
+brinkman_fluid_length = float(globals().get("BRINKMAN_FLUID_LENGTH", 100.0))
+brinkman_solid_length = float(globals().get("BRINKMAN_SOLID_LENGTH", 0.01))
+alpha_fluid = Constant(float(globals().get("ALPHA_FLUID", 2.5 * MU_FLUID_VALUE / brinkman_fluid_length ** 2.0)))
+alpha_solid = Constant(float(globals().get("ALPHA_SOLID", 2.5 * MU_FLUID_VALUE / brinkman_solid_length ** 2.0)))
 q_penal = Constant(0.1)
 
 
@@ -317,7 +320,14 @@ def compute_fixed_inlet_flow_rate():
 mass_flow_constraint_markers = []
 mass_flow_target_fractions = []
 mass_flow_constraint_tolerance = float(globals().get("MASS_FLOW_CONSTRAINT_TOLERANCE", 1.0e-4))
+mass_flow_constraint_mode = str(globals().get("MASS_FLOW_CONSTRAINT_MODE", "upper")).strip().lower()
 fixed_inlet_flow_value = None
+use_two_sided_mass_flow_constraints = mass_flow_constraint_mode in {"band", "equality", "two_sided"}
+
+if mass_flow_constraint_mode not in {"upper", "band", "equality", "two_sided"}:
+    raise ValueError(
+        "MASS_FLOW_CONSTRAINT_MODE must be one of 'upper', 'band', 'equality', or 'two_sided'."
+    )
 
 if "MASS_FLOW_TARGET_FRACTIONS" in globals():
     mass_flow_target_fractions = [float(value) for value in as_list(MASS_FLOW_TARGET_FRACTIONS)]
@@ -340,7 +350,8 @@ if "MASS_FLOW_TARGET_FRACTIONS" in globals():
         )
 
     root_print(
-        "Mass-flow constraints: markers {} with target fractions {} (Fin = {:.4e}, eps = {:.1e}).".format(
+        "Mass-flow constraints [{}]: markers {} with target fractions {} (Fin = {:.4e}, eps = {:.1e}).".format(
+            mass_flow_constraint_mode,
             mass_flow_constraint_markers,
             ["{:.3f}".format(value) for value in mass_flow_target_fractions],
             fixed_inlet_flow_value,
@@ -419,7 +430,16 @@ def pde_filter(input_field, output_field):
     return output_field
 
 
-rho_effective = projection(rho_f, ETA_I)
+def enforce_density_bounds_inplace(density_field):
+    values = density_field.vector().get_local()
+    values = np.clip(values, density_lower_values, density_upper_values)
+    density_field.vector().set_local(values)
+    density_field.vector().apply("insert")
+    return density_field
+
+
+rho_projected = projection(rho_f, ETA_I)
+rho_effective = density_lower_bound + (density_upper_bound - density_lower_bound) * rho_projected
 use_penalized_wall_distance = bool(globals().get("SA_USE_PENALIZED_WALL_DISTANCE", True))
 if use_penalized_wall_distance:
     sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
@@ -427,6 +447,13 @@ if use_penalized_wall_distance:
     sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
     sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
     sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
+    sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
+    sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
+    sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
+    sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAXATION", 0.5))
+    sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
+    sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
+    sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
 
     wall_distance, update_wall_distance_field = build_penalized_wall_distance_solver(
         TurbulenceSpace,
@@ -439,10 +466,22 @@ if use_penalized_wall_distance:
         sa_wall_penalty_alpha,
         sa_wall_penalty_power,
         sa_wall_g_floor,
+        newton_rtol=sa_wall_newton_rtol,
+        newton_atol=sa_wall_newton_atol,
+        newton_max_iters=sa_wall_newton_max_iters,
+        newton_relax=sa_wall_newton_relax,
+        penalty_homotopy=sa_wall_penalty_homotopy,
+        solid_guess_weight=sa_wall_initial_solid_guess,
+        extra_relaxations=sa_wall_extra_relaxations,
     )
     root_print(
-        "Penalized SA wall-distance enabled (frozen G): sigma={}, G0={}, alpha_G={}, n_G={}".format(
-            sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power,
+        "Penalized SA wall-distance enabled (frozen G): sigma={}, G0={}, alpha_G={}, n_G={}, relax_G={}, maxit_G={}".format(
+            sa_wall_sigma,
+            sa_wall_g0,
+            sa_wall_penalty_alpha,
+            sa_wall_penalty_power,
+            sa_wall_newton_relax,
+            sa_wall_newton_max_iters,
         )
     )
 else:
@@ -506,18 +545,37 @@ if mass_flow_target_fractions:
             raise ValueError("Mass-flow target fraction must be positive.")
         outlet_flux_functional = dot(u, n) * ds(marker)
         normalized_outlet_flux_functional = Constant(1.0 / target_flux_value) * outlet_flux_functional
-        constraint_lagrangian_form = normalized_outlet_flux_functional + state_form
+        upper_constraint_form = normalized_outlet_flux_functional
+        upper_constraint_lagrangian_form = upper_constraint_form + state_form
         mass_flow_constraints.append(
             {
                 "marker": marker,
                 "target_fraction": target_fraction,
-                "functional": normalized_outlet_flux_functional,
+                "bound": "upper",
+                "functional": upper_constraint_form,
+                "offset": -(1.0 + mass_flow_constraint_tolerance),
                 "adjoint_form": derivative(
-                    constraint_lagrangian_form, w_state, TestFunction(StateSpaceAdj)
+                    upper_constraint_lagrangian_form, w_state, TestFunction(StateSpaceAdj)
                 ),
-                "gradient_form": derivative(constraint_lagrangian_form, rho_f),
+                "gradient_form": derivative(upper_constraint_lagrangian_form, rho_f),
             }
         )
+        if use_two_sided_mass_flow_constraints:
+            lower_constraint_form = -normalized_outlet_flux_functional
+            lower_constraint_lagrangian_form = lower_constraint_form + state_form
+            mass_flow_constraints.append(
+                {
+                    "marker": marker,
+                    "target_fraction": target_fraction,
+                    "bound": "lower",
+                    "functional": lower_constraint_form,
+                    "offset": 1.0 - mass_flow_constraint_tolerance,
+                    "adjoint_form": derivative(
+                        lower_constraint_lagrangian_form, w_state, TestFunction(StateSpaceAdj)
+                    ),
+                    "gradient_form": derivative(lower_constraint_lagrangian_form, rho_f),
+                }
+            )
 
 u_warm, p_warm = TrialFunctions(FlowWarmSpace)
 v_warm, q_warm = TestFunctions(FlowWarmSpace)
@@ -577,7 +635,7 @@ def initialize_state_guess_with_stokes():
     assign(w_state.sub(2), nu_guess)
 
 
-def solve_state_once():
+def solve_state_once(method_override=None, line_search_override=None, max_iters_override=None):
     jac_state = derivative(state_residual_form, w_state)
     problem_state = NonlinearVariationalProblem(state_residual_form, w_state, bc_state, jac_state)
     solver_state = NonlinearVariationalSolver(problem_state)
@@ -586,11 +644,12 @@ def solve_state_once():
         "FULL_STATE_LINEAR_SOLVER",
         globals().get("SNES_LINEAR_SOLVER", "mumps"),
     )
-    solver_state.parameters["snes_solver"]["method"] = globals().get("FULL_STATE_SNES_METHOD", "newtonls")
-    if solver_state.parameters["snes_solver"]["method"] == "newtonls":
+    method = method_override or globals().get("FULL_STATE_SNES_METHOD", "newtonls")
+    solver_state.parameters["snes_solver"]["method"] = method
+    if method == "newtonls":
         solver_state.parameters["snes_solver"]["line_search"] = globals().get(
-            "FULL_STATE_SNES_LINE_SEARCH",
-            "bt",
+            "FULL_STATE_SNES_LINE_SEARCH" if line_search_override is None else "__unused__",
+            "bt" if line_search_override is None else line_search_override,
         )
     solver_state.parameters["snes_solver"]["relative_tolerance"] = float(
         globals().get("FULL_STATE_SNES_RTOL", globals().get("FORWARD_SNES_RTOL", 1.0e-6))
@@ -600,6 +659,8 @@ def solve_state_once():
     )
     solver_state.parameters["snes_solver"]["maximum_iterations"] = int(
         globals().get("FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80))
+        if max_iters_override is None
+        else max_iters_override
     )
     solver_state.parameters["snes_solver"]["error_on_nonconvergence"] = True
     solver_state.solve()
@@ -613,7 +674,23 @@ def solve_state_with_recovery():
             raise
         root_print("  State solve diverged; rebuilding Stokes-Brinkman warm start and retrying once.")
         initialize_state_guess_with_stokes()
-        solve_state_once()
+        fallback_method = globals().get(
+            "FULL_STATE_SNES_FALLBACK_METHOD",
+            globals().get("FULL_STATE_SNES_METHOD", "newtonls"),
+        )
+        fallback_line_search = globals().get(
+            "FULL_STATE_SNES_FALLBACK_LINE_SEARCH",
+            globals().get("FULL_STATE_SNES_LINE_SEARCH", "bt"),
+        )
+        fallback_max_iters = int(globals().get(
+            "FULL_STATE_SNES_FALLBACK_MAX_ITERS",
+            globals().get("FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80)),
+        ))
+        solve_state_once(
+            method_override=fallback_method,
+            line_search_override=fallback_line_search,
+            max_iters_override=fallback_max_iters,
+        )
 
 
 def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
@@ -649,19 +726,18 @@ ensure_clean_dir(p_dir)
 ensure_clean_dir(nu_tilde_dir)
 ensure_clean_dir(design_dir)
 
-rho_out = File(os.path.join(rho_dir, "plot_rho.pvd"))
-rhop_out = File(os.path.join(rho_p_dir, "plot_rho_projected.pvd"))
-u_out = File(os.path.join(u_dir, "plot_u.pvd"))
-p_out = File(os.path.join(p_dir, "plot_p.pvd"))
-nu_tilde_out = File(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"))
+rho_out = ResilientVTKFile(os.path.join(rho_dir, "plot_rho.pvd"), COMM)
+rhop_out = ResilientVTKFile(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), COMM)
+u_out = ResilientVTKFile(os.path.join(u_dir, "plot_u.pvd"), COMM)
+p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
+nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 initialize_optimization_log(log_path)
 
 initial_density = float(globals().get("INITIAL_DENSITY_VALUE", VOL_FRAC))
 assign(rho, interpolate(Constant(initial_density), DensitySpace))
-rho.vector().set_local(np.clip(rho.vector().get_local(), density_lower_values, density_upper_values))
-rho.vector().apply("insert")
+enforce_density_bounds_inplace(rho)
 
 iter_count = 0
 previous_objective = 0.0
@@ -772,11 +848,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         dfdx[0, :] = filtered_s_vol.vector()[:]
 
         mass_flow_status = []
+        mass_flow_status_markers = set()
         for constraint_idx, constraint_spec in enumerate(mass_flow_constraints, start=1):
             solve_adjoint(constraint_spec["adjoint_form"])
             fval[constraint_idx, 0] = (
-                assemble(constraint_spec["functional"])
-                - (1.0 + mass_flow_constraint_tolerance)
+                assemble(constraint_spec["functional"]) + constraint_spec["offset"]
             )
             unfiltered_constraint_gradient.vector()[:] = assemble(constraint_spec["gradient_form"])[:]
             filtered_constraint_gradient = pde_filter(
@@ -784,15 +860,18 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             )
             dfdx[constraint_idx, :] = filtered_constraint_gradient.vector()[:]
 
-            outlet_flow_value = assemble(dot(u, n) * ds(constraint_spec["marker"]))
-            outlet_fraction = outlet_flow_value / fixed_inlet_flow_value
-            mass_flow_status.append(
-                "m{}={:.3f}/{:.3f}".format(
-                    constraint_spec["marker"],
-                    outlet_fraction,
-                    constraint_spec["target_fraction"],
+            marker = constraint_spec["marker"]
+            if marker not in mass_flow_status_markers:
+                outlet_flow_value = assemble(dot(u, n) * ds(marker))
+                outlet_fraction = outlet_flow_value / fixed_inlet_flow_value
+                mass_flow_status.append(
+                    "m{}={:.3f}/{:.3f}".format(
+                        marker,
+                        outlet_fraction,
+                        constraint_spec["target_fraction"],
+                    )
                 )
-            )
+                mass_flow_status_markers.add(marker)
 
         root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
@@ -806,6 +885,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         rho_values = np.clip(xmma[:, 0].copy(), density_lower_values, density_upper_values)
         xval[:, 0] = rho_values
         rho.vector()[:] = rho_values
+        rho.vector().apply("insert")
 
         append_optimization_log_entry(
             log_path,

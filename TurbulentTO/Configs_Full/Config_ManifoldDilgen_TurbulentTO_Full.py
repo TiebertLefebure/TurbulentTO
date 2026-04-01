@@ -14,18 +14,20 @@ from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Dilgen 2018 2D flow manifold - Turbulent (SA surrogate)
+# Configuration: Dilgen 2018 2D flow manifold - Turbulent Full
 #
-# Paper data matched here:
+# Paper data referenced by the corresponding frozen-SA case:
 #   Re = 3500, Ub = 2.0 m/s, H = 0.1 m, nu = 5.7e-5 m^2/s
 #   lambda = 2e3 s^-1, q = 0.1, filter radius = 0.028, beta = 1.5 -> 14
 #   fluid volume fraction in design domain f = 0.43
 #   outlet flow fractions = [0.3, 0.4, 0.3] * Fin
 #
-# Modeling choice for this repo:
-#   keep the current SA-based turbulent solver and the standard parabolic inlet
-#   treatment used in the other cases, while matching the manifold geometry,
-#   passive fluid/solid regions, pressure outlets, and mass-flow constraints.
+# Implementation choice for this repo:
+#   keep the current SA-based manifold setup from the frozen case,
+#   including geometry, passive fluid/solid regions, pressure outlets,
+#   and outlet mass-flow constraints, but target the monolithic full
+#   state solver (u, p, nu_tilde) while keeping the wall-distance field
+#   external to the state.
 # ===================================================================
 
 # -------------------------------------------------------------------
@@ -124,7 +126,7 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 2.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-SA_USE_PENALIZED_WALL_DISTANCE = True
+SA_USE_PENALIZED_WALL_DISTANCE = False
 SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 2.0e3
@@ -139,10 +141,12 @@ INITIAL_DENSITY_VALUE = 0.43
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.08, 0.06, 0.05, 0.04, 0.03, 0.02]
-BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
-MAX_INNER_ITERATIONS_SCHEDULE = [40, 40, 40, 40, 40, 40, 40]
+# Keep the manifold continuation deliberately gentle so the three outlet
+# branches have more chance to settle before projection sharpening increases.
+Q_PENAL_SCHEDULE = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01]
+BETA_PROJ_SCHEDULE = [0.1, 0.15, 0.25, 0.35, 0.5, 1.0, 2.0, 4.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [60, 60, 60, 60, 60, 60, 60, 60]
 
 MASS_FLOW_CONSTRAINT_MARKERS = [3, 4, 5]  # top, right, bottom
 MASS_FLOW_TARGET_FRACTIONS = [0.3, 0.4, 0.3]
@@ -150,28 +154,16 @@ MASS_FLOW_CONSTRAINT_MODE = 'equality'
 MASS_FLOW_CONSTRAINT_TOLERANCE = 1.0e-4
 
 # -------------------------------------------------------------------
-# Solver settings
+# Monolithic full-state solver settings
 # -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = "mumps"
-FROZEN_PICARD_STEPS = 3
-NUT_RELAXATION_FACTOR = 0.35
-
-FORWARD_IPCS_DT = 2.0e-4
-FORWARD_IPCS_MAX_ITERS = 500
-FORWARD_IPCS_RTOL = 3.0e-4
-FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_U_RELAXATION = 0.25
-FORWARD_IPCS_P_RELAXATION = 0.10
-FORWARD_IPCS_VEL_SOLVER = "bicgstab"
-FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER = "cg"
-FORWARD_IPCS_P_PRECONDITIONER = "ilu"
-FORWARD_IPCS_LOG_EVERY = 50
-FORWARD_IPCS_MAX_RESTARTS = 3
-FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
-FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_RESTART_WITH_STOKES = False
-FORWARD_IPCS_ERROR_ON_NONCONVERGENCE = False
+SNES_LINEAR_SOLVER = 'mumps'
+FULL_STATE_LINEAR_SOLVER = 'mumps'
+FULL_STATE_SNES_METHOD = 'newtontr'
+FULL_STATE_SNES_LINE_SEARCH = 'bt'
+FULL_STATE_SNES_RTOL = 1.0e-6
+FULL_STATE_SNES_ATOL = 1.0e-8
+FULL_STATE_SNES_MAX_ITERS = 50
+FULL_STATE_RESTART_WITH_STOKES = True
 
 # -------------------------------------------------------------------
 # Projection, filter, and output
@@ -184,15 +176,14 @@ QUADRATURE_DEGREE = 6
 FILTER_BASE_LENGTH = 0.028
 FILTER_RADIUS_IN_CELLS = 1.0
 
-OUTLET_BC_TYPE = "pressure"
+OUTLET_BC_TYPE = 'pressure'
 OUTLET_PRESSURE_VALUE = 0.0
-SAVE_IPCS_RESIDUAL_PLOTS = True
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "Results_Frozen/Results_ManifoldDilgen_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_ManifoldDilgen_TurbulentTO_Full'
 
-MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": (3, 4, 5)}
+MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': (3, 4, 5)}
 
 
 def between(value, limits, eps=BOUNDARY_TOL):
@@ -262,19 +253,19 @@ class WallsBoundary(SubDomain):
 
 
 def mark_boundaries(mesh):
-    boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
-    boundaries.set_all(MARK["generic"])
+    boundaries = MeshFunction('size_t', mesh, mesh.topology().dim() - 1)
+    boundaries.set_all(MARK['generic'])
 
-    WallsBoundary().mark(boundaries, MARK["walls"])
-    VerticalSegmentBoundary(INLET_BLOCK_X_MIN, INLET_Y_MIN, INLET_Y_MAX).mark(boundaries, MARK["inlet"])
+    WallsBoundary().mark(boundaries, MARK['walls'])
+    VerticalSegmentBoundary(INLET_BLOCK_X_MIN, INLET_Y_MIN, INLET_Y_MAX).mark(boundaries, MARK['inlet'])
     HorizontalSegmentBoundary(TOP_BLOCK_Y_MAX, TOP_OUTLET_X_MIN, TOP_OUTLET_X_MAX).mark(
-        boundaries, MARK["outlet"][0]
+        boundaries, MARK['outlet'][0]
     )
     VerticalSegmentBoundary(RIGHT_BLOCK_X_MAX, RIGHT_OUTLET_Y_MIN, RIGHT_OUTLET_Y_MAX).mark(
-        boundaries, MARK["outlet"][1]
+        boundaries, MARK['outlet'][1]
     )
     HorizontalSegmentBoundary(BOTTOM_BLOCK_Y_MIN, BOTTOM_OUTLET_X_MIN, BOTTOM_OUTLET_X_MAX).mark(
-        boundaries, MARK["outlet"][2]
+        boundaries, MARK['outlet'][2]
     )
 
     return boundaries
@@ -284,7 +275,7 @@ def build_velocity_profile_sets():
     inlet_center = 0.5 * (INLET_Y_MIN + INLET_Y_MAX)
     inlet_width = INLET_Y_MAX - INLET_Y_MIN
     u_inlet = Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
+        ('u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))', '0.0'),
         degree=2,
         u_max=U_MAX_INLET,
         y_c=inlet_center,
@@ -353,9 +344,9 @@ def build_density_bounds(mesh, density_space):
                 upper_values[dof] = 0.0
 
     lower.vector().set_local(lower_values)
-    lower.vector().apply("insert")
+    lower.vector().apply('insert')
     upper.vector().set_local(upper_values)
-    upper.vector().apply("insert")
+    upper.vector().apply('insert')
     return lower, upper
 
 
@@ -375,5 +366,5 @@ def build_volume_region(mesh, density_space):
             region_values[dof] = 1.0
 
     volume_region.vector().set_local(region_values)
-    volume_region.vector().apply("insert")
+    volume_region.vector().apply('insert')
     return volume_region

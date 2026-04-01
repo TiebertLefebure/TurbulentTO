@@ -118,6 +118,9 @@ def build_penalized_wall_distance_solver(
     newton_atol=1.0e-10,
     newton_max_iters=80,
     newton_relax=0.5,
+    penalty_homotopy=None,
+    solid_guess_weight=1.0,
+    extra_relaxations=None,
 ):
     """
     Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25) in terms of G.
@@ -190,27 +193,105 @@ def build_penalized_wall_distance_solver(
         - Constant(1.0 / g0_value)
     )
 
-    def update_reciprocal_distance():
-        previous_values = reciprocal_distance.vector().get_local().copy()
-        relaxation_candidates = []
-        for candidate in (float(newton_relax), 0.5 * float(newton_relax), 0.25 * float(newton_relax), 0.1):
-            if candidate > 0.0 and candidate not in relaxation_candidates:
-                relaxation_candidates.append(candidate)
+    homotopy_scales = []
+    if penalty_homotopy is None:
+        penalty_homotopy = (0.0, 0.1, 0.25, 0.5, 1.0)
+    if isinstance(penalty_homotopy, np.ndarray):
+        penalty_homotopy = penalty_homotopy.tolist()
+    elif not isinstance(penalty_homotopy, (list, tuple)):
+        penalty_homotopy = [penalty_homotopy]
+    for scale in penalty_homotopy:
+        scale = float(scale)
+        if 0.0 <= scale <= 1.0 and scale not in homotopy_scales:
+            homotopy_scales.append(scale)
+    if alpha_g_value > 0.0:
+        if not homotopy_scales:
+            homotopy_scales = [0.0, 1.0]
+        if homotopy_scales[0] != 0.0:
+            homotopy_scales.insert(0, 0.0)
+        if homotopy_scales[-1] != 1.0:
+            homotopy_scales.append(1.0)
+    else:
+        homotopy_scales = [1.0]
 
+    relaxation_candidates = []
+    raw_relaxations = [
+        float(newton_relax),
+        0.5 * float(newton_relax),
+        0.25 * float(newton_relax),
+        0.1,
+        0.05,
+        0.02,
+        0.01,
+    ]
+    if extra_relaxations is not None:
+        if isinstance(extra_relaxations, np.ndarray):
+            extra_relaxations = extra_relaxations.tolist()
+        elif not isinstance(extra_relaxations, (list, tuple)):
+            extra_relaxations = [extra_relaxations]
+        raw_relaxations.extend(float(candidate) for candidate in extra_relaxations)
+    for candidate in raw_relaxations:
+        if candidate > 0.0 and candidate not in relaxation_candidates:
+            relaxation_candidates.append(candidate)
+
+    initial_solid_guess_weight = min(max(float(solid_guess_weight), 0.0), 1.0)
+    has_successful_update = False
+
+    def update_reciprocal_distance():
+        nonlocal has_successful_update
+        previous_values = reciprocal_distance.vector().get_local().copy()
         last_error = None
-        for candidate in relaxation_candidates:
+        if (not has_successful_update) and initial_solid_guess_weight > 0.0:
+            solid_blend = Constant(initial_solid_guess_weight) * solid_indicator
+            warm_start = project(
+                reciprocal_distance + solid_blend * (g0_constant - reciprocal_distance),
+                space,
+            )
+            reciprocal_distance.assign(warm_start)
+            enforce_scalar_floor(reciprocal_distance, g_floor_value)
+        else:
             reciprocal_distance.vector().set_local(previous_values)
             reciprocal_distance.vector().apply("insert")
-            solver.parameters["newton_solver"]["relaxation_parameter"] = candidate
-            try:
-                solver.solve()
-                enforce_scalar_floor(reciprocal_distance, g_floor_value)
+
+        scale_sequences = []
+        if has_successful_update:
+            scale_sequences.append([1.0])
+        if (not has_successful_update) or len(homotopy_scales) > 1:
+            scale_sequences.append(list(homotopy_scales))
+        if not scale_sequences:
+            scale_sequences = [[1.0]]
+
+        for sequence_idx, scales in enumerate(scale_sequences):
+            if sequence_idx > 0:
+                reciprocal_distance.vector().set_local(previous_values)
+                reciprocal_distance.vector().apply("insert")
+            sequence_solved = True
+            for scale in scales:
+                alpha_g_constant.assign(float(scale) * float(alpha_g_value))
+                stage_start_values = reciprocal_distance.vector().get_local().copy()
+                stage_solved = False
+                for candidate in relaxation_candidates:
+                    reciprocal_distance.vector().set_local(stage_start_values)
+                    reciprocal_distance.vector().apply("insert")
+                    solver.parameters["newton_solver"]["relaxation_parameter"] = candidate
+                    try:
+                        solver.solve()
+                        enforce_scalar_floor(reciprocal_distance, g_floor_value)
+                        stage_solved = True
+                        break
+                    except RuntimeError as err:
+                        last_error = err
+                if not stage_solved:
+                    sequence_solved = False
+                    break
+            if sequence_solved:
+                alpha_g_constant.assign(float(alpha_g_value))
+                has_successful_update = True
                 return
-            except RuntimeError as err:
-                last_error = err
 
         reciprocal_distance.vector().set_local(previous_values)
         reciprocal_distance.vector().apply("insert")
+        alpha_g_constant.assign(float(alpha_g_value))
         if MPI.rank(space.mesh().mpi_comm()) == 0:
             print(
                 "Warning: penalized wall-distance update did not converge; reusing previous wall-distance field."

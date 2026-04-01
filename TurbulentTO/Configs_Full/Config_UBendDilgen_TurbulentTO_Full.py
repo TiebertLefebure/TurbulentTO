@@ -5,16 +5,16 @@ from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Dilgen 2018 U-bend - Turbulent (SA, Re = 5000)
+# Configuration: Dilgen 2018 U-bend - Turbulent Full
 #
 # Paper data used here:
 #   Ub = 2.0 m/s, H = 0.1 m, nu = 4.0e-5 m^2/s, Re = Ub * H / nu = 5000
 #
 # Implementation choice:
-#   Keep the existing Borrvall-style turbulent workflow (IPCS + frozen-SA adjoint)
-#   and match the Dilgen case at the geometry and BC-type level:
-#   one velocity inlet, one pressure outlet, passive inlet/outlet pads,
-#   and the internal U-bend baffle.
+#   Keep the existing Dilgen U-bend geometry, passive pads, and baffle
+#   treatment from the frozen-SA case, but target the monolithic full
+#   state solver (u, p, nu_tilde) while keeping the wall-distance field
+#   external to the state.
 # ===================================================================
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -82,32 +82,32 @@ TOL = BOUNDARY_TOL
 # cross-section-averaged inlet velocity still matches the paper value Ub.
 # For a 2D parabola, U_bulk = (2/3) * U_max.
 RHO_FLUID_VALUE = 1.0
-MU_FLUID_VALUE = 4.0e-3
+MU_FLUID_VALUE = 4.0e-4
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
 
 # ---------------------------------------------------------------------------------------------------
-# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 50
+# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 500
 # ---------------------------------------------------------------------------------------------------
 
 # Treat the passive U-bend baffle as a strong imposed solid region without
-# making the segregated solve excessively stiff.
+# making the monolithic state solve excessively stiff.
 ALPHA_SOLID = 1.0e3
 
 
 # -------------------------------------------------------------------
 # Spalart-Allmaras turbulence model settings
 # -------------------------------------------------------------------
-# Use the shared ratio-based inlet treatment from the other turbulent cases.
-SA_MUT_RATIO = 5.0
+SA_MUT_RATIO = 0.5
 SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
-SA_INIT_WALL_DIST_SCALE = 0.05 * L
+SA_INIT_WALL_DIST_SCALE = 0.20 * L
+SA_NU_TILDE_INITIAL = MU_FLUID_VALUE
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-SA_USE_PENALIZED_WALL_DISTANCE = True
+SA_USE_PENALIZED_WALL_DISTANCE = False
 SA_WALL_SIGMA = 0.10
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
@@ -123,6 +123,7 @@ SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 # Topology optimization settings
 # -------------------------------------------------------------------
 VOL_FRAC = 0.30
+INITIAL_DENSITY_VALUE = 0.30
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 60, 60, 60, 60, 60, 60, 60]
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
@@ -134,26 +135,19 @@ MOVE_LIMIT_SCHEDULE = [0.10, 0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 
 # -------------------------------------------------------------------
-# Solver settings
+# Monolithic full-state solver settings
 # -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = "mumps"
-FROZEN_PICARD_STEPS = 3
-NUT_RELAXATION_FACTOR = 0.35
-
-FORWARD_IPCS_DT = 2.0e-4
-FORWARD_IPCS_MAX_ITERS = 400
-FORWARD_IPCS_RTOL = 2.0e-4
-FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_U_RELAXATION = 0.20
-FORWARD_IPCS_P_RELAXATION = 0.10
-FORWARD_IPCS_VEL_SOLVER = "mumps"
-FORWARD_IPCS_P_SOLVER = "mumps"
-FORWARD_IPCS_LOG_EVERY = 50
-FORWARD_IPCS_MAX_RESTARTS = 3
-FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
-FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_ERROR_ON_NONCONVERGENCE = True
-FORWARD_IPCS_RESTART_WITH_STOKES = False
+SNES_LINEAR_SOLVER = 'mumps'
+FULL_STATE_LINEAR_SOLVER = 'mumps'
+FULL_STATE_SNES_METHOD = 'newtontr'
+FULL_STATE_SNES_LINE_SEARCH = 'bt'
+FULL_STATE_SNES_RTOL = 1.0e-6
+FULL_STATE_SNES_ATOL = 1.0e-8
+FULL_STATE_SNES_MAX_ITERS = 150
+FULL_STATE_RESTART_WITH_STOKES = True
+FULL_STATE_SNES_FALLBACK_METHOD = 'newtonls'
+FULL_STATE_SNES_FALLBACK_LINE_SEARCH = 'bt'
+FULL_STATE_SNES_FALLBACK_MAX_ITERS = 250
 
 # -------------------------------------------------------------------
 # Projection, filter, and output
@@ -166,15 +160,14 @@ QUADRATURE_DEGREE = 6
 # artefacts during the early UBend iterations.
 FILTER_RADIUS_IN_CELLS = 2.0
 
-OUTLET_BC_TYPE = "pressure"
+OUTLET_BC_TYPE = 'pressure'
 OUTLET_PRESSURE_VALUE = 0.0
-SAVE_IPCS_RESIDUAL_PLOTS = True
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (LEFT_BLOCK_X_MIN, OUTLET_Y_MIN)
-RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendDilgen_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_UBendDilgen_TurbulentTO_Full'
 
-MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
+MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': 3}
 
 
 def between(value, limits, eps=BOUNDARY_TOL):
@@ -232,11 +225,11 @@ class WallsBoundary(SubDomain):
 
 
 def mark_boundaries(mesh):
-    boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
-    boundaries.set_all(MARK["generic"])
-    WallsBoundary().mark(boundaries, MARK["walls"])
-    InletBoundary().mark(boundaries, MARK["inlet"])
-    OutletBoundary().mark(boundaries, MARK["outlet"])
+    boundaries = MeshFunction('size_t', mesh, mesh.topology().dim() - 1)
+    boundaries.set_all(MARK['generic'])
+    WallsBoundary().mark(boundaries, MARK['walls'])
+    InletBoundary().mark(boundaries, MARK['inlet'])
+    OutletBoundary().mark(boundaries, MARK['outlet'])
     return boundaries
 
 
@@ -244,15 +237,13 @@ def build_velocity_profile_sets():
     inlet_center = 0.5 * (INLET_Y_MIN + INLET_Y_MAX)
     inlet_width = INLET_Y_MAX - INLET_Y_MIN
     u_inlet = Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
+        ('u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))', '0.0'),
         degree=2,
         u_max=U_MAX_INLET,
         y_c=inlet_center,
         width=inlet_width,
     )
 
-    # Dilgen 2018 prescribes a pressure outlet.  Keep the Borrvall-style
-    # workflow by leaving the outlet velocity unconstrained.
     return [u_inlet], []
 
 
@@ -289,9 +280,9 @@ def build_density_bounds(mesh, density_space):
             upper_values[dof] = 0.0
 
     lower.vector().set_local(lower_values)
-    lower.vector().apply("insert")
+    lower.vector().apply('insert')
     upper.vector().set_local(upper_values)
-    upper.vector().apply("insert")
+    upper.vector().apply('insert')
     return lower, upper
 
 
@@ -311,5 +302,5 @@ def build_volume_region(mesh, density_space):
             region_values[dof] = 1.0
 
     volume_region.vector().set_local(region_values)
-    volume_region.vector().apply("insert")
+    volume_region.vector().apply('insert')
     return volume_region

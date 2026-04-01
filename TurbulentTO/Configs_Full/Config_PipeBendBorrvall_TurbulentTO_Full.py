@@ -77,7 +77,7 @@ BETA_PROJ_SCHEDULE = [0.1, 0.15, 0.25, 0.4, 0.6, 0.9, 1.25, 1.75, 2.5]
 # Monolithic full-state solver settings
 SNES_LINEAR_SOLVER = "mumps"
 FULL_STATE_LINEAR_SOLVER = "mumps"
-FULL_STATE_SNES_METHOD = "newtonls"
+FULL_STATE_SNES_METHOD = "newtontr"
 FULL_STATE_SNES_LINE_SEARCH = "bt"
 FULL_STATE_SNES_RTOL = 1.0e-6
 FULL_STATE_SNES_ATOL = 1.0e-8
