@@ -109,9 +109,11 @@ RHO_FLUID_VALUE = 1.0
 MU_FLUID_VALUE = 5.7e-4
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
+ALPHA_SOLID = 2.0e3
 
 # ----------------------------------------------------------------------------------------------
 # Reynolds number: Re = U_BULK_INLET * H * RHO_FLUID_VALUE / MU_FLUID_VALUE = 350
+# Defined as in Dilgen 2018
 # ----------------------------------------------------------------------------------------------
 
 
@@ -141,11 +143,12 @@ INITIAL_DENSITY_VALUE = 0.43
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-# Keep the manifold continuation deliberately gentle so the three outlet
-# branches have more chance to settle before projection sharpening increases.
-Q_PENAL_SCHEDULE = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+# Start gently enough to avoid early state-solve failures, then raise the
+# Brinkman interpolation and projection sharply so outlet constraints are less
+# likely to be satisfied through broad gray leakage.
+Q_PENAL_SCHEDULE = [0.1, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6]
 MOVE_LIMIT_SCHEDULE = [0.05, 0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01]
-BETA_PROJ_SCHEDULE = [0.1, 0.15, 0.25, 0.35, 0.5, 1.0, 2.0, 4.0]
+BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 60, 60, 60, 60, 60, 60, 60]
 
 MASS_FLOW_CONSTRAINT_MARKERS = [3, 4, 5]  # top, right, bottom
@@ -160,10 +163,13 @@ SNES_LINEAR_SOLVER = 'mumps'
 FULL_STATE_LINEAR_SOLVER = 'mumps'
 FULL_STATE_SNES_METHOD = 'newtontr'
 FULL_STATE_SNES_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_RTOL = 1.0e-6
-FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 50
-FULL_STATE_RESTART_WITH_STOKES = True
+FULL_STATE_SNES_RTOL = 1.0e-4
+FULL_STATE_SNES_ATOL = 3.0e-5
+FULL_STATE_SNES_MAX_ITERS = 150
+FULL_STATE_RESTART_WITH_STOKES = False
+FULL_STATE_SNES_FALLBACK_METHOD = 'newtonls'
+FULL_STATE_SNES_FALLBACK_LINE_SEARCH = 'bt'
+FULL_STATE_SNES_FALLBACK_MAX_ITERS = 250
 
 # -------------------------------------------------------------------
 # Projection, filter, and output

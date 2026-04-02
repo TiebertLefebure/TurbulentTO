@@ -32,7 +32,14 @@ def sa_turbulent_viscosity(nu_tilde, nu_laminar, smooth_abs_eps=None):
     return 0.5 * (nu_t_raw + _smooth_abs(nu_t_raw, smooth_abs_eps))
 
 
-def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, smooth_abs_eps=None):
+def sa_transport_terms(
+    external_velocity,
+    nu_tilde,
+    nu_laminar,
+    wall_distance,
+    smooth_abs_eps=None,
+    wall_distance_floor=0.0,
+):
     """Build SA transport-model terms for a monolithic state residual."""
     sigma = Constant(2.0 / 3.0)
     cb1 = Constant(0.1355)
@@ -53,7 +60,7 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
     )
     s_value = sqrt(omega_sq + DOLFIN_EPS)
 
-    y_safe = wall_distance + DOLFIN_EPS
+    y_safe = wall_distance + Constant(max(float(wall_distance_floor), float(DOLFIN_EPS)))
     s_tilde = s_value + nu_tilde / (kappa**2 * y_safe**2) * f_v2
 
     r_arg = nu_tilde / (s_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
@@ -80,13 +87,17 @@ def build_spalart_allmaras_residual(
     custom_dx,
     nu_tilde_penalty_reaction=None,
     smooth_abs_eps=None,
+    wall_distance_floor=0.0,
 ):
     """Return the steady SA weak residual for the monolithic full solver."""
+    # Apply the optional wall-distance floor here so the transport helper does
+    # not need to carry an extra API parameter across solver variants.
+    wall_distance_safe = wall_distance + Constant(max(float(wall_distance_floor), 0.0))
     sigma, react_nt, source_nt = sa_transport_terms(
         external_velocity,
         nu_tilde,
         nu_laminar,
-        wall_distance,
+        wall_distance_safe,
         smooth_abs_eps=smooth_abs_eps,
     )
     penalty_react = (

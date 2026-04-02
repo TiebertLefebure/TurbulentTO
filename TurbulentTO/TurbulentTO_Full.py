@@ -20,6 +20,7 @@ from Utilities_LaminarTO import (
     ResilientVTKFile,
 )
 from Utilities_TurbulentTO_Full import (
+    build_direct_wall_distance_solver,
     build_penalized_wall_distance_solver,
     calculate_distance_field,
     nu_tilde_from_viscosity_ratio,
@@ -440,8 +441,105 @@ def enforce_density_bounds_inplace(density_field):
 
 rho_projected = projection(rho_f, ETA_I)
 rho_effective = density_lower_bound + (density_upper_bound - density_lower_bound) * rho_projected
+custom_wall_distance_updater_builder = globals().get("build_wall_distance_updater")
+custom_wall_distance_builder = globals().get("build_wall_distance_field")
 use_penalized_wall_distance = bool(globals().get("SA_USE_PENALIZED_WALL_DISTANCE", True))
-if use_penalized_wall_distance:
+sa_wall_model = str(globals().get("SA_WALL_MODEL", "")).strip().lower()
+if not sa_wall_model:
+    if callable(custom_wall_distance_updater_builder):
+        sa_wall_model = "custom_updater"
+    elif use_penalized_wall_distance:
+        sa_wall_model = "penalized_g"
+    elif callable(custom_wall_distance_builder):
+        sa_wall_model = "custom_initial"
+    else:
+        sa_wall_model = "geometric"
+
+valid_sa_wall_models = {"custom_updater", "custom_initial", "direct_y", "geometric", "penalized_g"}
+if sa_wall_model not in valid_sa_wall_models:
+    raise ValueError(
+        "Unsupported SA_WALL_MODEL={!r}. Expected one of {}.".format(
+            sa_wall_model, sorted(valid_sa_wall_models)
+        )
+    )
+
+custom_initial_wall_distance = None
+if callable(custom_wall_distance_builder) and sa_wall_model not in {"custom_updater", "geometric"}:
+    custom_initial_wall_distance = custom_wall_distance_builder(
+        TurbulenceSpace, mesh, boundaries, wall_markers, dx
+    )
+
+if sa_wall_model == "custom_updater":
+    if not callable(custom_wall_distance_updater_builder):
+        raise ValueError("SA_WALL_MODEL='custom_updater' requires build_wall_distance_updater in the config.")
+    wall_distance, update_wall_distance_field = custom_wall_distance_updater_builder(
+        TurbulenceSpace,
+        DensitySpace,
+        mesh,
+        boundaries,
+        wall_markers,
+        dx,
+        rho_proj_plot,
+        density_lower_bound,
+        density_upper_bound,
+    )
+    root_print("Custom SA wall-distance updater enabled from config.")
+elif sa_wall_model == "direct_y":
+    sa_wall_density_source = str(globals().get("SA_WALL_DENSITY_SOURCE", "design")).strip().lower()
+    sa_wall_relaxation = float(
+        globals().get("SA_WALL_Y_RELAXATION", globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
+    )
+    sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+    sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
+    sa_wall_eikonal_eps = float(globals().get("SA_WALL_EIKONAL_EPS", DOLFIN_EPS))
+    sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
+    sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
+    sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
+    sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAXATION", 0.5))
+    sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
+    sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
+    sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
+    sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
+    if sa_wall_density_source == "passive":
+        wall_penalty_fluid_indicator = density_upper_bound
+    else:
+        wall_penalty_fluid_indicator = rho_effective
+
+    wall_distance, update_wall_distance_field = build_direct_wall_distance_solver(
+        TurbulenceSpace,
+        boundaries,
+        wall_markers,
+        dx,
+        wall_penalty_fluid_indicator,
+        sa_wall_relaxation,
+        sa_wall_penalty_alpha,
+        sa_wall_penalty_power,
+        eikonal_eps=sa_wall_eikonal_eps,
+        newton_rtol=sa_wall_newton_rtol,
+        newton_atol=sa_wall_newton_atol,
+        newton_max_iters=sa_wall_newton_max_iters,
+        newton_relax=sa_wall_newton_relax,
+        penalty_homotopy=sa_wall_penalty_homotopy,
+        solid_guess_weight=sa_wall_initial_solid_guess,
+        extra_relaxations=sa_wall_extra_relaxations,
+        solid_threshold=sa_wall_solid_threshold,
+        initial_wall_distance=custom_initial_wall_distance,
+    )
+    root_print(
+        "Direct SA wall-distance enabled (penalized y eikonal): source={}, init_y={}, eta_y={}, eps_y={}, alpha_y={}, n_y={}, rho_cut_y={}, relax_y={}, maxit_y={}".format(
+            sa_wall_density_source,
+            "custom" if custom_initial_wall_distance is not None else "geometric",
+            sa_wall_relaxation,
+            sa_wall_eikonal_eps,
+            sa_wall_penalty_alpha,
+            sa_wall_penalty_power,
+            sa_wall_solid_threshold,
+            sa_wall_newton_relax,
+            sa_wall_newton_max_iters,
+        )
+    )
+elif sa_wall_model == "penalized_g":
+    sa_wall_density_source = str(globals().get("SA_WALL_DENSITY_SOURCE", "design")).strip().lower()
     sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
     sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
     sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
@@ -454,13 +552,19 @@ if use_penalized_wall_distance:
     sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
     sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
     sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
+    sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
+    sa_wall_prefer_pseudo_time = bool(globals().get("SA_WALL_PREFER_PSEUDO_TIME", False))
+    if sa_wall_density_source == "passive":
+        wall_penalty_fluid_indicator = density_upper_bound
+    else:
+        wall_penalty_fluid_indicator = rho_effective
 
     wall_distance, update_wall_distance_field = build_penalized_wall_distance_solver(
         TurbulenceSpace,
         boundaries,
         wall_markers,
         dx,
-        rho_effective,
+        wall_penalty_fluid_indicator,
         sa_wall_sigma,
         sa_wall_g0,
         sa_wall_penalty_alpha,
@@ -473,17 +577,32 @@ if use_penalized_wall_distance:
         penalty_homotopy=sa_wall_penalty_homotopy,
         solid_guess_weight=sa_wall_initial_solid_guess,
         extra_relaxations=sa_wall_extra_relaxations,
+        solid_threshold=sa_wall_solid_threshold,
+        initial_wall_distance=custom_initial_wall_distance,
+        prefer_pseudo_time=sa_wall_prefer_pseudo_time,
     )
     root_print(
-        "Penalized SA wall-distance enabled (frozen G): sigma={}, G0={}, alpha_G={}, n_G={}, relax_G={}, maxit_G={}".format(
+        "Penalized SA wall-distance enabled (frozen G): source={}, init_G={}, pseudo_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}, relax_G={}, maxit_G={}".format(
+            sa_wall_density_source,
+            "custom" if custom_initial_wall_distance is not None else "geometric",
+            sa_wall_prefer_pseudo_time,
             sa_wall_sigma,
             sa_wall_g0,
             sa_wall_penalty_alpha,
             sa_wall_penalty_power,
+            sa_wall_solid_threshold,
             sa_wall_newton_relax,
             sa_wall_newton_max_iters,
         )
     )
+elif sa_wall_model == "custom_initial":
+    if custom_initial_wall_distance is None:
+        raise ValueError("SA_WALL_MODEL='custom_initial' requires build_wall_distance_field in the config.")
+    wall_distance = custom_initial_wall_distance
+    root_print("Custom SA wall-distance field enabled from config.")
+
+    def update_wall_distance_field():
+        return None
 else:
     wall_distance = calculate_distance_field(
         TurbulenceSpace,
@@ -526,6 +645,7 @@ state_form = (
         dx,
         nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
         smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+        wall_distance_floor=float(globals().get("SA_WALL_DISTANCE_FLOOR", 0.0)),
     )
 )
 lagrangian_form = ObjFunctional + state_form
@@ -635,7 +755,13 @@ def initialize_state_guess_with_stokes():
     assign(w_state.sub(2), nu_guess)
 
 
-def solve_state_once(method_override=None, line_search_override=None, max_iters_override=None):
+def solve_state_once(
+    method_override=None,
+    line_search_override=None,
+    max_iters_override=None,
+    rtol_override=None,
+    atol_override=None,
+):
     jac_state = derivative(state_residual_form, w_state)
     problem_state = NonlinearVariationalProblem(state_residual_form, w_state, bc_state, jac_state)
     solver_state = NonlinearVariationalSolver(problem_state)
@@ -653,9 +779,13 @@ def solve_state_once(method_override=None, line_search_override=None, max_iters_
         )
     solver_state.parameters["snes_solver"]["relative_tolerance"] = float(
         globals().get("FULL_STATE_SNES_RTOL", globals().get("FORWARD_SNES_RTOL", 1.0e-6))
+        if rtol_override is None
+        else rtol_override
     )
     solver_state.parameters["snes_solver"]["absolute_tolerance"] = float(
         globals().get("FULL_STATE_SNES_ATOL", globals().get("FORWARD_SNES_ATOL", 1.0e-8))
+        if atol_override is None
+        else atol_override
     )
     solver_state.parameters["snes_solver"]["maximum_iterations"] = int(
         globals().get("FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80))
@@ -666,31 +796,107 @@ def solve_state_once(method_override=None, line_search_override=None, max_iters_
     solver_state.solve()
 
 
+def build_state_snes_recovery_attempts():
+    base_attempt = {
+        "label": "primary solve",
+        "method": str(globals().get("FULL_STATE_SNES_METHOD", "newtonls")),
+        "line_search": str(globals().get("FULL_STATE_SNES_LINE_SEARCH", "bt")),
+        "rtol": float(globals().get("FULL_STATE_SNES_RTOL", globals().get("FORWARD_SNES_RTOL", 1.0e-6))),
+        "atol": float(globals().get("FULL_STATE_SNES_ATOL", globals().get("FORWARD_SNES_ATOL", 1.0e-8))),
+        "max_iters": int(globals().get("FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80))),
+        "restart_with_stokes": False,
+    }
+    configured_attempts = globals().get("FULL_STATE_SNES_RECOVERY_ATTEMPTS")
+    if configured_attempts is None:
+        fallback_attempt = dict(base_attempt)
+        fallback_attempt.update(
+            {
+                "label": "fallback retry",
+                "method": str(globals().get("FULL_STATE_SNES_FALLBACK_METHOD", base_attempt["method"])),
+                "line_search": str(
+                    globals().get("FULL_STATE_SNES_FALLBACK_LINE_SEARCH", base_attempt["line_search"])
+                ),
+                "max_iters": int(
+                    globals().get("FULL_STATE_SNES_FALLBACK_MAX_ITERS", base_attempt["max_iters"])
+                ),
+                "restart_with_stokes": bool(globals().get("FULL_STATE_RESTART_WITH_STOKES", True)),
+            }
+        )
+        return [base_attempt, fallback_attempt]
+
+    attempts = [base_attempt]
+    for attempt_idx, attempt_spec in enumerate(configured_attempts, start=1):
+        if not isinstance(attempt_spec, dict):
+            raise TypeError("FULL_STATE_SNES_RECOVERY_ATTEMPTS entries must be dictionaries.")
+        attempt = dict(base_attempt)
+        attempt.update(attempt_spec)
+        attempt["label"] = str(attempt.get("label", "recovery attempt {}".format(attempt_idx)))
+        attempt["method"] = str(attempt.get("method", base_attempt["method"]))
+        attempt["line_search"] = str(attempt.get("line_search", base_attempt["line_search"]))
+        attempt["rtol"] = float(attempt.get("rtol", base_attempt["rtol"]))
+        attempt["atol"] = float(attempt.get("atol", base_attempt["atol"]))
+        attempt["max_iters"] = int(attempt.get("max_iters", base_attempt["max_iters"]))
+        attempt["restart_with_stokes"] = bool(attempt.get("restart_with_stokes", False))
+        attempts.append(attempt)
+    return attempts
+
+
+def describe_state_snes_attempt(attempt):
+    description = [
+        "method={}".format(attempt["method"]),
+        "max_it={}".format(attempt["max_iters"]),
+        "rtol={:.1e}".format(attempt["rtol"]),
+        "atol={:.1e}".format(attempt["atol"]),
+    ]
+    if attempt["method"] == "newtonls":
+        description.append("line_search={}".format(attempt["line_search"]))
+    return ", ".join(description)
+
+
 def solve_state_with_recovery():
-    try:
-        solve_state_once()
-    except RuntimeError:
-        if not bool(globals().get("FULL_STATE_RESTART_WITH_STOKES", True)):
-            raise
-        root_print("  State solve diverged; rebuilding Stokes-Brinkman warm start and retrying once.")
-        initialize_state_guess_with_stokes()
-        fallback_method = globals().get(
-            "FULL_STATE_SNES_FALLBACK_METHOD",
-            globals().get("FULL_STATE_SNES_METHOD", "newtonls"),
-        )
-        fallback_line_search = globals().get(
-            "FULL_STATE_SNES_FALLBACK_LINE_SEARCH",
-            globals().get("FULL_STATE_SNES_LINE_SEARCH", "bt"),
-        )
-        fallback_max_iters = int(globals().get(
-            "FULL_STATE_SNES_FALLBACK_MAX_ITERS",
-            globals().get("FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80)),
-        ))
-        solve_state_once(
-            method_override=fallback_method,
-            line_search_override=fallback_line_search,
-            max_iters_override=fallback_max_iters,
-        )
+    recovery_attempts = build_state_snes_recovery_attempts()
+    last_error = None
+    num_retries = max(0, len(recovery_attempts) - 1)
+    for attempt_idx, attempt in enumerate(recovery_attempts):
+        if attempt_idx > 0:
+            retry_idx = attempt_idx
+            if attempt["restart_with_stokes"]:
+                root_print(
+                    "  State solve diverged; rebuilding Stokes-Brinkman warm start before retry {}/{} "
+                    "({}: {}).".format(
+                        retry_idx,
+                        num_retries,
+                        attempt["label"],
+                        describe_state_snes_attempt(attempt),
+                    )
+                )
+                initialize_state_guess_with_stokes()
+            else:
+                root_print(
+                    "  State solve diverged; retrying from the current iterate with retry {}/{} "
+                    "({}: {}).".format(
+                        retry_idx,
+                        num_retries,
+                        attempt["label"],
+                        describe_state_snes_attempt(attempt),
+                    )
+                )
+        try:
+            solve_state_once(
+                method_override=attempt["method"],
+                line_search_override=attempt["line_search"],
+                max_iters_override=attempt["max_iters"],
+                rtol_override=attempt["rtol"],
+                atol_override=attempt["atol"],
+            )
+            return
+        except RuntimeError as error:
+            last_error = error
+            if attempt_idx == len(recovery_attempts) - 1:
+                raise
+
+    if last_error is not None:
+        raise last_error
 
 
 def solve_adjoint(adjoint_residual_form=objective_adjoint_form):

@@ -29,7 +29,14 @@ def sa_turbulent_viscosity(nu_tilde, nu_laminar, smooth_abs_eps=None):
     return 0.5 * (nu_t_raw + _smooth_abs(nu_t_raw, smooth_abs_eps))
 
 
-def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, smooth_abs_eps=None):
+def sa_transport_terms(
+    external_velocity,
+    nu_tilde,
+    nu_laminar,
+    wall_distance,
+    smooth_abs_eps=None,
+    wall_distance_floor=0.0,
+):
     """Build SA transport-model terms shared across solvers."""
     sigma = Constant(2.0 / 3.0)
     cb1 = Constant(0.1355)
@@ -47,7 +54,7 @@ def sa_transport_terms(external_velocity, nu_tilde, nu_laminar, wall_distance, s
     omega_sq = Constant(2.0) * inner(skew(nabla_grad(external_velocity)), skew(nabla_grad(external_velocity)))
     S = sqrt(omega_sq + DOLFIN_EPS)
 
-    y_safe = wall_distance + DOLFIN_EPS
+    y_safe = wall_distance + Constant(max(float(wall_distance_floor), float(DOLFIN_EPS)))
     S_tilde = S + nu_tilde / (kappa**2 * y_safe**2) * f_v2
 
     r_arg = nu_tilde / (S_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
@@ -75,6 +82,7 @@ class SpalartAllmarasSteadyState:
         custom_ds,
         wall_distance,
         nu_tilde_penalty_reaction=None,
+        wall_distance_floor=0.0,
     ):
         self._space = space
         self._bcs = bcs
@@ -82,6 +90,7 @@ class SpalartAllmarasSteadyState:
         self._dx = custom_dx
         self._wall_distance = wall_distance
         self._nu_tilde_penalty_reaction = nu_tilde_penalty_reaction
+        self._wall_distance_floor = float(wall_distance_floor)
 
         self._nu_tilde = TrialFunction(space)
         self._xi = TestFunction(space)
@@ -91,7 +100,11 @@ class SpalartAllmarasSteadyState:
     def construct_forms(self, external_velocity):
         self._nu_t = sa_turbulent_viscosity(self._nu_tilde0, self._nu_laminar)
         sigma, react_nt, source_nt = sa_transport_terms(
-            external_velocity, self._nu_tilde0, self._nu_laminar, self._wall_distance,
+            external_velocity,
+            self._nu_tilde0,
+            self._nu_laminar,
+            self._wall_distance,
+            wall_distance_floor=self._wall_distance_floor,
         )
         penalty_react = self._nu_tilde_penalty_reaction if self._nu_tilde_penalty_reaction is not None else Constant(0.0)
 

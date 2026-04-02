@@ -65,6 +65,7 @@ BAFFLE_TIP_RADIUS = 0.5 * BAFFLE_THICKNESS
 BAFFLE_TIP_CENTER_X = BAFFLE_X_MAX - BAFFLE_TIP_RADIUS
 BAFFLE_TIP_CENTER_Y = 0.5 * (BAFFLE_Y_MIN + BAFFLE_Y_MAX)
 BAFFLE_STRAIGHT_X_MAX = BAFFLE_TIP_CENTER_X
+PASSIVE_BAFFLE_SAMPLES = 5
 
 DOMAIN_X_MIN = LEFT_BLOCK_X_MIN
 DOMAIN_Y_MIN = DESIGN_Y_MIN
@@ -107,17 +108,24 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-SA_USE_PENALIZED_WALL_DISTANCE = True
+# Wall-distance model selector:
+#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
+#   "penalized_g" -> solve the penalized reciprocal-distance model
+#   "geometric"   -> use the plain geometric distance field only
+SA_WALL_MODEL = "penalized_g"
+SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SIGMA = 0.10
 SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e3
+SA_WALL_PENALTY_ALPHA = 1.0e2
 SA_WALL_PENALTY_N = 3.0
+SA_WALL_SOLID_THRESHOLD = 0.10
 SA_WALL_G_FLOOR = 1.0e-8
 SA_WALL_NEWTON_MAX_ITERS = 300
 SA_WALL_NEWTON_RELAXATION = 0.1
 SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
 SA_WALL_INITIAL_SOLID_GUESS = 1.0
 SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
+SA_WALL_PREFER_PSEUDO_TIME = True
 
 # -------------------------------------------------------------------
 # Topology optimization settings
@@ -203,6 +211,55 @@ def in_rounded_baffle(x_value, y_value):
     return in_straight_section or in_tip
 
 
+def cell_near_rounded_baffle(cell):
+    coords = np.asarray(cell.get_vertex_coordinates(), dtype=float).reshape((-1, 2))
+    x_min = np.min(coords[:, 0])
+    x_max = np.max(coords[:, 0])
+    y_min = np.min(coords[:, 1])
+    y_max = np.max(coords[:, 1])
+    padding = cell.h()
+    return not (
+        x_max < BAFFLE_X_MIN - padding
+        or x_min > BAFFLE_X_MAX + padding
+        or y_max < BAFFLE_Y_MIN - padding
+        or y_min > BAFFLE_Y_MAX + padding
+    )
+
+
+def cell_near_baffle_tip(cell):
+    coords = np.asarray(cell.get_vertex_coordinates(), dtype=float).reshape((-1, 2))
+    x_min = np.min(coords[:, 0])
+    x_max = np.max(coords[:, 0])
+    y_min = np.min(coords[:, 1])
+    y_max = np.max(coords[:, 1])
+    padding = cell.h()
+    return not (
+        x_max < BAFFLE_STRAIGHT_X_MAX - padding
+        or x_min > BAFFLE_X_MAX + padding
+        or y_max < BAFFLE_Y_MIN - padding
+        or y_min > BAFFLE_Y_MAX + padding
+    )
+
+
+def estimate_baffle_fluid_fraction(cell, samples_per_edge=PASSIVE_BAFFLE_SAMPLES):
+    coords = np.asarray(cell.get_vertex_coordinates(), dtype=float).reshape((-1, 2))
+    samples_per_edge = max(1, int(samples_per_edge))
+    fluid_samples = 0
+    total_samples = 0
+
+    for i_idx in range(samples_per_edge + 1):
+        for j_idx in range(samples_per_edge + 1 - i_idx):
+            xi_1 = float(i_idx) / float(samples_per_edge)
+            xi_2 = float(j_idx) / float(samples_per_edge)
+            xi_0 = 1.0 - xi_1 - xi_2
+            point = xi_0 * coords[0] + xi_1 * coords[1] + xi_2 * coords[2]
+            if not in_rounded_baffle(point[0], point[1]):
+                fluid_samples += 1
+            total_samples += 1
+
+    return float(fluid_samples) / float(max(total_samples, 1))
+
+
 class InletBoundary(SubDomain):
     def inside(self, x, on_boundary):
         return on_boundary and near(x[0], LEFT_BLOCK_X_MIN, BOUNDARY_TOL) and between(
@@ -238,6 +295,74 @@ def mark_boundaries(mesh):
     InletBoundary().mark(boundaries, MARK["inlet"])
     OutletBoundary().mark(boundaries, MARK["outlet"])
     return boundaries
+
+
+def _distance_to_vertical_segment(x_value, y_value, x_segment, y_min, y_max):
+    dy = 0.0
+    if y_value < y_min:
+        dy = y_min - y_value
+    elif y_value > y_max:
+        dy = y_value - y_max
+    return float(np.hypot(x_value - x_segment, dy))
+
+
+def _distance_to_horizontal_segment(x_value, y_value, x_min, x_max, y_segment):
+    dx = 0.0
+    if x_value < x_min:
+        dx = x_min - x_value
+    elif x_value > x_max:
+        dx = x_value - x_max
+    return float(np.hypot(dx, y_value - y_segment))
+
+
+def _distance_to_baffle_boundary(x_value, y_value):
+    distances = [
+        _distance_to_horizontal_segment(
+            x_value, y_value,
+            BAFFLE_X_MIN, BAFFLE_STRAIGHT_X_MAX,
+            BAFFLE_Y_MIN,
+        ),
+        _distance_to_horizontal_segment(
+            x_value, y_value,
+            BAFFLE_X_MIN, BAFFLE_STRAIGHT_X_MAX,
+            BAFFLE_Y_MAX,
+        ),
+    ]
+
+    if x_value >= BAFFLE_TIP_CENTER_X - BOUNDARY_TOL:
+        distances.append(abs(
+            np.hypot(x_value - BAFFLE_TIP_CENTER_X, y_value - BAFFLE_TIP_CENTER_Y)
+            - BAFFLE_TIP_RADIUS
+        ))
+
+    return min(float(distance) for distance in distances)
+
+
+def build_wall_distance_field(space, mesh, boundaries, wall_markers, custom_dx):
+    wall_distance = Function(space)
+    coords = np.asarray(space.tabulate_dof_coordinates(), dtype=float).reshape((-1, mesh.geometry().dim()))
+    values = np.zeros(coords.shape[0], dtype=float)
+
+    left_wall_segments = [
+        (DOMAIN_Y_MIN, OUTLET_Y_MIN),
+        (OUTLET_Y_MAX, INLET_Y_MIN),
+        (INLET_Y_MAX, DOMAIN_Y_MAX),
+    ]
+
+    for idx, (x_value, y_value) in enumerate(coords[:, :2]):
+        distances = [
+            _distance_to_horizontal_segment(x_value, y_value, DOMAIN_X_MIN, DOMAIN_X_MAX, DOMAIN_Y_MIN),
+            _distance_to_horizontal_segment(x_value, y_value, DOMAIN_X_MIN, DOMAIN_X_MAX, DOMAIN_Y_MAX),
+            _distance_to_vertical_segment(x_value, y_value, DOMAIN_X_MAX, DOMAIN_Y_MIN, DOMAIN_Y_MAX),
+            _distance_to_baffle_boundary(x_value, y_value),
+        ]
+        for y_min, y_max in left_wall_segments:
+            distances.append(_distance_to_vertical_segment(x_value, y_value, LEFT_BLOCK_X_MIN, y_min, y_max))
+        values[idx] = max(min(distances), 0.0)
+
+    wall_distance.vector().set_local(values)
+    wall_distance.vector().apply("insert")
+    return wall_distance
 
 
 def build_velocity_profile_sets():
@@ -284,9 +409,18 @@ def build_density_bounds(mesh, density_space):
             else:
                 lower_values[dof] = 0.0
                 upper_values[dof] = 0.0
-        elif in_rounded_baffle(x_coord, y_coord):
+        elif in_rectangle(
+            x_coord, y_coord,
+            BAFFLE_X_MIN, BAFFLE_STRAIGHT_X_MAX,
+            BAFFLE_Y_MIN, BAFFLE_Y_MAX,
+        ):
             lower_values[dof] = 0.0
             upper_values[dof] = 0.0
+        elif cell_near_baffle_tip(cell):
+            fluid_fraction = estimate_baffle_fluid_fraction(cell)
+            if fluid_fraction <= 0.5 + 1.0e-12:
+                lower_values[dof] = fluid_fraction
+                upper_values[dof] = fluid_fraction
 
     lower.vector().set_local(lower_values)
     lower.vector().apply("insert")

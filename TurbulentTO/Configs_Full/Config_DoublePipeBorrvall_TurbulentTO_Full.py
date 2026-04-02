@@ -4,7 +4,7 @@ from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Double Pipe - Turbulent Full (SA, Re = 1660)
+# Configuration: Borrvall Double Pipe - Turbulent Full (SA, Re = 5050)
 #
 # Two symmetric ports on the left and right boundaries.
 # This config targets the monolithic full-state solver (u, p, nu_tilde),
@@ -54,17 +54,20 @@ OUTLET_SEGMENTS = [
 ]
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-4
+MU_FLUID_VALUE = 3.3e-5
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,050
 # ----------------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
-SA_MUT_RATIO = 1.0
+# Match the frozen double-pipe inlet seeding; the weaker nu_t / nu_lam = 1
+# start was an outlier among the high-Re cases and made the monolithic solve
+# much harder to globalize from the first continuation step.
+SA_MUT_RATIO = 5.0
 SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
@@ -78,6 +81,9 @@ SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
+# Only treat near-solid cells as artificial walls; the initial rho=1/3 gray
+# field should not trigger wall penalties across the whole domain.
+SA_WALL_SOLID_THRESHOLD = 0.10
 SA_WALL_G_FLOOR = 1.0e-8
 
 # Topology optimization settings
@@ -98,8 +104,23 @@ FULL_STATE_SNES_METHOD = "newtontr"
 FULL_STATE_SNES_LINE_SEARCH = "bt"
 FULL_STATE_SNES_RTOL = 1.0e-6
 FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 50
-FULL_STATE_RESTART_WITH_STOKES = True
+FULL_STATE_SNES_MAX_ITERS = 120
+FULL_STATE_SNES_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 220,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "Stokes rebuild line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 250,
+        "restart_with_stokes": True,
+    },
+]
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
