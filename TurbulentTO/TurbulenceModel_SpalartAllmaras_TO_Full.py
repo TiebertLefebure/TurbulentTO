@@ -15,6 +15,14 @@ def _smooth_abs(value, smooth_abs_eps):
     return sqrt(value**2 + Constant(smooth_abs_eps))
 
 
+def _smooth_positive(value, floor=0.0, smooth_abs_eps=None):
+    floor_constant = Constant(float(floor))
+    shifted_value = value - floor_constant
+    if smooth_abs_eps is None:
+        return 0.5 * (shifted_value + abs(shifted_value)) + floor_constant
+    return 0.5 * (shifted_value + _smooth_abs(shifted_value, smooth_abs_eps)) + floor_constant
+
+
 def sa_min(a, b, smooth_abs_eps=None):
     """UFL-safe min helper; optionally smoothed for differentiability."""
     if smooth_abs_eps is None:
@@ -39,6 +47,7 @@ def sa_transport_terms(
     wall_distance,
     smooth_abs_eps=None,
     wall_distance_floor=0.0,
+    nu_tilde_floor=0.0,
 ):
     """Build SA transport-model terms for a monolithic state residual."""
     sigma = Constant(2.0 / 3.0)
@@ -49,7 +58,13 @@ def sa_transport_terms(
     cw3 = Constant(2.0)
     cw1 = cb1 / kappa**2 + (Constant(1.0) + cb2) / sigma
 
-    chi = nu_tilde / (nu_laminar + DOLFIN_EPS)
+    nu_tilde_safe = _smooth_positive(
+        nu_tilde,
+        floor=nu_tilde_floor,
+        smooth_abs_eps=smooth_abs_eps,
+    )
+
+    chi = nu_tilde_safe / (nu_laminar + DOLFIN_EPS)
     f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
     f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
     f_t2 = Constant(1.2) * exp(Constant(-0.5) * chi**2)
@@ -61,9 +76,9 @@ def sa_transport_terms(
     s_value = sqrt(omega_sq + DOLFIN_EPS)
 
     y_safe = wall_distance + Constant(max(float(wall_distance_floor), float(DOLFIN_EPS)))
-    s_tilde = s_value + nu_tilde / (kappa**2 * y_safe**2) * f_v2
+    s_tilde = s_value + nu_tilde_safe / (kappa**2 * y_safe**2) * f_v2
 
-    r_arg = nu_tilde / (s_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
+    r_arg = nu_tilde_safe / (s_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
     r_value = sa_min(r_arg, Constant(10.0), smooth_abs_eps=smooth_abs_eps)
 
     g_value = r_value + cw2 * (r_value**6 - r_value)
@@ -71,11 +86,11 @@ def sa_transport_terms(
         (Constant(1.0) + cw3**6) / (g_value**6 + cw3**6)
     ) ** (Constant(1.0) / Constant(6.0))
 
-    prod_nt = cb1 * (Constant(1.0) - f_t2) * s_tilde * nu_tilde
-    react_nt = cw1 * f_w * (nu_tilde / y_safe**2)
+    prod_nt = cb1 * (Constant(1.0) - f_t2) * s_tilde * nu_tilde_safe
+    react_nt = cw1 * f_w * (nu_tilde_safe / y_safe**2)
     cross_diff_nt = (cb2 / sigma) * inner(nabla_grad(nu_tilde), nabla_grad(nu_tilde))
     source_nt = prod_nt + cross_diff_nt
-    return sigma, react_nt, source_nt
+    return sigma, react_nt, source_nt, nu_tilde_safe
 
 
 def build_spalart_allmaras_residual(
@@ -88,17 +103,17 @@ def build_spalart_allmaras_residual(
     nu_tilde_penalty_reaction=None,
     smooth_abs_eps=None,
     wall_distance_floor=0.0,
+    nu_tilde_floor=0.0,
 ):
     """Return the steady SA weak residual for the monolithic full solver."""
-    # Apply the optional wall-distance floor here so the transport helper does
-    # not need to carry an extra API parameter across solver variants.
-    wall_distance_safe = wall_distance + Constant(max(float(wall_distance_floor), 0.0))
-    sigma, react_nt, source_nt = sa_transport_terms(
+    sigma, react_nt, source_nt, nu_tilde_safe = sa_transport_terms(
         external_velocity,
         nu_tilde,
         nu_laminar,
-        wall_distance_safe,
+        wall_distance,
         smooth_abs_eps=smooth_abs_eps,
+        wall_distance_floor=wall_distance_floor,
+        nu_tilde_floor=nu_tilde_floor,
     )
     penalty_react = (
         nu_tilde_penalty_reaction
@@ -108,7 +123,7 @@ def build_spalart_allmaras_residual(
 
     return (
         dot(external_velocity, nabla_grad(nu_tilde)) * test_nu_tilde * custom_dx
-        + inner((nu_laminar + nu_tilde) / sigma * grad(nu_tilde), grad(test_nu_tilde)) * custom_dx
-        + (react_nt + penalty_react) * nu_tilde * test_nu_tilde * custom_dx
+        + inner((nu_laminar + nu_tilde_safe) / sigma * grad(nu_tilde), grad(test_nu_tilde)) * custom_dx
+        + (react_nt + penalty_react) * nu_tilde_safe * test_nu_tilde * custom_dx
         - source_nt * test_nu_tilde * custom_dx
     )

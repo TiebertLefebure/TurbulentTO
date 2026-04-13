@@ -67,6 +67,18 @@ def positive_part(expr):
     return conditional(gt(expr, zero), expr, zero)
 
 
+def _smooth_abs(value, smooth_abs_eps):
+    return sqrt(value**2 + Constant(float(smooth_abs_eps)))
+
+
+def _smooth_positive(value, floor=0.0, smooth_abs_eps=None):
+    floor_constant = Constant(float(floor))
+    shifted = value - floor_constant
+    if smooth_abs_eps is None:
+        return positive_part(shifted) + floor_constant
+    return 0.5 * (shifted + _smooth_abs(shifted, smooth_abs_eps)) + floor_constant
+
+
 def enforce_scalar_floor(scalar_function, floor_value):
     """Enforce scalar_function >= floor_value in-place."""
     values = scalar_function.vector().get_local()
@@ -101,6 +113,98 @@ def calculate_distance_field(space, boundaries_data, wall_markers, custom_dx, re
     solver.parameters["newton_solver"]["report"] = False
     solver.solve()
     return y
+
+
+def initialize_penalized_reciprocal_distance(
+    space,
+    boundaries_data,
+    wall_markers,
+    custom_dx,
+    sigma_w,
+    g0_value,
+    g_floor_value,
+    initial_wall_distance=None,
+):
+    """Build a robust initial guess for the penalized reciprocal wall-distance state G."""
+    if initial_wall_distance is None:
+        y_initial = calculate_distance_field(
+            space,
+            boundaries_data,
+            wall_markers,
+            custom_dx,
+            relaxation=sigma_w,
+        )
+    elif isinstance(initial_wall_distance, Function):
+        if initial_wall_distance.function_space().dim() == space.dim():
+            y_initial = Function(space)
+            y_initial.assign(initial_wall_distance)
+        else:
+            y_initial = project(initial_wall_distance, space)
+    else:
+        y_initial = project(initial_wall_distance, space)
+
+    reciprocal_distance = project(
+        Constant(1.0) / (y_initial + Constant(1.0 / float(g0_value))),
+        space,
+    )
+    enforce_scalar_floor(reciprocal_distance, g_floor_value)
+    return reciprocal_distance
+
+
+def wall_distance_from_reciprocal_distance(
+    reciprocal_distance,
+    g0_value,
+    g_floor_value,
+    smooth_abs_eps=None,
+):
+    reciprocal_distance_safe = _smooth_positive(
+        reciprocal_distance,
+        floor=g_floor_value,
+        smooth_abs_eps=smooth_abs_eps,
+    )
+    wall_distance_raw = Constant(1.0) / reciprocal_distance_safe - Constant(1.0 / float(g0_value))
+    return _smooth_positive(wall_distance_raw, floor=0.0, smooth_abs_eps=smooth_abs_eps)
+
+
+def build_penalized_reciprocal_distance_residual(
+    reciprocal_distance,
+    test_function,
+    custom_dx,
+    fluid_density_indicator,
+    sigma_w,
+    g0_value,
+    alpha_g_value,
+    n_g_value,
+    solid_threshold=1.0,
+):
+    """Return the weak residual for the penalized reciprocal wall-distance state G."""
+    sigma_w_constant = Constant(float(sigma_w))
+    g0_constant = Constant(float(g0_value))
+    alpha_g_constant = Constant(float(alpha_g_value))
+    n_g_constant = Constant(float(n_g_value))
+    solid_threshold_value = float(solid_threshold)
+    solid_threshold_constant = Constant(solid_threshold_value)
+
+    if 0.0 < solid_threshold_value < 1.0:
+        solid_indicator = positive_part(solid_threshold_constant - fluid_density_indicator) / solid_threshold_constant
+    else:
+        solid_indicator = positive_part(Constant(1.0) - fluid_density_indicator)
+    solid_penalty_indicator = solid_indicator**n_g_constant
+    penalty = alpha_g_constant * (reciprocal_distance - g0_constant) * solid_penalty_indicator
+
+    return (
+        (Constant(1.0) - sigma_w_constant)
+        * inner(grad(reciprocal_distance), grad(reciprocal_distance))
+        * test_function
+        * custom_dx
+        - sigma_w_constant
+        * reciprocal_distance
+        * inner(grad(reciprocal_distance), grad(test_function))
+        * custom_dx
+        - ((Constant(1.0) + Constant(2.0) * sigma_w_constant) * reciprocal_distance**4 + penalty)
+        * test_function
+        * custom_dx
+    )
 
 
 def build_direct_wall_distance_solver(

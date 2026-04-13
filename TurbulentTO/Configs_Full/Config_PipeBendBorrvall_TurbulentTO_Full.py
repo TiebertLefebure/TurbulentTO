@@ -46,6 +46,8 @@ U_MAX_OUTLET = 1.0
 # ----------------------------------------------------------------------------------------------
 # Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2,000
 # ----------------------------------------------------------------------------------------------
+# Worked with Re = 2000, penalized_g
+
 
 # Spalart-Allmaras settings
 SA_MUT_RATIO = 5.0
@@ -95,6 +97,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (0.0, 0.0)
 RESULTS_ROOT_NAME_FULL = "Results_Full/Results_PipeBendBorrvall_TurbulentTO_Full"
+RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_PipeBendBorrvall_TurbulentTO_FullWithG"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

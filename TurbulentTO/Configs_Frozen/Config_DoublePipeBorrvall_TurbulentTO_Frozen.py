@@ -4,10 +4,9 @@ from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Double Pipe — Turbulent (SA, Re = 1660)
+# Configuration: Borrvall Double Pipe — Turbulent (SA, Re = 1,660)
 #
 # Two symmetric ports on left (inlets) and right (outlets).
-# Optimal topology: two straight horizontal channels (no cross-flow).
 # ===================================================================
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -90,10 +89,13 @@ SA_WALL_G_FLOOR = 1.0e-8               # floor on reciprocal distance (avoids di
 # Topology optimization settings
 # -------------------------------------------------------------------
 VOL_FRAC = 1.0 / 3.0          # target fluid volume fraction (two thin channels ≈ 1/3)
-INITIAL_DENSITY_VALUE = 1.0 / 3.0  
-MAX_INNER_ITERATIONS_SCHEDULE = [35, 80, 100, 120, 120, 120, 100, 100]
-OBJECTIVE_CONVERGENCE_TOL = 5e-5
-OBJECTIVE_STREAK_TO_STOP = 5
+INITIAL_DENSITY_VALUE = 1.0 / 3.0
+# Shorter stage caps plus a slightly looser stage-stop rule push the design to a
+# crisp two-channel topology sooner, instead of spending hundreds of iterations
+# polishing very gray intermediate designs.
+MAX_INNER_ITERATIONS_SCHEDULE = [25, 45, 60, 80, 100, 120, 140, 160]
+OBJECTIVE_CONVERGENCE_TOL = 1.0e-4
+OBJECTIVE_STREAK_TO_STOP = 4
 
 # -------------------------------------------------------------------
 # Continuation schedules — one entry per stage, applied in order.
@@ -101,9 +103,9 @@ OBJECTIVE_STREAK_TO_STOP = 5
 # beta:    Heaviside sharpness; 1 = smooth sigmoid, 64 = near step function.
 # move:    MMA move limit; large at start (topology formation), small at end (refinement).
 # -------------------------------------------------------------------
-Q_PENAL_SCHEDULE    = [0.05, 0.1, 0.1, 0.2, 0.5, 1.0, 1.0, 1.0]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0, 8.0,  16.0, 32.0, 64.0]
+Q_PENAL_SCHEDULE    = [0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00, 3.00]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.025, 0.015, 0.008, 0.004, 0.002]
+BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0,  8.0,  16.0, 32.0, 64.0]
 
 # -------------------------------------------------------------------
 # Solver settings
@@ -112,19 +114,22 @@ SNES_LINEAR_SOLVER = "mumps"   # direct LU solver (adjoint + Stokes warm-start)
 
 # Outer NS–SA coupling: solve NS → solve SA → repeat FROZEN_PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-FROZEN_PICARD_STEPS = 2
+FROZEN_PICARD_STEPS = 1
 NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
 
 # IPCS forward solver parameters:
 #   dt                        : pseudo-time step (smaller → more stable, more iterations needed)
-#   u_relaxation/p_relaxation : under-relaxation (lower → more stable at high Re, slower convergence)
-#   rtol_u                    : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
-FORWARD_IPCS_DT                 = 2.0e-4
-FORWARD_IPCS_MAX_ITERS          = 400
-FORWARD_IPCS_RTOL               = 2.0e-4
-FORWARD_IPCS_PRESSURE_RTOL      = 1.0e-3
-FORWARD_IPCS_U_RELAXATION       = 0.4
-FORWARD_IPCS_P_RELAXATION       = 0.15
+#   vel_relaxation/p_relaxation : under-relaxation (lower → more stable at high Re, slower convergence)
+#   velocity_rtol             : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
+# Start closer to the previously successful retry settings so the first attempt
+# does not burn the full 400-step budget before adaptive backoff kicks in.
+FORWARD_IPCS_DT                 = 1.0e-4
+FORWARD_IPCS_MAX_ITERS          = 200
+FORWARD_IPCS_VELOCITY_RTOL      = 2.0e-4
+FORWARD_IPCS_PRESSURE_RTOL      = 2.0e-3
+FORWARD_IPCS_LOG_EVERY          = 50
+FORWARD_IPCS_VEL_RELAXATION     = 0.28
+FORWARD_IPCS_P_RELAXATION       = 0.10
 FORWARD_IPCS_VEL_SOLVER         = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER           = "cg"
@@ -151,6 +156,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeBorrvall_TurbulentTO_Frozen"
+SAVE_IPCS_RESIDUAL_PLOTS = False
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

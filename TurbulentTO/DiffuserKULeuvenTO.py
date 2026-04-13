@@ -7,7 +7,10 @@ from IPython.core.debugger import set_trace
 from petsc4py import PETSc
 import logging
 from time import gmtime, strftime, localtime
-from ufl import tanh
+try:
+    from ufl import tanh
+except ModuleNotFoundError:
+    from ufl_legacy import tanh
 from scipy.sparse import csr_matrix, lil_matrix
 from mma import mmasub
 

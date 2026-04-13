@@ -110,8 +110,6 @@ def _resolve_config_path_candidates(raw_config_arg):
 
 
 def _load_config_module_from_tmp_copy(module_name, config_path):
-    source_text = _read_text_file_resilient(config_path)
-
     sys.modules.pop(module_name, None)
     module_spec = importlib.util.spec_from_loader(module_name, loader=None, origin=config_path)
     module = importlib.util.module_from_spec(module_spec)
@@ -119,9 +117,69 @@ def _load_config_module_from_tmp_copy(module_name, config_path):
     module.__package__ = module_name.rpartition(".")[0]
     module.__loader__ = None
     module.__spec__ = module_spec
-    exec(compile(source_text, config_path, "exec"), module.__dict__)
-    sys.modules[module_name] = module
-    return module
+
+    load_errors = []
+    try:
+        source_text = _read_text_file_resilient(config_path)
+        exec(compile(source_text, config_path, "exec"), module.__dict__)
+        sys.modules[module_name] = module
+        return module
+    except OSError as read_exc:
+        load_errors.append("direct source read failed: {}".format(read_exc))
+
+    tmp_dir = tempfile.mkdtemp(prefix="fenics_config_", dir="/tmp")
+    tmp_config_path = os.path.join(tmp_dir, os.path.basename(config_path))
+    try:
+        _copy_file_resilient(config_path, tmp_config_path)
+        source_text = _read_text_file_resilient(tmp_config_path)
+        exec(compile(source_text, config_path, "exec"), module.__dict__)
+        sys.modules[module_name] = module
+        return module
+    except OSError as copy_exc:
+        load_errors.append("tmp-copy source read failed: {}".format(copy_exc))
+
+    pycache_dir = os.path.join(os.path.dirname(config_path), "__pycache__")
+    module_stem = os.path.splitext(os.path.basename(config_path))[0]
+    version_tag = "cpython-{}{}".format(sys.version_info.major, sys.version_info.minor)
+    pyc_candidates = []
+    preferred_pyc = os.path.join(pycache_dir, "{}.{}.pyc".format(module_stem, version_tag))
+    if os.path.exists(preferred_pyc):
+        pyc_candidates.append(preferred_pyc)
+    for candidate in sorted(glob.glob(os.path.join(pycache_dir, module_stem + ".cpython-*.pyc"))):
+        if candidate not in pyc_candidates:
+            pyc_candidates.append(candidate)
+
+    pyc_errors = []
+    for pyc_path in pyc_candidates:
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, pyc_path)
+            if spec is None or spec.loader is None:
+                continue
+            code_object = spec.loader.get_code(module_name)
+            if code_object is None:
+                continue
+            module.__loader__ = spec.loader
+            module.__cached__ = pyc_path
+            exec(code_object, module.__dict__)
+            sys.modules[module_name] = module
+            if MPI.rank(MPI.comm_world) == 0:
+                print(
+                    "Warning: loaded config {} from cached bytecode {} after source-file read failures.".format(
+                        config_path, pyc_path
+                    )
+                )
+            return module
+        except Exception as pyc_exc:
+            pyc_errors.append("{}: {}".format(pyc_path, pyc_exc))
+
+    if pyc_errors:
+        load_errors.append("cached bytecode fallback failed: {}".format(" | ".join(pyc_errors[-4:])))
+    raise OSError(
+        "Unable to load config {}. Attempts: {}".format(
+            config_path,
+            " | ".join(load_errors),
+        )
+    )
 
 
 def load_config_module_from_cli():
@@ -337,24 +395,44 @@ def build_pressure_pin_expression_from_config(config_values):
     return "near(x[0], {:.16g}) && near(x[1], {:.16g})".format(float(pin_x), float(pin_y))
 
 
-def initialize_optimization_log(log_path):
-    header_fields = (
+def _optimization_log_columns(include_ipcs_residuals=False):
+    columns = [
         ("Stage", 7),
         ("Q", 7),
         ("Beta", 7),
         ("InnerIter", 10),
         ("GlobalIter", 11),
-        ("Objective", 14),
-        ("ObjConv", 12),
-        ("VolFrac", 12),
-        ("VolResid", 12),
-        ("Timestamp", 24),
-    )
+        ("Objective", 17),
+        ("ObjConv", 17),
+        ("VolFrac", 17),
+        ("VolResid", 17),
+    ]
+    if include_ipcs_residuals:
+        columns.extend([
+            ("du_ipcs", 17),
+            ("dp_ipcs", 17),
+        ])
+    columns.append(("Timestamp", 24))
+    return columns
+
+
+def _format_optimization_log_row(values, include_ipcs_residuals=False):
+    columns = _optimization_log_columns(include_ipcs_residuals=include_ipcs_residuals)
+    if len(values) != len(columns):
+        raise ValueError(
+            "Expected {} optimization-log fields, got {}.".format(len(columns), len(values))
+        )
+    return "   ".join(str(value).ljust(width) for value, (_, width) in zip(values, columns))
+
+
+def initialize_optimization_log(log_path, include_ipcs_residuals=False):
+    header_fields = _optimization_log_columns(include_ipcs_residuals=include_ipcs_residuals)
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "w") as txtout:
-            txtout.write(
-                " ".join(label.ljust(width) for label, width in header_fields) + "\r\n"
-            )
+            txtout.write(_format_optimization_log_row(
+                [label for label, _ in header_fields],
+                include_ipcs_residuals=include_ipcs_residuals,
+            ) + "\r\n")
     MPI.barrier(MPI.comm_world)
 
 
@@ -369,20 +447,33 @@ def append_optimization_log_entry(
     objective_convergence,
     volume_fraction,
     volume_residual,
+    du_ipcs=None,
+    dp_ipcs=None,
 ):
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "a") as txtout:
+            row_values = [
+                "{:d}".format(int(stage_idx)),
+                "{:.3f}".format(float(q_value)),
+                "{:.2f}".format(float(beta_value)),
+                "{:d}".format(int(inner_iter)),
+                "{:d}".format(int(global_iter)),
+                "{:.10e}".format(float(objective)),
+                "{:.10e}".format(float(objective_convergence)),
+                "{:.10e}".format(float(volume_fraction)),
+                "{:.10e}".format(float(volume_residual)),
+            ]
+            if du_ipcs is not None or dp_ipcs is not None:
+                if du_ipcs is None or dp_ipcs is None:
+                    raise ValueError("Both du_ipcs and dp_ipcs must be provided together.")
+                row_values.extend([
+                    "{:.10e}".format(float(du_ipcs)),
+                    "{:.10e}".format(float(dp_ipcs)),
+                ])
+            row_values.append(strftime("%a, %d %b %Y %H:%M:%S", localtime()))
             txtout.write(
-                "{:<7d} {:<7.3f} {:<7.2f} {:<10d} {:<11d} {:.10e}   {:.10e}   {:.10e}   {:.10e}   {}\r\n".format(
-                    int(stage_idx),
-                    float(q_value),
-                    float(beta_value),
-                    int(inner_iter),
-                    int(global_iter),
-                    float(objective),
-                    float(objective_convergence),
-                    float(volume_fraction),
-                    float(volume_residual),
-                    strftime("%a, %d %b %Y %H:%M:%S", localtime()),
-                )
+                _format_optimization_log_row(
+                    row_values,
+                    include_ipcs_residuals=(du_ipcs is not None or dp_ipcs is not None),
+                ) + "\r\n"
             )

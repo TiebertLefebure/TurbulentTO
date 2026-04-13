@@ -5,10 +5,9 @@ from Utilities_LaminarTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Pipe Bend — Turbulent (SA, Re = 2000)
+# Configuration: Borrvall Pipe Bend — Turbulent (SA, Re = 2,000)
 #
 # One inlet on the left wall and one outlet on the bottom wall.
-# Expected topology: a short corner-cutting channel with minimal turning.
 # ===================================================================
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,13 +36,13 @@ OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-4
+MU_FLUID_VALUE = 1.0e-1
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2,000
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2
 # ----------------------------------------------------------------------------------------------
 
 # -------------------------------------------------------------------
@@ -76,7 +75,7 @@ SA_WALL_G_FLOOR = 1.0e-8               # floor on reciprocal distance (avoids di
 # Topology optimization settings
 # -------------------------------------------------------------------
 VOL_FRAC = 0.08 * pi  # Borrvall pipe-bend benchmark volume fraction
-MAX_INNER_ITERATIONS_SCHEDULE = [120, 120, 120, 120, 120, 120, 100, 100, 100]
+MAX_INNER_ITERATIONS_SCHEDULE = [120, 120, 120, 120, 120, 120, 100, 100, 100, 120, 140, 160]
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -86,9 +85,12 @@ OBJECTIVE_STREAK_TO_STOP = 5
 # the move limit shrinks gradually for refinement,
 # and beta sharpens the projection without becoming aggressive.
 # -------------------------------------------------------------------
-Q_PENAL_SCHEDULE    = [0.05, 0.08, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 1.00]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.08, 0.07, 0.06, 0.05, 0.035, 0.025, 0.015, 0.01]
-BETA_PROJ_SCHEDULE  = [0.1, 0.15, 0.25, 0.4, 0.6, 0.9, 1.25, 1.75, 2.5]
+Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
+#Q_PENAL_SCHEDULE    = [0.05, 0.08, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 1.00, 1.00, 1.00, 1.00]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.08, 0.1, 0.15, 0.2] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
+#MOVE_LIMIT_SCHEDULE = [0.08, 0.08, 0.07, 0.06, 0.05, 0.035, 0.025, 0.015, 0.01, 0.0075, 0.005, 0.003]
+BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
+#BETA_PROJ_SCHEDULE  = [0.1, 0.15, 0.25, 0.4, 0.6, 0.9, 1.25, 1.75, 2.5, 4.0, 6.0, 8.0]
 
 # -------------------------------------------------------------------
 # Solver settings
@@ -97,19 +99,19 @@ SNES_LINEAR_SOLVER = "mumps"   # direct LU solver (adjoint + Stokes warm-start)
 
 # Outer NS–SA coupling: solve NS → solve SA → repeat FROZEN_PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-FROZEN_PICARD_STEPS = 3
+FROZEN_PICARD_STEPS = 1
 NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
 
 # IPCS forward solver parameters:
 #   dt                        : pseudo-time step (smaller → more stable, more iterations needed)
 #   u_relaxation/p_relaxation : under-relaxation (lower → more stable at high Re, slower convergence)
 #   rtol_u                    : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
-FORWARD_IPCS_DT = 2.0e-4
-FORWARD_IPCS_MAX_ITERS = 600
-FORWARD_IPCS_RTOL = 2.0e-4
+FORWARD_IPCS_DT = 1.0e-4
+FORWARD_IPCS_MAX_ITERS = 250
+FORWARD_IPCS_VELOCITY_RTOL = 2.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_U_RELAXATION = 0.3
-FORWARD_IPCS_P_RELAXATION = 0.10
+FORWARD_IPCS_VEL_RELAXATION = 0.21
+FORWARD_IPCS_P_RELAXATION = 0.07
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER = "cg"
@@ -134,7 +136,7 @@ FILTER_RADIUS_IN_CELLS = 3.0  # PDE filter radius in mesh cell widths
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0  # Used only when OUTLET_BC_TYPE == "pressure".
-SAVE_IPCS_RESIDUAL_PLOTS = True
+SAVE_IPCS_RESIDUAL_PLOTS = False
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (0.0, 0.0)

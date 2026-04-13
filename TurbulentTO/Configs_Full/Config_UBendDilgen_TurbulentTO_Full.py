@@ -83,14 +83,16 @@ TOL = BOUNDARY_TOL
 # cross-section-averaged inlet velocity still matches the paper value Ub.
 # For a 2D parabola, U_bulk = (2/3) * U_max.
 RHO_FLUID_VALUE = 1.0
-MU_FLUID_VALUE = 4.0e-5
+MU_FLUID_VALUE = 4.0e-4
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
 
 # ---------------------------------------------------------------------------------------------------
-# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
+# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 125
 # Defined as in Dilgen 2018
 # ---------------------------------------------------------------------------------------------------
+# Worked with Re = 50, penalized_g
+
 
 # Treat the passive U-bend baffle as a strong imposed solid region without
 # making the monolithic state solve excessively stiff.
@@ -105,22 +107,22 @@ SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.20 * L
 SA_NU_TILDE_INITIAL = MU_FLUID_VALUE
-SA_NU_TILDE_FLOOR = 1.0e-12
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_FLOOR = 1.0e-8
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e2
 SA_NU_TILDE_PENALTY_N = 3.0
 
 # Wall-distance model selector:
 #   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
 #   "penalized_g" -> solve the penalized reciprocal-distance model
 #   "geometric"   -> use the plain geometric distance field only
-SA_WALL_MODEL = "direct_y"
+SA_WALL_MODEL = "penalized_g"
 SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_Y_RELAXATION = 0.10
 SA_WALL_EIKONAL_EPS = 1.0e-12
-SA_WALL_PENALTY_ALPHA = 1.0e2
+SA_WALL_PENALTY_ALPHA = 5.0e1
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_SOLID_THRESHOLD = 0.10
-SA_WALL_DISTANCE_FLOOR = 1.0e-6 * H
+SA_WALL_DISTANCE_FLOOR = 1.0e-4 * H
 SA_WALL_NEWTON_MAX_ITERS = 300
 SA_WALL_NEWTON_RELAXATION = 0.1
 SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
@@ -139,7 +141,7 @@ OBJECTIVE_STREAK_TO_STOP = 5
 # Keep the early stages gray-friendly, then raise q moderately so the
 # optimizer does not keep broad semi-fluid regions near the pressure outlet.
 Q_PENAL_SCHEDULE = [0.1, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.5]
-MOVE_LIMIT_SCHEDULE = [0.10, 0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 
 # -------------------------------------------------------------------
@@ -147,15 +149,16 @@ BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 # -------------------------------------------------------------------
 SNES_LINEAR_SOLVER = 'mumps'
 FULL_STATE_LINEAR_SOLVER = 'mumps'
-FULL_STATE_SNES_METHOD = 'newtontr'
+FULL_STATE_SNES_METHOD = 'newtonls'
 FULL_STATE_SNES_LINE_SEARCH = 'bt'
 FULL_STATE_SNES_RTOL = 1.0e-6
 FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 150
+FULL_STATE_SNES_MAX_ITERS = 200
 FULL_STATE_RESTART_WITH_STOKES = True
 FULL_STATE_SNES_FALLBACK_METHOD = 'newtonls'
 FULL_STATE_SNES_FALLBACK_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_FALLBACK_MAX_ITERS = 250
+FULL_STATE_SNES_FALLBACK_MAX_ITERS = 350
+FULL_STATE_TURBULENCE_COUPLING_SCHEDULE = [0.0, 0.25, 0.5, 1.0]
 
 # -------------------------------------------------------------------
 # Projection, filter, and output
@@ -174,6 +177,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (LEFT_BLOCK_X_MIN, OUTLET_Y_MIN)
 RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_UBendDilgen_TurbulentTO_Full'
+RESULTS_ROOT_NAME_FULL_WITH_G = 'Results_FullWithG/Results_UBendDilgen_TurbulentTO_FullWithG'
 
 MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': 3}
 

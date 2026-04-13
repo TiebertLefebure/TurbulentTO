@@ -54,14 +54,16 @@ OUTLET_SEGMENTS = [
 ]
 
 # Flow settings
-MU_FLUID_VALUE = 3.3e-5
+MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,050
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
 # ----------------------------------------------------------------------------------------------
+# 03/04/2026: working up to Re = 2500 with penalized_g
+
 
 # Spalart-Allmaras settings
 # Match the frozen double-pipe inlet seeding; the weaker nu_t / nu_lam = 1
@@ -75,16 +77,25 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
-SA_USE_PENALIZED_WALL_DISTANCE = True
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
-SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e3
+# Wall-distance model selector:
+#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
+#   "penalized_g" -> solve the penalized reciprocal-distance model
+#   "geometric"   -> use the plain geometric distance field only
+SA_WALL_MODEL = "penalized_g"
+SA_WALL_DENSITY_SOURCE = "design"
+SA_WALL_Y_RELAXATION = 0.10
+SA_WALL_EIKONAL_EPS = 1.0e-12
+SA_WALL_PENALTY_ALPHA = 1.0e2
 SA_WALL_PENALTY_N = 3.0
 # Only treat near-solid cells as artificial walls; the initial rho=1/3 gray
 # field should not trigger wall penalties across the whole domain.
 SA_WALL_SOLID_THRESHOLD = 0.10
-SA_WALL_G_FLOOR = 1.0e-8
+SA_WALL_DISTANCE_FLOOR = 1.0e-6 * PORT_WIDTH
+SA_WALL_NEWTON_MAX_ITERS = 300
+SA_WALL_NEWTON_RELAXATION = 0.1
+SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
+SA_WALL_INITIAL_SOLID_GUESS = 1.0
+SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 
 # Topology optimization settings
 VOL_FRAC = 1.0 / 3.0
@@ -105,12 +116,29 @@ FULL_STATE_SNES_LINE_SEARCH = "bt"
 FULL_STATE_SNES_RTOL = 1.0e-6
 FULL_STATE_SNES_ATOL = 1.0e-8
 FULL_STATE_SNES_MAX_ITERS = 120
+FULL_STATE_INITIAL_SA_SWEEPS = 4
+FULL_STATE_INITIAL_SA_RELAXATION = 0.5
+# Ramp the turbulent-viscosity feedback into the momentum equations instead
+# of forcing the first monolithic Newton solve to handle the full coupling at
+# once from a Stokes/SA warm start.
+FULL_STATE_TURBULENCE_COUPLING_SCHEDULE = [
+    {"weight": 0.0, "max_iters": 220, "atol": 8.0e-4},
+    {"weight": 0.35, "max_iters": 180, "atol": 5.0e-4},
+    {"weight": 0.70, "max_iters": 180, "atol": 2.0e-4},
+    {"weight": 1.0},
+]
 FULL_STATE_SNES_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",
         "method": "newtonls",
         "line_search": "bt",
         "max_iters": 220,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "current-iterate trust-region retry",
+        "method": "newtontr",
+        "max_iters": 250,
         "restart_with_stokes": False,
     },
     {
@@ -133,6 +161,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME_FULL = "Results_Full/Results_DoublePipeBorrvall_TurbulentTO_Full"
+RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_DoublePipeBorrvall_TurbulentTO_FullWithG"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

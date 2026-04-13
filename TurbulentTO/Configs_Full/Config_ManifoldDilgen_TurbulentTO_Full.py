@@ -106,13 +106,13 @@ def create_design_mesh():
 # Flow settings
 # -------------------------------------------------------------------
 RHO_FLUID_VALUE = 1.0
-MU_FLUID_VALUE = 5.7e-4
+MU_FLUID_VALUE = 5.7e-2
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
-ALPHA_SOLID = 2.0e3
+ALPHA_SOLID = 1.0e4
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_BULK_INLET * H * RHO_FLUID_VALUE / MU_FLUID_VALUE = 350
+# Reynolds number: Re = U_BULK_INLET * H * RHO_FLUID_VALUE / MU_FLUID_VALUE = 3
 # Defined as in Dilgen 2018
 # ----------------------------------------------------------------------------------------------
 
@@ -128,18 +128,31 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 2.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-SA_USE_PENALIZED_WALL_DISTANCE = False
+
+# Wall-distance model selector:
+#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
+#   "penalized_g" -> solve the penalized reciprocal-distance model
+#   "geometric"   -> use the plain geometric distance field only
+SA_WALL_MODEL = "penalized_g"
+SA_WALL_DENSITY_SOURCE = "design"
+SA_WALL_Y_RELAXATION = SA_DISTANCE_RELAXATION
 SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
-SA_WALL_G0 = 20.0
+SA_WALL_EIKONAL_EPS = 1.0e-12
 SA_WALL_PENALTY_ALPHA = 2.0e3
 SA_WALL_PENALTY_N = 3.0
-SA_WALL_G_FLOOR = 1.0e-8
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 1.0e-6 * H
+SA_WALL_NEWTON_MAX_ITERS = 300
+SA_WALL_NEWTON_RELAXATION = 0.1
+SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
+SA_WALL_INITIAL_SOLID_GUESS = 1.0
+SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 
 # -------------------------------------------------------------------
 # Topology optimization settings
 # -------------------------------------------------------------------
 VOL_FRAC = 0.43
-INITIAL_DENSITY_VALUE = 0.43
+INITIAL_DENSITY_VALUE = 1.0
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -188,6 +201,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_ManifoldDilgen_TurbulentTO_Full'
+RESULTS_ROOT_NAME_FULL_WITH_G = 'Results_FullWithG/Results_ManifoldDilgen_TurbulentTO_FullWithG'
 
 MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': (3, 4, 5)}
 

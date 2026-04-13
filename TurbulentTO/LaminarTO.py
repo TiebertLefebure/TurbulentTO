@@ -1,7 +1,10 @@
 from dolfin import *
 import numpy as np
 import os
-from ufl import tanh
+try:
+    from ufl import tanh
+except ModuleNotFoundError:
+    from ufl_legacy import tanh
 
 from mma import mmasub
 from Utilities_LaminarTO import (

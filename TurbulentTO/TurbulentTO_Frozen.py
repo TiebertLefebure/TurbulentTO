@@ -1,32 +1,459 @@
 from dolfin import *
+import importlib
+import importlib.util
 import numpy as np
 import os
-from ufl import tanh
+import sys
+import time
+try:
+    from ufl import tanh
+except ModuleNotFoundError:
+    from ufl_legacy import tanh
 
-from mma import mmasub
-from TurbulenceModel_SpalartAllmaras_TO_Frozen import (
-    SpalartAllmarasSteadyState,
-    sa_turbulent_viscosity,
-)
-from Utilities_LaminarTO import (
-    append_optimization_log_entry,
-    as_list,
-    build_pressure_pin_expression_from_config,
-    compute_filter_base_length_from_config,
-    create_design_mesh_from_config,
-    ensure_clean_dir,
-    initialize_optimization_log,
-    load_config_module_from_cli,
-    ResilientVTKFile,
-)
-from Utilities_TurbulentTO_Frozen import (
-    build_direct_wall_distance_solver,
-    build_penalized_wall_distance_solver,
-    calculate_distance_field,
-    enforce_scalar_floor,
-    nu_tilde_from_viscosity_ratio,
-    positive_part,
-)
+
+def import_local_module_with_retry(module_name, retries=8, base_delay=0.25):
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            sys.modules.pop(module_name, None)
+            return importlib.import_module(module_name)
+        except OSError as exc:
+            if getattr(exc, "errno", None) != 35:
+                raise
+            last_exc = exc
+            if attempt == retries:
+                break
+            wait_time = base_delay * attempt
+            print(
+                "[Import retry] {} failed with Errno 35 (resource deadlock avoided); "
+                "retrying in {:.2f}s ({}/{})".format(
+                    module_name, wait_time, attempt, retries
+                ),
+                file=sys.stderr,
+            )
+            time.sleep(wait_time)
+    raise last_exc
+
+
+def load_spalart_allmaras_helpers():
+    try:
+        sa_module = import_local_module_with_retry("TurbulenceModel_SpalartAllmaras_TO_Frozen")
+        return sa_module.SpalartAllmarasSteadyState, sa_module.sa_turbulent_viscosity
+    except OSError as source_exc:
+        if getattr(source_exc, "errno", None) != 35:
+            raise
+        print(
+            "[Import fallback] Using built-in Spalart-Allmaras helpers after Errno 35 "
+            "while reading TurbulenceModel_SpalartAllmaras_TO_Frozen.py",
+            file=sys.stderr,
+        )
+
+        def _smooth_abs(value, smooth_abs_eps):
+            return sqrt(value**2 + Constant(smooth_abs_eps))
+
+        def sa_min(a, b, smooth_abs_eps=None):
+            if smooth_abs_eps is None:
+                return (a + b - abs(a - b)) / Constant(2.0)
+            return (a + b - _smooth_abs(a - b, smooth_abs_eps)) / Constant(2.0)
+
+        def sa_turbulent_viscosity(nu_tilde, nu_laminar, smooth_abs_eps=None):
+            chi = nu_tilde / (nu_laminar + DOLFIN_EPS)
+            f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
+            nu_t_raw = nu_tilde * f_v1
+            if smooth_abs_eps is None:
+                return nu_t_raw
+            return 0.5 * (nu_t_raw + _smooth_abs(nu_t_raw, smooth_abs_eps))
+
+        def sa_transport_terms(
+            external_velocity,
+            nu_tilde,
+            nu_laminar,
+            wall_distance,
+            smooth_abs_eps=None,
+            wall_distance_floor=0.0,
+        ):
+            sigma = Constant(2.0 / 3.0)
+            cb1 = Constant(0.1355)
+            cb2 = Constant(0.622)
+            kappa = Constant(0.41)
+            cw2 = Constant(0.3)
+            cw3 = Constant(2.0)
+            cw1 = cb1 / kappa**2 + (Constant(1.0) + cb2) / sigma
+
+            chi = nu_tilde / (nu_laminar + DOLFIN_EPS)
+            f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
+            f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
+            f_t2 = Constant(1.2) * exp(Constant(-0.5) * chi**2)
+
+            omega_sq = Constant(2.0) * inner(skew(nabla_grad(external_velocity)), skew(nabla_grad(external_velocity)))
+            S = sqrt(omega_sq + DOLFIN_EPS)
+
+            y_safe = wall_distance + Constant(max(float(wall_distance_floor), float(DOLFIN_EPS)))
+            S_tilde = S + nu_tilde / (kappa**2 * y_safe**2) * f_v2
+
+            r_arg = nu_tilde / (S_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
+            r = sa_min(r_arg, Constant(10.0), smooth_abs_eps=smooth_abs_eps)
+
+            g = r + cw2 * (r**6 - r)
+            f_w = g * ((Constant(1.0) + cw3**6) / (g**6 + cw3**6))**(Constant(1.0) / Constant(6.0))
+
+            prod_nt = cb1 * (Constant(1.0) - f_t2) * S_tilde * nu_tilde
+            react_nt = cw1 * f_w * (nu_tilde / y_safe**2)
+            cross_diff_nt = (cb2 / sigma) * inner(nabla_grad(nu_tilde), nabla_grad(nu_tilde))
+            source_nt = prod_nt + cross_diff_nt
+            return sigma, react_nt, source_nt
+
+        class SpalartAllmarasSteadyState:
+            def __init__(
+                self,
+                space,
+                bcs,
+                nu_tilde_init,
+                nu_laminar,
+                force,
+                custom_dx,
+                custom_ds,
+                wall_distance,
+                nu_tilde_penalty_reaction=None,
+                wall_distance_floor=0.0,
+            ):
+                self._space = space
+                self._bcs = bcs
+                self._nu_laminar = nu_laminar
+                self._dx = custom_dx
+                self._wall_distance = wall_distance
+                self._nu_tilde_penalty_reaction = nu_tilde_penalty_reaction
+                self._wall_distance_floor = float(wall_distance_floor)
+
+                self._nu_tilde = TrialFunction(space)
+                self._xi = TestFunction(space)
+                self._nu_tilde1 = Function(space)
+                self._nu_tilde0 = interpolate(Constant(nu_tilde_init), space)
+
+            def construct_forms(self, external_velocity):
+                self._nu_t = sa_turbulent_viscosity(self._nu_tilde0, self._nu_laminar)
+                sigma, react_nt, source_nt = sa_transport_terms(
+                    external_velocity,
+                    self._nu_tilde0,
+                    self._nu_laminar,
+                    self._wall_distance,
+                    wall_distance_floor=self._wall_distance_floor,
+                )
+                penalty_react = self._nu_tilde_penalty_reaction if self._nu_tilde_penalty_reaction is not None else Constant(0.0)
+
+                FNT = (
+                    dot(external_velocity, nabla_grad(self._nu_tilde)) * self._xi * self._dx
+                    + inner((self._nu_laminar + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi)) * self._dx
+                    + (react_nt + penalty_react) * self._nu_tilde * self._xi * self._dx
+                    - source_nt * self._xi * self._dx
+                )
+                self._a_nt = lhs(FNT)
+                self._l_nt = rhs(FNT)
+
+            def solve_turbulence_model(self):
+                A_NT = assemble(self._a_nt)
+                b_nt = assemble(self._l_nt)
+                for bc in self._bcs:
+                    bc.apply(A_NT, b_nt)
+                solve(A_NT, self._nu_tilde1.vector(), b_nt)
+
+            def update_variables(self, relaxation=1.0):
+                self._nu_tilde0.assign(relaxation * self._nu_tilde1 + (1.0 - relaxation) * self._nu_tilde0)
+
+            @property
+            def nu_t(self):
+                return self._nu_t
+
+            @property
+            def nu_tilde0(self):
+                return self._nu_tilde0
+
+            @property
+            def nu_tilde1(self):
+                return self._nu_tilde1
+
+        return SpalartAllmarasSteadyState, sa_turbulent_viscosity
+
+def load_mma_subroutine():
+    try:
+        from mma import mmasub as mma_subroutine
+        return mma_subroutine
+    except OSError as source_exc:
+        # Docker shared mounts on macOS can intermittently fail on the source-file
+        # import with EDEADLK/EDEADLOCK. Fall back to a local copy of the MMA
+        # routine so the solver does not depend on reading mma.py at runtime.
+        try:
+            from scipy.linalg import solve
+            from scipy.sparse import diags
+        except Exception:
+            raise source_exc
+
+        def subsolv(m, n, epsimin, low, upp, alfa, beta, p0, q0, P, Q, a0, a, b, c, d):
+            een = np.ones((n, 1))
+            eem = np.ones((m, 1))
+            epsi = 1
+            epsvecn = epsi * een
+            epsvecm = epsi * eem
+            x = 0.5 * (alfa + beta)
+            y = eem.copy()
+            z = np.array([[1.0]])
+            lam = eem.copy()
+            xsi = een / (x - alfa)
+            xsi = np.maximum(xsi, een)
+            eta = een / (beta - x)
+            eta = np.maximum(eta, een)
+            mu = np.maximum(eem, 0.5 * c)
+            zet = np.array([[1.0]])
+            s = eem.copy()
+            while epsi > epsimin:
+                epsvecn = epsi * een
+                epsvecm = epsi * eem
+                ux1 = upp - x
+                xl1 = x - low
+                ux2 = ux1 * ux1
+                xl2 = xl1 * xl1
+                uxinv1 = een / ux1
+                xlinv1 = een / xl1
+                plam = p0 + np.dot(P.T, lam)
+                qlam = q0 + np.dot(Q.T, lam)
+                gvec = np.dot(P, uxinv1) + np.dot(Q, xlinv1)
+                dpsidx = plam / ux2 - qlam / xl2
+                rex = dpsidx - xsi + eta
+                rey = c + d * y - mu - lam
+                rez = a0 - zet - np.dot(a.T, lam)
+                relam = gvec - a * z - y + s - b
+                rexsi = xsi * (x - alfa) - epsvecn
+                reeta = eta * (beta - x) - epsvecn
+                remu = mu * y - epsvecm
+                rezet = zet * z - epsi
+                res = lam * s - epsvecm
+                residu1 = np.concatenate((rex, rey, rez), axis=0)
+                residu2 = np.concatenate((relam, rexsi, reeta, remu, rezet, res), axis=0)
+                residu = np.concatenate((residu1, residu2), axis=0)
+                residunorm = np.sqrt((np.dot(residu.T, residu)).item())
+                residumax = np.max(np.abs(residu))
+                ittt = 0
+                while (residumax > 0.9 * epsi) and (ittt < 200):
+                    ittt += 1
+                    ux1 = upp - x
+                    xl1 = x - low
+                    ux2 = ux1 * ux1
+                    xl2 = xl1 * xl1
+                    ux3 = ux1 * ux2
+                    xl3 = xl1 * xl2
+                    uxinv1 = een / ux1
+                    xlinv1 = een / xl1
+                    uxinv2 = een / ux2
+                    xlinv2 = een / xl2
+                    plam = p0 + np.dot(P.T, lam)
+                    qlam = q0 + np.dot(Q.T, lam)
+                    gvec = np.dot(P, uxinv1) + np.dot(Q, xlinv1)
+                    GG = (diags(uxinv2.flatten(), 0).dot(P.T)).T - (diags(xlinv2.flatten(), 0).dot(Q.T)).T
+                    dpsidx = plam / ux2 - qlam / xl2
+                    delx = dpsidx - epsvecn / (x - alfa) + epsvecn / (beta - x)
+                    dely = c + d * y - lam - epsvecm / y
+                    delz = a0 - np.dot(a.T, lam) - epsi / z
+                    dellam = gvec - a * z - y - b + epsvecm / lam
+                    diagx = plam / ux3 + qlam / xl3
+                    diagx = 2 * diagx + xsi / (x - alfa) + eta / (beta - x)
+                    diagxinv = een / diagx
+                    diagy = d + mu / y
+                    diagyinv = eem / diagy
+                    diaglam = s / lam
+                    diaglamyi = diaglam + diagyinv
+                    if m < n:
+                        blam = dellam + dely / diagy - np.dot(GG, (delx / diagx))
+                        bb = np.concatenate((blam, delz), axis=0)
+                        Alam = np.asarray(diags(diaglamyi.flatten(), 0) + (diags(diagxinv.flatten(), 0).dot(GG.T).T).dot(GG.T))
+                        AAr1 = np.concatenate((Alam, a), axis=1)
+                        AAr2 = np.concatenate((a, -zet / z), axis=0).T
+                        AA = np.concatenate((AAr1, AAr2), axis=0)
+                        solut = solve(AA, bb)
+                        dlam = solut[0:m]
+                        dz = solut[m:m + 1]
+                        dx = -delx / diagx - np.dot(GG.T, dlam) / diagx
+                    else:
+                        diaglamyiinv = eem / diaglamyi
+                        dellamyi = dellam + dely / diagy
+                        Axx = np.asarray(diags(diagx.flatten(), 0) + (diags(diaglamyiinv.flatten(), 0).dot(GG).T).dot(GG))
+                        azz = zet / z + np.dot(a.T, (a / diaglamyi))
+                        axz = np.dot(-GG.T, (a / diaglamyi))
+                        bx = delx + np.dot(GG.T, (dellamyi / diaglamyi))
+                        bz = delz - np.dot(a.T, (dellamyi / diaglamyi))
+                        AAr1 = np.concatenate((Axx, axz), axis=1)
+                        AAr2 = np.concatenate((axz.T, azz), axis=1)
+                        AA = np.concatenate((AAr1, AAr2), axis=0)
+                        bb = np.concatenate((-bx, -bz), axis=0)
+                        solut = solve(AA, bb)
+                        dx = solut[0:n]
+                        dz = solut[n:n + 1]
+                        dlam = np.dot(GG, dx) / diaglamyi - dz * (a / diaglamyi) + dellamyi / diaglamyi
+                    dy = -dely / diagy + dlam / diagy
+                    dxsi = -xsi + epsvecn / (x - alfa) - (xsi * dx) / (x - alfa)
+                    deta = -eta + epsvecn / (beta - x) + (eta * dx) / (beta - x)
+                    dmu = -mu + epsvecm / y - (mu * dy) / y
+                    dzet = -zet + epsi / z - zet * dz / z
+                    ds = -s + epsvecm / lam - (s * dlam) / lam
+                    xx = np.concatenate((y, z, lam, xsi, eta, mu, zet, s), axis=0)
+                    dxx = np.concatenate((dy, dz, dlam, dxsi, deta, dmu, dzet, ds), axis=0)
+                    stepxx = -1.01 * dxx / xx
+                    stmxx = np.max(stepxx)
+                    stepalfa = -1.01 * dx / (x - alfa)
+                    stmalfa = np.max(stepalfa)
+                    stepbeta = 1.01 * dx / (beta - x)
+                    stmbeta = np.max(stepbeta)
+                    stmalbe = np.maximum(stmalfa, stmbeta)
+                    stminv = np.maximum(np.maximum(stmalbe, stmxx), 1.0)
+                    steg = 1.0 / stminv
+                    xold = x.copy()
+                    yold = y.copy()
+                    zold = z.copy()
+                    lamold = lam.copy()
+                    xsiold = xsi.copy()
+                    etaold = eta.copy()
+                    muold = mu.copy()
+                    zetold = zet.copy()
+                    sold = s.copy()
+                    itto = 0
+                    resinew = 2 * residunorm
+                    while (resinew > residunorm) and (itto < 50):
+                        itto += 1
+                        x = xold + steg * dx
+                        y = yold + steg * dy
+                        z = zold + steg * dz
+                        lam = lamold + steg * dlam
+                        xsi = xsiold + steg * dxsi
+                        eta = etaold + steg * deta
+                        mu = muold + steg * dmu
+                        zet = zetold + steg * dzet
+                        s = sold + steg * ds
+                        ux1 = upp - x
+                        xl1 = x - low
+                        ux2 = ux1 * ux1
+                        xl2 = xl1 * xl1
+                        uxinv1 = een / ux1
+                        xlinv1 = een / xl1
+                        plam = p0 + np.dot(P.T, lam)
+                        qlam = q0 + np.dot(Q.T, lam)
+                        gvec = np.dot(P, uxinv1) + np.dot(Q, xlinv1)
+                        dpsidx = plam / ux2 - qlam / xl2
+                        rex = dpsidx - xsi + eta
+                        rey = c + d * y - mu - lam
+                        rez = a0 - zet - np.dot(a.T, lam)
+                        relam = gvec - np.dot(a, z) - y + s - b
+                        rexsi = xsi * (x - alfa) - epsvecn
+                        reeta = eta * (beta - x) - epsvecn
+                        remu = mu * y - epsvecm
+                        rezet = np.dot(zet, z) - epsi
+                        res = lam * s - epsvecm
+                        residu1 = np.concatenate((rex, rey, rez), axis=0)
+                        residu2 = np.concatenate((relam, rexsi, reeta, remu, rezet, res), axis=0)
+                        residu = np.concatenate((residu1, residu2), axis=0)
+                        resinew = np.sqrt(np.dot(residu.T, residu))
+                        steg = steg / 2
+                    residunorm = resinew.copy()
+                    residumax = np.max(np.abs(residu))
+                    steg = 2 * steg
+                epsi = 0.1 * epsi
+            return x.copy(), y.copy(), z.copy(), lam, xsi, eta, mu, zet, s
+
+        def local_mmasub(m, n, iter, xval, xmin, xmax, xold1, xold2, f0val, df0dx, fval, dfdx, low, upp, a0, a, c, d, move):
+            raa0 = 0.00001
+            albefa = 0.1
+            asyinit = 0.5
+            asyincr = 1.2
+            asydecr = 0.7
+            eeen = np.ones((n, 1))
+            eeem = np.ones((m, 1))
+            zeron = np.zeros((n, 1))
+            if iter <= 2:
+                low = xval - asyinit * (xmax - xmin)
+                upp = xval + asyinit * (xmax - xmin)
+            else:
+                zzz = (xval - xold1) * (xold1 - xold2)
+                factor = eeen.copy()
+                factor[np.where(zzz > 0)] = asyincr
+                factor[np.where(zzz < 0)] = asydecr
+                low = xval - factor * (xold1 - low)
+                upp = xval + factor * (upp - xold1)
+                lowmin = xval - 10 * (xmax - xmin)
+                lowmax = xval - 0.01 * (xmax - xmin)
+                uppmin = xval + 0.01 * (xmax - xmin)
+                uppmax = xval + 10 * (xmax - xmin)
+                low = np.maximum(low, lowmin)
+                low = np.minimum(low, lowmax)
+                upp = np.minimum(upp, uppmax)
+                upp = np.maximum(upp, uppmin)
+            zzz1 = low + albefa * (xval - low)
+            zzz2 = xval - move * (xmax - xmin)
+            alfa = np.maximum(np.maximum(zzz1, zzz2), xmin)
+            zzz1 = upp - albefa * (upp - xval)
+            zzz2 = xval + move * (xmax - xmin)
+            beta = np.minimum(np.minimum(zzz1, zzz2), xmax)
+            xmami = np.maximum(xmax - xmin, 0.00001 * eeen)
+            xmamiinv = eeen / xmami
+            ux1 = upp - xval
+            xl1 = xval - low
+            ux2 = ux1 * ux1
+            xl2 = xl1 * xl1
+            uxinv = eeen / ux1
+            xlinv = eeen / xl1
+            p0 = np.maximum(df0dx, 0)
+            q0 = np.maximum(-df0dx, 0)
+            pq0 = 0.001 * (p0 + q0) + raa0 * xmamiinv
+            p0 = (p0 + pq0) * ux2
+            q0 = (q0 + pq0) * xl2
+            P = np.maximum(dfdx, 0)
+            Q = np.maximum(-dfdx, 0)
+            PQ = 0.001 * (P + Q) + raa0 * np.dot(eeem, xmamiinv.T)
+            P = (diags(ux2.flatten(), 0).dot((P + PQ).T)).T
+            Q = (diags(xl2.flatten(), 0).dot((Q + PQ).T)).T
+            b = np.dot(P, uxinv) + np.dot(Q, xlinv) - fval
+            xmma, ymma, zmma, lam, xsi, eta, mu, zet, s = subsolv(
+                m, n, 1.0e-7, low, upp, alfa, beta, p0, q0, P, Q, a0, a, b, c, d
+            )
+            return xmma, ymma, zmma, lam, xsi, eta, mu, zet, s, low, upp
+
+        return local_mmasub
+
+
+mmasub = load_mma_subroutine()
+SpalartAllmarasSteadyState, sa_turbulent_viscosity = load_spalart_allmaras_helpers()
+
+_utilities_module = import_local_module_with_retry("Utilities_LaminarTO")
+append_optimization_log_entry = _utilities_module.append_optimization_log_entry
+as_list = _utilities_module.as_list
+build_pressure_pin_expression_from_config = _utilities_module.build_pressure_pin_expression_from_config
+compute_filter_base_length_from_config = _utilities_module.compute_filter_base_length_from_config
+create_design_mesh_from_config = _utilities_module.create_design_mesh_from_config
+ensure_clean_dir = _utilities_module.ensure_clean_dir
+initialize_optimization_log = _utilities_module.initialize_optimization_log
+load_config_module_from_cli = _utilities_module.load_config_module_from_cli
+ResilientVTKFile = _utilities_module.ResilientVTKFile
+
+
+def load_frozen_utilities_module():
+    module_name = "Utilities_TurbulentTO_Frozen"
+    try:
+        return import_local_module_with_retry(module_name)
+    except OSError as source_exc:
+        if getattr(source_exc, "errno", None) != 35:
+            raise
+        module_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), module_name + ".py")
+        print(
+            "[Import fallback] Loading {} from a resilient source copy after Errno 35".format(module_name),
+            file=sys.stderr,
+        )
+        return _utilities_module._load_config_module_from_tmp_copy(module_name, module_path)
+
+
+_frozen_utilities_module = load_frozen_utilities_module()
+build_direct_wall_distance_solver = _frozen_utilities_module.build_direct_wall_distance_solver
+build_penalized_wall_distance_solver = _frozen_utilities_module.build_penalized_wall_distance_solver
+calculate_distance_field = _frozen_utilities_module.calculate_distance_field
+enforce_scalar_floor = _frozen_utilities_module.enforce_scalar_floor
+nu_tilde_from_viscosity_ratio = _frozen_utilities_module.nu_tilde_from_viscosity_ratio
+positive_part = _frozen_utilities_module.positive_part
 
 # ====================================================================================
 # Turbulent topology optimization with a frozen-turbulence adjoint.
@@ -753,7 +1180,16 @@ def sanitize_output_label(raw_label):
     return cleaned.strip("_") or "solve"
 
 
-def write_ipcs_residual_outputs(output_dir, base_name, u_history, p_history, rtol_u, rtol_p):
+def write_ipcs_residual_outputs(
+    output_dir,
+    base_name,
+    u_history,
+    p_history,
+    rtol_u,
+    rtol_p,
+    write_svg=False,
+):
+    os.makedirs(output_dir, exist_ok=True)
     txt_path = os.path.join(output_dir, base_name + ".txt")
     with open(txt_path, "w") as handle:
         handle.write("# step du_rel dp_rel\n")
@@ -762,7 +1198,7 @@ def write_ipcs_residual_outputs(output_dir, base_name, u_history, p_history, rto
         for step_idx, (u_val, p_val) in enumerate(zip(u_history, p_history), start=1):
             handle.write("{:04d} {:.16e} {:.16e}\n".format(step_idx, u_val, p_val))
 
-    if not u_history or not p_history:
+    if (not write_svg) or (not u_history) or (not p_history):
         return
 
     width = 920
@@ -925,10 +1361,12 @@ def initialize_forward_guess_with_stokes():
 # Forward solver.
 def solve_forward(solve_label=None):
     """Run IPCS to a steady state and store the result in w_fwd."""
+    global ipcs_solve_counter
+    global save_ipcs_residual_plots
     max_it  = int(globals().get("FORWARD_IPCS_MAX_ITERS", 200))
-    rtol_u  = float(globals().get("FORWARD_IPCS_RTOL", 1.0e-3))
+    rtol_u  = float(globals().get("FORWARD_IPCS_VELOCITY_RTOL", globals().get("FORWARD_IPCS_RTOL", 1.0e-3)))
     rtol_p  = float(globals().get("FORWARD_IPCS_PRESSURE_RTOL", 2.0e-2))
-    omega_u_base = float(globals().get("FORWARD_IPCS_U_RELAXATION", 0.5))
+    omega_u_base = float(globals().get("FORWARD_IPCS_VEL_RELAXATION", globals().get("FORWARD_IPCS_U_RELAXATION", 0.5)))
     omega_p_base = float(globals().get("FORWARD_IPCS_P_RELAXATION", 0.2))
     min_omega_u = float(globals().get("FORWARD_IPCS_MIN_U_RELAXATION", 0.05))
     min_omega_p = float(globals().get("FORWARD_IPCS_MIN_P_RELAXATION", 0.02))
@@ -1050,13 +1488,31 @@ def solve_forward(solve_label=None):
             )
 
         if save_ipcs_residual_plots:
-            global ipcs_solve_counter
             ipcs_solve_counter += 1
             label = solve_label if solve_label is not None else "solve"
             if max_restarts > 0:
                 label = "{}_attempt{:02d}".format(label, attempt_idx + 1)
             base_name = "{:04d}_{}".format(ipcs_solve_counter, sanitize_output_label(label))
-            write_ipcs_residual_outputs(ipcs_residual_dir, base_name, u_history, p_history, rtol_u, rtol_p)
+            try:
+                write_ipcs_residual_outputs(
+                    ipcs_residual_dir,
+                    base_name,
+                    u_history,
+                    p_history,
+                    rtol_u,
+                    rtol_p,
+                    write_svg=save_ipcs_residual_svgs,
+                )
+            except OSError as exc:
+                if getattr(exc, "errno", None) == 28:
+                    save_ipcs_residual_plots = False
+                    root_print(
+                        "Warning: disabling IPCS residual file dumps after running out of disk space at {}.".format(
+                            os.path.join(ipcs_residual_dir, base_name + ".txt")
+                        )
+                    )
+                else:
+                    raise
 
         attempt_summaries.append(
             "attempt {}: dt={:.2e}, best@{:03d} du={:.2e} (target {:.2e}), dp={:.2e} (target {:.2e}); final du={:.2e}, dp={:.2e}".format(
@@ -1068,7 +1524,7 @@ def solve_forward(solve_label=None):
             assign(w_fwd.sub(0), u_pc_old)
             assign(w_fwd.sub(1), p_pc_old)
             dt_pc.assign(base_dt)
-            return
+            return float(du_rel), float(dp_rel)
 
         # Retry from the best iterate seen in this attempt, not from the
         # potentially degraded final iterate after a long failed march.
@@ -1096,12 +1552,13 @@ def solve_forward(solve_label=None):
     if error_on_nonconvergence:
         raise RuntimeError(message)
     root_print("Warning: {}".format(message))
+    return float(best_du), float(best_dp)
 
 
 def solve_forward_with_recovery(solve_label=None):
     """Retry a failed IPCS solve from a fresh Stokes-Brinkman warm start."""
     try:
-        solve_forward(solve_label)
+        return solve_forward(solve_label)
     except RuntimeError:
         if not bool(globals().get("FORWARD_IPCS_RESTART_WITH_STOKES", True)):
             raise
@@ -1113,7 +1570,7 @@ def solve_forward_with_recovery(solve_label=None):
         solver_log("      [IPCS] rebuilding Stokes-Brinkman warm start and retrying once")
         initialize_forward_guess_with_stokes()
         retry_label = solve_label if solve_label is not None else "solve"
-        solve_forward("{}_stokes".format(retry_label))
+        return solve_forward("{}_stokes".format(retry_label))
 
 # Adjoint solver.
 def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
@@ -1139,7 +1596,8 @@ p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
-save_ipcs_residual_plots = bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", True))
+save_ipcs_residual_plots = bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
+save_ipcs_residual_svgs = bool(globals().get("SAVE_IPCS_RESIDUAL_SVGS", False))
 ipcs_solve_counter = 0
 
 ensure_clean_dir(results_root)
@@ -1159,7 +1617,7 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path)
+initialize_optimization_log(log_path, include_ipcs_residuals=True)
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -1264,7 +1722,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # Final flow solve with the updated turbulent viscosity.
         solver_log("    [Final flow] IPCS with updated turbulent viscosity")
-        solve_forward_with_recovery("stage{:02d}_iter{:03d}_final".format(
+        final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward_with_recovery("stage{:02d}_iter{:03d}_final".format(
             stage_idx + 1, inner_count,
         ))
 
@@ -1354,6 +1812,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
+            du_ipcs=final_flow_du_ipcs,
+            dp_ipcs=final_flow_dp_ipcs,
         )
 
         constraint_status_text = ""

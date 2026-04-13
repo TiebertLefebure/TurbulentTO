@@ -104,12 +104,12 @@ def create_design_mesh():
 # Flow settings
 # -------------------------------------------------------------------
 RHO_FLUID_VALUE = 1.0
-MU_FLUID_VALUE = 5.7e-4
+MU_FLUID_VALUE = 5.7e-2
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
 
 # ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_BULK_INLET * H * RHO_FLUID_VALUE / MU_FLUID_VALUE = 350
+# Reynolds number: Re = U_BULK_INLET * H * RHO_FLUID_VALUE / MU_FLUID_VALUE = 3.5
 # ----------------------------------------------------------------------------------------------
 
 
@@ -135,7 +135,7 @@ SA_WALL_G_FLOOR = 1.0e-8
 # Topology optimization settings
 # -------------------------------------------------------------------
 VOL_FRAC = 0.43
-INITIAL_DENSITY_VALUE = 0.43
+INITIAL_DENSITY_VALUE = 1.0
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -158,9 +158,9 @@ NUT_RELAXATION_FACTOR = 0.35
 
 FORWARD_IPCS_DT = 2.0e-4
 FORWARD_IPCS_MAX_ITERS = 500
-FORWARD_IPCS_RTOL = 3.0e-4
+FORWARD_IPCS_VELOCITY_RTOL = 3.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_U_RELAXATION = 0.25
+FORWARD_IPCS_VEL_RELAXATION = 0.25
 FORWARD_IPCS_P_RELAXATION = 0.10
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
@@ -186,7 +186,7 @@ FILTER_RADIUS_IN_CELLS = 1.0
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
-SAVE_IPCS_RESIDUAL_PLOTS = True
+SAVE_IPCS_RESIDUAL_PLOTS = False
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)

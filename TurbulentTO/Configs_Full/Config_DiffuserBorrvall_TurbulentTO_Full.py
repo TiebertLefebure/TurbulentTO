@@ -39,13 +39,13 @@ OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-4
+MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
 
 # ------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 10,000
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,000
 # ------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
@@ -99,6 +99,7 @@ OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME_FULL = "Results_Full/Results_DiffuserBorrvall_TurbulentTO_Full"
+RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_DiffuserBorrvall_TurbulentTO_FullWithG"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

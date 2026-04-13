@@ -37,13 +37,13 @@ OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
 # Flow settings
-MU_FLUID_VALUE = 1.0e-3
+MU_FLUID_VALUE = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
 
 # ------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,000
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1
 # ------------------------------------------------------------------------------------
 
 # Spalart-Allmaras settings
@@ -68,20 +68,19 @@ SA_WALL_G_FLOOR = 1.0e-8
 
 # Topology optimization settings
 VOL_FRAC = 0.50
-MAX_INNER_ITERATIONS = 80
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-# Keep the Brinkman penalization fixed and sharpen only the density projection.
-# The diffuser needs a conservative continuation here because the frozen-SA
-# gradient is only approximate, and large early MMA moves tended to push the
-# design uphill while growing inlet artefacts.
-Q_PENAL_SCHEDULE = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.01, 0.005]
-BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+# Keep the first stages gray-friendly while the frozen-SA iterate settles, then
+# raise q and beta once the topology is formed so the projected field does not
+# stall with broad intermediate densities.
+Q_PENAL_SCHEDULE = [0.1, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 3.0]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
+BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
 SNES_LINEAR_SOLVER = "mumps"
-FROZEN_PICARD_STEPS = 2
+FROZEN_PICARD_STEPS = 1
 NUT_RELAXATION_FACTOR = 0.5
 
 # IPCS forward solver parameters:
@@ -89,9 +88,9 @@ NUT_RELAXATION_FACTOR = 0.5
 #   explicitly so the case configuration is self-contained.
 FORWARD_IPCS_DT = 2.0e-4
 FORWARD_IPCS_MAX_ITERS = 200
-FORWARD_IPCS_RTOL = 1.0e-3
+FORWARD_IPCS_VELOCITY_RTOL = 1.0e-3
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-2
-FORWARD_IPCS_U_RELAXATION = 0.5
+FORWARD_IPCS_VEL_RELAXATION = 0.5
 FORWARD_IPCS_P_RELAXATION = 0.2
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"

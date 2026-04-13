@@ -83,12 +83,12 @@ TOL = BOUNDARY_TOL
 # cross-section-averaged inlet velocity still matches the paper value Ub.
 # For a 2D parabola, U_bulk = (2/3) * U_max.
 RHO_FLUID_VALUE = 1.0
-MU_FLUID_VALUE = 4.0e-3
+MU_FLUID_VALUE = 4.0e-5
 U_BULK_INLET = 2.0
 U_MAX_INLET = 1.5 * U_BULK_INLET
 
 # ---------------------------------------------------------------------------------------------------
-# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 50
+# Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5000
 # ---------------------------------------------------------------------------------------------------
 
 # Treat the passive U-bend baffle as a strong imposed solid region without
@@ -150,9 +150,9 @@ NUT_RELAXATION_FACTOR = 0.35
 
 FORWARD_IPCS_DT = 2.0e-4
 FORWARD_IPCS_MAX_ITERS = 400
-FORWARD_IPCS_RTOL = 2.0e-4
+FORWARD_IPCS_VELOCITY_RTOL = 2.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_U_RELAXATION = 0.20
+FORWARD_IPCS_VEL_RELAXATION = 0.20
 FORWARD_IPCS_P_RELAXATION = 0.10
 FORWARD_IPCS_VEL_SOLVER = "mumps"
 FORWARD_IPCS_P_SOLVER = "mumps"
@@ -176,7 +176,7 @@ FILTER_RADIUS_IN_CELLS = 2.0
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
-SAVE_IPCS_RESIDUAL_PLOTS = True
+SAVE_IPCS_RESIDUAL_PLOTS = False
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (LEFT_BLOCK_X_MIN, OUTLET_Y_MIN)
