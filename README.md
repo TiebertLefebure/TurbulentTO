@@ -1,61 +1,26 @@
-# TopologyOptimization 
+## TurbulentTO: Topology Optimization for Turbulent Flows
 
-Laminar & Turbulent Topology Optimization
+**TurbulentTO** is a custom finite-element CFD and topology optimization framework built in [FEniCS](https://fenicsproject.org/). It is designed to optimize fluid manifolds in the turbulent regime to minimize pressure drop. It utilizes a highly stabilized **Spalart-Allmaras (SA) one-equation turbulence model** coupled with a continuous adjoint sensitivity solver.
 
-# --------------------------------------------------------------------------------------------------------------------- #
-### Turbulent Topology Optimization uses the "frozen turbulence" assumption and the Spalart-Allmaras turbulence model ###
-# --------------------------------------------------------------------------------------------------------------------- #
+## Repository Structure
 
+* **`TurbulenceModels/`**: The standalone Spalart-Allmaras fluid dynamics engine. Includes the IPCS fractional-step solver, SUPG stabilization, and Yoon's PDE-based Eikonal wall-distance solver.
+* **`FluidTO/`**: The topology optimization architecture. Includes the continuous adjoint solver (via the Frozen Turbulence assumption), Brinkman penalization (Fictitious Domain), Helmholtz density filtering, and MMA optimizer integration.
 
-Paper: 
-Borrvall 2003 Topology optimization of fluids in Stokes flow.pdf
+## Key Features
 
+* **Wall-Resolved Turbulence:** Integrates through the viscous sublayer ($y^+ \approx 1$) without empirical wall functions, ensuring stability as boundaries evolve.
+* **PDE-Based Wall Distance:** Replaces non-differentiable geometric searches with a relaxed Eikonal equation for stable adjoint derivation.
+* **Rigorous Verification:** The SA fluid solver is quantitatively verified against **Ansys Fluent** (Validation Case VMFL048) for predicting flow separation in $De \approx 10,000$ curvature.
 
-1. Borrvall, 2003: Diffuser case -> Laminar 
+## Dependencies
+* **FEniCS** (dolfin, UFL)
+* **Gmsh** (Meshing)
+* **SciPy / NumPy / Matplotlib**
+* **MPI4Py** (Parallel execution)
 
-- DiffuserBorrvallTO.py (original KU Leuven FEniCS code)
-- mma.py
-
-`python3 DiffuserBorrvallTO.py`
-
-
-
-
-2. Borrvall, 2003: Pipe Bend case -> Laminar & Turbulent
-
-Laminar:
-- Config_PipeBendBorrvall_LaminarTO.py
-- Borrvall_LaminarTO.py
-- mma.py
-
-`python3 Borrvall_LaminarTO.py --config Config_PipeBendBorrvall_LaminarTO`
-
-Turbulent:
-- Config_PipeBendBorrvall_TurbulentTO.py
-- Borrvall_TurbulentTO.py
-- TurbulenceModel_SpalartAllmaras_TO.py
-- mma.py
-
-`python3 Borrvall_TurbulentTO.py --config Config_PipeBendBorrvall_TurbulentTO`
-
-
-
-
-3. Borrvall, 2003: Double Pipe case (wide domain, delta = 1.5) -> Laminar & Turbulent
-
-Laminar:
-- Config_DoublePipeBorrvall_LaminarTO.py
-- Borrvall_LaminarTO.py
-- mma.py
-
-`python3 Borrvall_LaminarTO.py --config Config_DoublePipeBorrvall_LaminarTO`
-
-Turbulent:
-- Config_DoublePipeBorrvall_TurbulentTO.py
-- Borrvall_TurbulentTO.py
-- mma.py
-
-`python3 Borrvall_TurbulentTO.py --config Config_DoublePipeBorrvall_TurbulentTO`
+## Academic Use
+Developed as part of a Master's thesis on thermal-fluid topology optimization. Please cite this repository if you utilize this codebase or the modified Eikonal formulations in your research.
 
 
 
