@@ -197,7 +197,7 @@ class SpalartAllmarasTransient(SpalartAllmarasGeneral):
         tau = h / (2.0 * u_mag)
         supg_factor = Constant(float(self._sa_options.get('SUPG_FACTOR', 1.0)))
 
-        # Residual used in SUPG stabilization (same style as k-epsilon model)
+        # Residual used in SUPG stabilization
         res_nt = (self._nu_tilde - self._nu_tilde0) / self._dt \
                + dot(external_u1, nabla_grad(self._nu_tilde)) \
                + self._react_nt * self._nu_tilde - self._source_nt

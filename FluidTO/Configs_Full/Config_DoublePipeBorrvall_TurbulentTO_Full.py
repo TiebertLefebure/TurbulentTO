@@ -1,0 +1,276 @@
+import os
+from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from Utilities_SharedTO import load_mesh_from_xdmf
+
+
+# ===================================================================
+# Configuration: Borrvall Double Pipe - Turbulent Full (SA, Re = 5050)
+#
+# Two symmetric ports on the left and right boundaries.
+# This config targets the monolithic full-state solver (u, p, nu_tilde),
+# while still keeping the wall-distance field external to the state.
+# ===================================================================
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(THIS_DIR)
+
+# Mesh files
+# Generate via: cd Meshes/DoublePipeBorrvall && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
+mesh_files = {
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/DoublePipeBorrvall/mesh.xdmf"),
+}
+
+
+def create_design_mesh():
+    return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
+
+
+# Domain and mesh
+DOMAIN_X_MIN = 0.0
+DOMAIN_Y_MIN = 0.0
+DOMAIN_X_MAX = 1.5
+DOMAIN_Y_MAX = 1.0
+NX = 150  # reference resolution used to generate the Gmsh mesh
+NY = 100
+TOL = DOLFIN_EPS
+
+# Port layout on left/right boundaries
+PORT_WIDTH = 1.0 / 6.0
+PORT_TOP_MARGIN = 1.0 / 4.0
+PORT_BOTTOM_MARGIN = 1.0 / 4.0
+
+TOP_PORT_Y_MAX = DOMAIN_Y_MAX - PORT_TOP_MARGIN
+TOP_PORT_Y_MIN = TOP_PORT_Y_MAX - PORT_WIDTH
+BOTTOM_PORT_Y_MIN = PORT_BOTTOM_MARGIN
+BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_WIDTH
+
+INLET_SEGMENTS = [
+    (TOP_PORT_Y_MIN, TOP_PORT_Y_MAX),
+    (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
+]
+OUTLET_SEGMENTS = [
+    (TOP_PORT_Y_MIN, TOP_PORT_Y_MAX),
+    (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
+]
+
+# Flow settings
+MU_FLUID_VALUE = 1.0e-4
+RHO_FLUID_VALUE = 1.0
+U_MAX_INLETS = [1.0, 1.0]
+U_MAX_OUTLETS = [1.0, 1.0]
+
+# ----------------------------------------------------------------------------------------------
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
+# ----------------------------------------------------------------------------------------------
+# 03/04/2026: working up to Re = 2500 with penalized_g
+
+
+# Spalart-Allmaras settings
+# Match the frozen double-pipe inlet seeding; the weaker nu_t / nu_lam = 1
+# start was an outlier among the high-Re cases and made the monolithic solve
+# much harder to globalize from the first continuation step.
+SA_MUT_RATIO = 5.0
+SA_DISTANCE_RELAXATION = 0.01
+SA_SMOOTH_ABS_EPS = 1.0e-12
+SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
+SA_NU_TILDE_FLOOR = 1.0e-12
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_PENALTY_N = 3.0
+
+# Wall-distance model selector:
+#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
+#   "penalized_g" -> solve the penalized reciprocal-distance model
+#   "geometric"   -> use the plain geometric distance field only
+SA_WALL_MODEL = "penalized_g"
+SA_WALL_DENSITY_SOURCE = "design"
+SA_WALL_Y_RELAXATION = 0.10
+SA_WALL_EIKONAL_EPS = 1.0e-12
+SA_WALL_PENALTY_ALPHA = 1.0e2
+SA_WALL_PENALTY_N = 3.0
+# Only treat near-solid cells as artificial walls; the initial rho=1/3 gray
+# field should not trigger wall penalties across the whole domain.
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 1.0e-6 * PORT_WIDTH
+SA_WALL_NEWTON_MAX_ITERS = 300
+SA_WALL_NEWTON_RELAXATION = 0.1
+SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
+SA_WALL_INITIAL_SOLID_GUESS = 1.0
+SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
+
+# Topology optimization settings
+VOL_FRAC = 1.0 / 3.0
+INITIAL_DENSITY_VALUE = 1.0 / 3.0
+MAX_INNER_ITERATIONS_SCHEDULE = [35, 80, 100, 120, 120, 120, 100, 100]
+OBJECTIVE_CONVERGENCE_TOL = 5e-5
+OBJECTIVE_STREAK_TO_STOP = 5
+
+Q_PENAL_SCHEDULE = [0.05, 0.1, 0.1, 0.2, 0.5, 1.0, 1.0, 1.0]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
+BETA_PROJ_SCHEDULE = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+
+# Monolithic full-state solver settings
+SNES_LINEAR_SOLVER = "mumps"
+FULL_STATE_LINEAR_SOLVER = "mumps"
+FULL_STATE_SNES_METHOD = "newtontr"
+FULL_STATE_SNES_LINE_SEARCH = "bt"
+FULL_STATE_SNES_RTOL = 1.0e-6
+FULL_STATE_SNES_ATOL = 1.0e-8
+FULL_STATE_SNES_MAX_ITERS = 120
+FULL_STATE_INITIAL_SA_SWEEPS = 4
+FULL_STATE_INITIAL_SA_RELAXATION = 0.5
+# Ramp the turbulent-viscosity feedback into the momentum equations instead
+# of forcing the first monolithic Newton solve to handle the full coupling at
+# once from a Stokes/SA warm start.
+FULL_STATE_TURBULENCE_COUPLING_SCHEDULE = [
+    {"weight": 0.0, "max_iters": 220, "atol": 8.0e-4},
+    {"weight": 0.35, "max_iters": 180, "atol": 5.0e-4},
+    {"weight": 0.70, "max_iters": 180, "atol": 2.0e-4},
+    {"weight": 1.0},
+]
+FULL_STATE_SNES_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 220,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "current-iterate trust-region retry",
+        "method": "newtontr",
+        "max_iters": 250,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "Stokes rebuild line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 250,
+        "restart_with_stokes": True,
+    },
+]
+
+BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
+ETA_I = 0.50
+QUADRATURE_DEGREE = 6
+FILTER_RADIUS_IN_CELLS = 2.0
+
+OUTLET_BC_TYPE = "pressure"
+OUTLET_PRESSURE_VALUE = 0.0
+
+ENABLE_PRESSURE_PIN = True
+PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
+RESULTS_ROOT_NAME_FULL = "Results_Full/Results_DoublePipeBorrvall_TurbulentTO_Full"
+RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_DoublePipeBorrvall_TurbulentTO_FullWithG"
+
+MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
+
+
+def between(value, limits, eps=DOLFIN_EPS):
+    return (limits[0] - eps <= value) and (value <= limits[1] + eps)
+
+
+class VerticalPortBoundary(SubDomain):
+    def __init__(self, x_location, tol, y_min, y_max):
+        super().__init__()
+        self._x_location = x_location
+        self._tol = tol
+        self._y_min = y_min
+        self._y_max = y_max
+
+    def inside(self, x, on_boundary):
+        return on_boundary and near(x[0], self._x_location, self._tol) and between(
+            x[1], (self._y_min, self._y_max), self._tol
+        )
+
+
+class WallsBoundary(SubDomain):
+    def __init__(self, x_min, x_max, y_min, y_max, tol, inlet_segments, outlet_segments):
+        super().__init__()
+        self._x_min = x_min
+        self._x_max = x_max
+        self._y_min = y_min
+        self._y_max = y_max
+        self._tol = tol
+        self._inlet_segments = inlet_segments
+        self._outlet_segments = outlet_segments
+
+    def _inside_any_segment(self, y_value, segments):
+        return any(between(y_value, segment, self._tol) for segment in segments)
+
+    def inside(self, x, on_boundary):
+        left_wall_outside_inlets = near(x[0], self._x_min, self._tol) and not self._inside_any_segment(
+            x[1], self._inlet_segments
+        )
+        right_wall_outside_outlets = near(x[0], self._x_max, self._tol) and not self._inside_any_segment(
+            x[1], self._outlet_segments
+        )
+        top_wall = near(x[1], self._y_max, self._tol)
+        bottom_wall = near(x[1], self._y_min, self._tol)
+        return on_boundary and (
+            left_wall_outside_inlets or right_wall_outside_outlets or top_wall or bottom_wall
+        )
+
+
+def _validate_port_configuration():
+    inlet_markers = list(MARK["inlet"])
+    outlet_markers = list(MARK["outlet"])
+    if len(inlet_markers) != len(INLET_SEGMENTS):
+        raise ValueError("MARK['inlet'] length must match INLET_SEGMENTS length.")
+    if len(outlet_markers) != len(OUTLET_SEGMENTS):
+        raise ValueError("MARK['outlet'] length must match OUTLET_SEGMENTS length.")
+    if len(U_MAX_INLETS) != len(INLET_SEGMENTS):
+        raise ValueError("U_MAX_INLETS length must match INLET_SEGMENTS length.")
+    if len(U_MAX_OUTLETS) != len(OUTLET_SEGMENTS):
+        raise ValueError("U_MAX_OUTLETS length must match OUTLET_SEGMENTS length.")
+
+
+_validate_port_configuration()
+
+
+def mark_boundaries(mesh):
+    boundaries = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+    boundaries.set_all(MARK["generic"])
+
+    WallsBoundary(
+        DOMAIN_X_MIN,
+        DOMAIN_X_MAX,
+        DOMAIN_Y_MIN,
+        DOMAIN_Y_MAX,
+        TOL,
+        INLET_SEGMENTS,
+        OUTLET_SEGMENTS,
+    ).mark(boundaries, MARK["walls"])
+
+    for marker, segment in zip(MARK["inlet"], INLET_SEGMENTS):
+        VerticalPortBoundary(DOMAIN_X_MIN, TOL, segment[0], segment[1]).mark(boundaries, marker)
+    for marker, segment in zip(MARK["outlet"], OUTLET_SEGMENTS):
+        VerticalPortBoundary(DOMAIN_X_MAX, TOL, segment[0], segment[1]).mark(boundaries, marker)
+    return boundaries
+
+
+def _build_horizontal_profile(u_max, y_min, y_max):
+    y_center = 0.5 * (y_min + y_max)
+    width = y_max - y_min
+    return Expression(
+        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
+        degree=2,
+        u_max=u_max,
+        y_c=y_center,
+        width=width,
+    )
+
+
+def build_velocity_profile_sets():
+    inlet_profiles = [
+        _build_horizontal_profile(u_max, segment[0], segment[1])
+        for u_max, segment in zip(U_MAX_INLETS, INLET_SEGMENTS)
+    ]
+    if OUTLET_BC_TYPE == "pressure":
+        return inlet_profiles, []
+
+    outlet_profiles = [
+        _build_horizontal_profile(u_max, segment[0], segment[1])
+        for u_max, segment in zip(U_MAX_OUTLETS, OUTLET_SEGMENTS)
+    ]
+    return inlet_profiles, outlet_profiles
