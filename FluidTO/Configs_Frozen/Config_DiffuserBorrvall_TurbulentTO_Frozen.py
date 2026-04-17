@@ -1,18 +1,17 @@
 import os
-from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Diffuser - Turbulent (SA, Re = 1,000)
+# Configuration: Borrvall Diffuser - Turbulent Frozen (SA, Re = 1,000)
 #
 # One inlet on the left wall and one outlet on the right wall.
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/DiffuserBorrvall && python3 diffuser_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh.xdmf'),
@@ -23,9 +22,8 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# Domain and mesh
+# Geometry and reference meshing parameters for the design box.
 L = 1.0
-N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = L
@@ -36,37 +34,29 @@ TOL = DOLFIN_EPS
 OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
-# Flow settings
+# Flow and Brinkman parameters for the frozen forward solve.
 MU_FLUID_VALUE = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
 
-# ------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1
-# ------------------------------------------------------------------------------------
-
-# Spalart-Allmaras settings
-# Use the same ratio-based inlet workflow as the other turbulent Borrvall cases.
-# This tiny ratio preserves the previous effective inlet level from
-# SA_NU_TILDE_INLET = 1.0e-4 with nu_lam = MU_FLUID_VALUE / RHO_FLUID_VALUE = 1.0e-3.
+# SA transport parameters for the frozen turbulence update.
+# Use a very small inlet turbulent-viscosity ratio so this case starts from a weak-turbulence state.
 SA_MUT_RATIO = 2.794e-7
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
-SA_USE_PENALIZED_WALL_DISTANCE = True
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
+# Relaxed wall equation parameters for the external reciprocal distance solve.
+SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 
-# Topology optimization settings
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.50
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
@@ -79,9 +69,10 @@ MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
-SNES_LINEAR_SOLVER = "mumps"
-FROZEN_PICARD_STEPS = 1
-NUT_RELAXATION_FACTOR = 0.5
+# Frozen flow/turbulence coupling and IPCS solve parameters.
+LINEAR_SOLVER = "mumps"
+PICARD_STEPS = 1
+TURBULENCE_RELAXATION = 0.5
 
 # IPCS forward solver parameters:
 #   These match the shared defaults in TurbulentTO_Frozen.py and are written here
@@ -102,19 +93,17 @@ FORWARD_IPCS_P_SOLVER = "cg"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 25
 
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
 FILTER_RADIUS_IN_CELLS = 2.0
 
-# Outlet BC toggle for the turbulent diffuser case:
-# Change this to "pressure" to impose p = OUTLET_PRESSURE_VALUE on the outlet opening.
-# Keep "velocity" to impose the outlet parabolic velocity profile built below.
+# Use pressure outlets here; switch to "velocity" only when imposing the outlet profile below.
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0  # Used only when OUTLET_BC_TYPE == "pressure".
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Frozen/Results_DiffuserBorrvall_TurbulentTO_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}

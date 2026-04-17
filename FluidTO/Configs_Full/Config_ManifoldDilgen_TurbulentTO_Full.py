@@ -14,7 +14,7 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Dilgen 2018 2D flow manifold - Turbulent Full
+# Configuration: Dilgen 2018 2D Flow Manifold - Turbulent Full
 #
 # Paper data referenced by the corresponding frozen-SA case:
 #   Re = 3500, Ub = 2.0 m/s, H = 0.1 m, nu = 5.7e-5 m^2/s
@@ -25,16 +25,15 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 # Implementation choice for this repo:
 #   keep the current SA-based manifold setup from the frozen case,
 #   including geometry, passive fluid/solid regions, pressure outlets,
-#   and outlet mass-flow constraints, but target the monolithic full
-#   state solver (u, p, nu_tilde) while keeping the wall-distance field
-#   external to the state.
+#   and outlet mass-flow constraints, but target the Full adjoint:
+#   the reciprocal wall-distance G enters the monolithic primal state and
+#   the adjoint system together with (u, p, nu_tilde).
 # ===================================================================
 
 # -------------------------------------------------------------------
 # Geometry from Fig. 15 of Dilgen et al. 2018
 # -------------------------------------------------------------------
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 H = 0.1
 
@@ -50,7 +49,6 @@ INLET_BLOCK_X_MIN = -2.0 * H
 INLET_BLOCK_X_MAX = DESIGN_X_MIN
 INLET_BLOCK_Y_MIN = 6.0 * H
 INLET_BLOCK_Y_MAX = 10.0 * H
-INLET_HEIGHT = 2.0 * H
 INLET_Y_MIN = 7.0 * H
 INLET_Y_MAX = 9.0 * H
 
@@ -91,7 +89,7 @@ TOL = BOUNDARY_TOL
 NX = 100
 NY = 100
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/ManifoldDilgen && python3 manifold_dilgen_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/ManifoldDilgen/mesh.xdmf'),
@@ -102,9 +100,7 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# -------------------------------------------------------------------
-# Flow settings
-# -------------------------------------------------------------------
+# Flow and Brinkman parameters for the monolithic primal solve.
 RHO_FLUID_VALUE = 1.0
 MU_FLUID_VALUE = 5.7e-2
 U_BULK_INLET = 2.0
@@ -117,11 +113,8 @@ ALPHA_SOLID = 1.0e4
 # ----------------------------------------------------------------------------------------------
 
 
-# -------------------------------------------------------------------
-# Spalart-Allmaras turbulence model settings
-# -------------------------------------------------------------------
+# SA transport parameters for the monolithic primal state.
 SA_MUT_RATIO = 5.0
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DESIGN_LENGTH
 SA_NU_TILDE_FLOOR = 1.0e-12
@@ -129,28 +122,17 @@ SA_NU_TILDE_PENALTY_ALPHA = 2.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
 
-# Wall-distance model selector:
-#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
-#   "penalized_g" -> solve the penalized reciprocal-distance model
-#   "geometric"   -> use the plain geometric distance field only
-SA_WALL_MODEL = "penalized_g"
+# Relaxed wall equation parameters for the coupled reciprocal distance state.
 SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_Y_RELAXATION = SA_DISTANCE_RELAXATION
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
-SA_WALL_EIKONAL_EPS = 1.0e-12
+SA_WALL_SIGMA = 0.01
+SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 2.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_G_FLOOR = 1.0e-8
 SA_WALL_DISTANCE_FLOOR = 1.0e-6 * H
-SA_WALL_NEWTON_MAX_ITERS = 300
-SA_WALL_NEWTON_RELAXATION = 0.1
-SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
-SA_WALL_INITIAL_SOLID_GUESS = 1.0
-SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 
-# -------------------------------------------------------------------
-# Topology optimization settings
-# -------------------------------------------------------------------
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.43
 INITIAL_DENSITY_VALUE = 1.0
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
@@ -169,24 +151,17 @@ MASS_FLOW_TARGET_FRACTIONS = [0.3, 0.4, 0.3]
 MASS_FLOW_CONSTRAINT_MODE = 'equality'
 MASS_FLOW_CONSTRAINT_TOLERANCE = 1.0e-4
 
-# -------------------------------------------------------------------
-# Monolithic full-state solver settings
-# -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = 'mumps'
-FULL_STATE_LINEAR_SOLVER = 'mumps'
-FULL_STATE_SNES_METHOD = 'newtontr'
-FULL_STATE_SNES_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_RTOL = 1.0e-4
-FULL_STATE_SNES_ATOL = 3.0e-5
-FULL_STATE_SNES_MAX_ITERS = 150
-FULL_STATE_RESTART_WITH_STOKES = False
-FULL_STATE_SNES_FALLBACK_METHOD = 'newtonls'
-FULL_STATE_SNES_FALLBACK_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_FALLBACK_MAX_ITERS = 250
+# Full primal-state solve parameters.
+LINEAR_SOLVER = 'mumps'
+STATE_SOLVE_METHOD = 'newtontr'
+STATE_RTOL = 1.0e-4
+STATE_ATOL = 3.0e-5
+STATE_MAX_ITERS = 150
+STATE_RESTART_WITH_STOKES = False
+STATE_FALLBACK_METHOD = 'newtonls'
+STATE_FALLBACK_MAX_ITERS = 250
 
-# -------------------------------------------------------------------
-# Projection, filter, and output
-# -------------------------------------------------------------------
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -199,9 +174,7 @@ OUTLET_BC_TYPE = 'pressure'
 OUTLET_PRESSURE_VALUE = 0.0
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_ManifoldDilgen_TurbulentTO_Full'
-RESULTS_ROOT_NAME_FULL_WITH_G = 'Results_FullWithG/Results_ManifoldDilgen_TurbulentTO_FullWithG'
+RESULTS_ROOT_NAME = 'Results_Full/Results_ManifoldDilgen_TurbulentTO_Full'
 
 MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': (3, 4, 5)}
 

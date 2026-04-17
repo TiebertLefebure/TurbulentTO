@@ -1,20 +1,21 @@
 import os
-from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+import numpy as np
+from dolfin import DOLFIN_EPS, Expression, Function, MeshFunction, MPI, SubDomain, cells, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
-# ===================================================================
-# Configuration: Borrvall Double Pipe - Turbulent Full (SA, Re = 5050)
+# =======================================================================
+# Configuration: Borrvall Double Pipe - Turbulent Full (SA, Re = 1,660)
 #
 # Two symmetric ports on the left and right boundaries.
-# This config targets the monolithic full-state solver (u, p, nu_tilde),
-# while still keeping the wall-distance field external to the state.
-# ===================================================================
+# This config targets the Full adjoint: the reciprocal wall-distance G enters
+# the monolithic primal state and the adjoint system together with
+# (u, p, nu_tilde).
+# =======================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/DoublePipeBorrvall && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/DoublePipeBorrvall/mesh.xdmf"),
@@ -25,7 +26,7 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
 
 
-# Domain and mesh
+# Geometry and reference meshing parameters for the two-port design box.
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = 1.5
@@ -53,7 +54,13 @@ OUTLET_SEGMENTS = [
     (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
 ]
 
-# Flow settings
+# Optional passive inlet strip that can pin a few x-cells to fluid at the
+# inlet windows and to solid elsewhere in the same strip.
+ENABLE_INLET_PASSIVE_STRIP = False
+INLET_PASSIVE_STRIP_CELLS = 3
+INLET_PASSIVE_STRIP_LENGTH = INLET_PASSIVE_STRIP_CELLS * ((DOMAIN_X_MAX - DOMAIN_X_MIN) / NX)
+
+# Flow and Brinkman parameters for the monolithic primal solve.
 MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
@@ -62,42 +69,30 @@ U_MAX_OUTLETS = [1.0, 1.0]
 # ----------------------------------------------------------------------------------------------
 # Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
 # ----------------------------------------------------------------------------------------------
-# 03/04/2026: working up to Re = 2500 with penalized_g
 
 
-# Spalart-Allmaras settings
-# Match the frozen double-pipe inlet seeding; the weaker nu_t / nu_lam = 1
-# start was an outlier among the high-Re cases and made the monolithic solve
-# much harder to globalize from the first continuation step.
+# SA transport parameters for the monolithic primal state.
 SA_MUT_RATIO = 5.0
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Wall-distance model selector:
-#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
-#   "penalized_g" -> solve the penalized reciprocal-distance model
-#   "geometric"   -> use the plain geometric distance field only
-SA_WALL_MODEL = "penalized_g"
+# Relaxed wall equation parameters for the coupled reciprocal distance state.
 SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_Y_RELAXATION = 0.10
-SA_WALL_EIKONAL_EPS = 1.0e-12
-SA_WALL_PENALTY_ALPHA = 1.0e2
+SA_WALL_SIGMA = 0.01
+SA_WALL_G0 = 20.0
+SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
+SA_WALL_G_FLOOR = 1.0e-8
+
 # Only treat near-solid cells as artificial walls; the initial rho=1/3 gray
 # field should not trigger wall penalties across the whole domain.
 SA_WALL_SOLID_THRESHOLD = 0.10
 SA_WALL_DISTANCE_FLOOR = 1.0e-6 * PORT_WIDTH
-SA_WALL_NEWTON_MAX_ITERS = 300
-SA_WALL_NEWTON_RELAXATION = 0.1
-SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
-SA_WALL_INITIAL_SOLID_GUESS = 1.0
-SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 
-# Topology optimization settings
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 1.0 / 3.0
 INITIAL_DENSITY_VALUE = 1.0 / 3.0
 MAX_INNER_ITERATIONS_SCHEDULE = [35, 80, 100, 120, 120, 120, 100, 100]
@@ -108,37 +103,32 @@ Q_PENAL_SCHEDULE = [0.05, 0.1, 0.1, 0.2, 0.5, 1.0, 1.0, 1.0]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
 BETA_PROJ_SCHEDULE = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
 
-# Monolithic full-state solver settings
-SNES_LINEAR_SOLVER = "mumps"
-FULL_STATE_LINEAR_SOLVER = "mumps"
-FULL_STATE_SNES_METHOD = "newtontr"
-FULL_STATE_SNES_LINE_SEARCH = "bt"
-FULL_STATE_SNES_RTOL = 1.0e-6
-FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 120
-FULL_STATE_INITIAL_SA_SWEEPS = 4
-FULL_STATE_INITIAL_SA_RELAXATION = 0.5
-# Ramp the turbulent-viscosity feedback into the momentum equations instead
-# of forcing the first monolithic Newton solve to handle the full coupling at
-# once from a Stokes/SA warm start.
-FULL_STATE_TURBULENCE_COUPLING_SCHEDULE = [
+# Full primal-state solve parameters.
+LINEAR_SOLVER = "mumps"
+STATE_SOLVE_METHOD = "newtontr"
+STATE_RTOL = 1.0e-6
+STATE_ATOL = 1.0e-8
+STATE_MAX_ITERS = 120
+STATE_INITIAL_SA_SWEEPS = 4
+# Ramp the turbulent-viscosity feedback into the momentum equations gradually
+# so the first monolithic solve does not jump straight from Stokes/SA startup
+# to a strongly coupled (u, p, nu_tilde, G) state.
+STATE_TURBULENCE_COUPLING_SCHEDULE = [
     {"weight": 0.0, "max_iters": 220, "atol": 8.0e-4},
-    {"weight": 0.35, "max_iters": 180, "atol": 5.0e-4},
-    {"weight": 0.70, "max_iters": 180, "atol": 2.0e-4},
-    {"weight": 1.0},
+    {"weight": 0.20, "max_iters": 180, "atol": 6.0e-4},
+    {"weight": 0.45, "max_iters": 180, "atol": 4.0e-4},
+    {"weight": 0.65, "max_iters": 200, "atol": 3.0e-4},
+    {"weight": 0.82, "max_iters": 220, "atol": 2.0e-4},
+    {"weight": 1.0, "max_iters": 250, "atol": 1.0e-4},
 ]
-FULL_STATE_SNES_RECOVERY_ATTEMPTS = [
+# Keep one alternate-globalization retry from the current iterate, then one
+# clean Stokes rebuild retry with the same safer line-search globalization.
+STATE_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",
         "method": "newtonls",
         "line_search": "bt",
         "max_iters": 220,
-        "restart_with_stokes": False,
-    },
-    {
-        "label": "current-iterate trust-region retry",
-        "method": "newtontr",
-        "max_iters": 250,
         "restart_with_stokes": False,
     },
     {
@@ -150,6 +140,7 @@ FULL_STATE_SNES_RECOVERY_ATTEMPTS = [
     },
 ]
 
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -158,10 +149,9 @@ FILTER_RADIUS_IN_CELLS = 2.0
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 
-ENABLE_PRESSURE_PIN = True
+ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME_FULL = "Results_Full/Results_DoublePipeBorrvall_TurbulentTO_Full"
-RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_DoublePipeBorrvall_TurbulentTO_FullWithG"
+RESULTS_ROOT_NAME = "Results_Full/Results_DoublePipeBorrvall_TurbulentTO_Full"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 
@@ -274,3 +264,60 @@ def build_velocity_profile_sets():
         for u_max, segment in zip(U_MAX_OUTLETS, OUTLET_SEGMENTS)
     ]
     return inlet_profiles, outlet_profiles
+
+
+def _inside_any_segment(y_value, segments, tol=TOL):
+    return any(between(y_value, segment, tol) for segment in segments)
+
+
+def build_density_bounds(mesh, density_space):
+    if not ENABLE_INLET_PASSIVE_STRIP:
+        return 0.0, 1.0
+
+    lower = Function(density_space)
+    upper = Function(density_space)
+
+    lower_values = np.zeros(density_space.dim())
+    upper_values = np.ones(density_space.dim())
+    dofmap = density_space.dofmap()
+    inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
+
+    for cell in cells(mesh):
+        dof = dofmap.cell_dofs(cell.index())[0]
+        midpoint = cell.midpoint()
+        x_coord = midpoint.x()
+        y_coord = midpoint.y()
+
+        if DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
+            if _inside_any_segment(y_coord, INLET_SEGMENTS):
+                lower_values[dof] = 1.0
+                upper_values[dof] = 1.0
+            else:
+                lower_values[dof] = 0.0
+                upper_values[dof] = 0.0
+
+    lower.vector().set_local(lower_values)
+    lower.vector().apply("insert")
+    upper.vector().set_local(upper_values)
+    upper.vector().apply("insert")
+    return lower, upper
+
+
+def build_volume_region(mesh, density_space):
+    if not ENABLE_INLET_PASSIVE_STRIP:
+        return 1.0
+
+    volume_region = Function(density_space)
+    region_values = np.ones(density_space.dim())
+    dofmap = density_space.dofmap()
+    inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
+
+    for cell in cells(mesh):
+        dof = dofmap.cell_dofs(cell.index())[0]
+        x_coord = cell.midpoint().x()
+        if DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
+            region_values[dof] = 0.0
+
+    volume_region.vector().set_local(region_values)
+    volume_region.vector().apply("insert")
+    return volume_region

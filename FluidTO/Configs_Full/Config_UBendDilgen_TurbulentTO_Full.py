@@ -5,22 +5,21 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Dilgen 2018 U-bend - Turbulent Full
+# Configuration: Dilgen 2018 U-Bend - Turbulent Full
 #
 # Paper data used here:
 #   Ub = 2.0 m/s, H = 0.1 m, nu = 4.0e-5 m^2/s, Re = Ub * H / nu = 5000
 #
 # Implementation choice:
 #   Keep the existing Dilgen U-bend geometry, passive pads, and baffle
-#   treatment from the frozen-SA case, but target the monolithic full
-#   state solver (u, p, nu_tilde) while keeping the wall-distance field
-#   external to the state.
+#   treatment from the frozen-SA case, but target the Full adjoint:
+#   the reciprocal wall-distance G enters the monolithic primal state and
+#   the adjoint system together with (u, p, nu_tilde).
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/UBendDilgen && python3 ubend_dilgen_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/UBendDilgen/mesh.xdmf'),
@@ -75,9 +74,7 @@ DOMAIN_Y_MAX = DESIGN_Y_MAX
 BOUNDARY_TOL = 1.0e-6
 TOL = BOUNDARY_TOL
 
-# -------------------------------------------------------------------
-# Flow settings
-# -------------------------------------------------------------------
+# Flow and Brinkman parameters for the monolithic primal solve.
 # Keep the U-bend inlet aligned with the other benchmark cases for now:
 # use the standard parabolic velocity profile, but choose its peak so the
 # cross-section-averaged inlet velocity still matches the paper value Ub.
@@ -91,7 +88,6 @@ U_MAX_INLET = 1.5 * U_BULK_INLET
 # Reynolds number: Re_H = U_BULK_INLET * 0.5*PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 125
 # Defined as in Dilgen 2018
 # ---------------------------------------------------------------------------------------------------
-# Worked with Re = 50, penalized_g
 
 
 # Treat the passive U-bend baffle as a strong imposed solid region without
@@ -99,11 +95,8 @@ U_MAX_INLET = 1.5 * U_BULK_INLET
 ALPHA_SOLID = 1.0e3
 
 
-# -------------------------------------------------------------------
-# Spalart-Allmaras turbulence model settings
-# -------------------------------------------------------------------
+# SA transport parameters for the monolithic primal state.
 SA_MUT_RATIO = 0.5
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.20 * L
 SA_NU_TILDE_INITIAL = MU_FLUID_VALUE
@@ -111,27 +104,17 @@ SA_NU_TILDE_FLOOR = 1.0e-8
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e2
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Wall-distance model selector:
-#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
-#   "penalized_g" -> solve the penalized reciprocal-distance model
-#   "geometric"   -> use the plain geometric distance field only
-SA_WALL_MODEL = "penalized_g"
+# Relaxed wall equation parameters for the coupled reciprocal distance state.
 SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_Y_RELAXATION = 0.10
-SA_WALL_EIKONAL_EPS = 1.0e-12
+SA_WALL_SIGMA = 0.01
+SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 5.0e1
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_G_FLOOR = 1.0e-8
 SA_WALL_DISTANCE_FLOOR = 1.0e-4 * H
-SA_WALL_NEWTON_MAX_ITERS = 300
-SA_WALL_NEWTON_RELAXATION = 0.1
-SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
-SA_WALL_INITIAL_SOLID_GUESS = 1.0
-SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 
-# -------------------------------------------------------------------
-# Topology optimization settings
-# -------------------------------------------------------------------
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.30
 INITIAL_DENSITY_VALUE = 0.30
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 60, 60, 60, 60, 60, 60, 60]
@@ -144,25 +127,17 @@ Q_PENAL_SCHEDULE = [0.1, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.5]
 MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 
-# -------------------------------------------------------------------
-# Monolithic full-state solver settings
-# -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = 'mumps'
-FULL_STATE_LINEAR_SOLVER = 'mumps'
-FULL_STATE_SNES_METHOD = 'newtonls'
-FULL_STATE_SNES_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_RTOL = 1.0e-6
-FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 200
-FULL_STATE_RESTART_WITH_STOKES = True
-FULL_STATE_SNES_FALLBACK_METHOD = 'newtonls'
-FULL_STATE_SNES_FALLBACK_LINE_SEARCH = 'bt'
-FULL_STATE_SNES_FALLBACK_MAX_ITERS = 350
-FULL_STATE_TURBULENCE_COUPLING_SCHEDULE = [0.0, 0.25, 0.5, 1.0]
+# Full primal-state solve parameters.
+LINEAR_SOLVER = 'mumps'
+STATE_SOLVE_METHOD = 'newtonls'
+STATE_LINE_SEARCH = 'bt'
+STATE_RTOL = 1.0e-6
+STATE_ATOL = 1.0e-8
+STATE_MAX_ITERS = 200
+STATE_FALLBACK_MAX_ITERS = 350
+STATE_TURBULENCE_COUPLING_SCHEDULE = [0.0, 0.25, 0.5, 1.0]
 
-# -------------------------------------------------------------------
-# Projection, filter, and output
-# -------------------------------------------------------------------
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -175,9 +150,7 @@ OUTLET_BC_TYPE = 'pressure'
 OUTLET_PRESSURE_VALUE = 0.0
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (LEFT_BLOCK_X_MIN, OUTLET_Y_MIN)
-RESULTS_ROOT_NAME_FULL = 'Results_Full/Results_UBendDilgen_TurbulentTO_Full'
-RESULTS_ROOT_NAME_FULL_WITH_G = 'Results_FullWithG/Results_UBendDilgen_TurbulentTO_FullWithG'
+RESULTS_ROOT_NAME = 'Results_Full/Results_UBendDilgen_TurbulentTO_Full'
 
 MARK = {'generic': 0, 'walls': 1, 'inlet': 2, 'outlet': 3}
 
@@ -335,8 +308,8 @@ def _distance_to_baffle_boundary(x_value, y_value):
     return min(float(distance) for distance in distances)
 
 
-def build_wall_distance_field(space, mesh, boundaries, wall_markers, custom_dx):
-    # Exact geometric distance used only to initialize the direct-y wall-distance solve.
+def build_wall_distance_field(space, mesh, _boundaries, _wall_markers, _custom_dx):
+    # Exact geometric distance used to initialize the penalized-G wall-distance solve.
     wall_distance = Function(space)
     coords = np.asarray(space.tabulate_dof_coordinates(), dtype=float).reshape((-1, mesh.geometry().dim()))
     values = np.zeros(coords.shape[0], dtype=float)

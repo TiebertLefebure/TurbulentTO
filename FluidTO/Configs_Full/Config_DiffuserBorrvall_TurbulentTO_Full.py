@@ -1,5 +1,5 @@
 import os
-from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
@@ -7,14 +7,14 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 # Configuration: Borrvall Diffuser - Turbulent Full (SA, Re = 1,000)
 #
 # One inlet on the left wall and one outlet on the right wall.
-# This config targets the monolithic full-state solver (u, p, nu_tilde),
-# while still keeping the wall-distance field external to the state.
+# This config targets the Full adjoint: the reciprocal wall-distance G enters
+# the monolithic primal state and the adjoint system together with
+# (u, p, nu_tilde).
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/DiffuserBorrvall && python3 diffuser_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh.xdmf'),
@@ -25,9 +25,8 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# Domain and mesh
+# Geometry and reference meshing parameters for the design box.
 L = 1.0
-N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = L
@@ -38,7 +37,7 @@ TOL = DOLFIN_EPS
 OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
-# Flow settings
+# Flow and Brinkman parameters for the monolithic primal solve.
 MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
@@ -48,27 +47,25 @@ U_MAX_OUTLET = 3.0
 # Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,000
 # ------------------------------------------------------------------------------------
 
-# Spalart-Allmaras settings
+# SA transport parameters for the monolithic primal state.
 SA_MUT_RATIO = 2.794e-7
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Penalized reciprocal wall-distance equation (Yoon 2016 Eq. 25)
-SA_USE_PENALIZED_WALL_DISTANCE = True
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION
+# Relaxed wall equation parameters for the coupled reciprocal distance state.
+SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 
-# Topology optimization settings
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.50
-OBJECTIVE_CONVERGENCE_TOL = 5e-6
-OBJECTIVE_STREAK_TO_STOP = 8
+OBJECTIVE_CONVERGENCE_TOL = 1e-5
+OBJECTIVE_STREAK_TO_STOP = 5
 
 # The original diffuser continuation stopped with broad gray zones because the
 # Brinkman penalization never increased beyond q=0.1. Push q up in the later
@@ -78,16 +75,15 @@ MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
-# Monolithic full-state solver settings
-SNES_LINEAR_SOLVER = "mumps"
-FULL_STATE_LINEAR_SOLVER = "mumps"
-FULL_STATE_SNES_METHOD = "newtonls"
-FULL_STATE_SNES_LINE_SEARCH = "bt"
-FULL_STATE_SNES_RTOL = 1.0e-6
-FULL_STATE_SNES_ATOL = 1.0e-8
-FULL_STATE_SNES_MAX_ITERS = 50
-FULL_STATE_RESTART_WITH_STOKES = True
+# Full primal-state (u, p, nu_tilde) solve parameters.
+LINEAR_SOLVER = "mumps"
+STATE_SOLVE_METHOD = "newtonls"
+STATE_LINE_SEARCH = "bt"
+STATE_RTOL = 1.0e-6
+STATE_ATOL = 1.0e-8
+STATE_MAX_ITERS = 50
 
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -97,9 +93,7 @@ OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME_FULL = "Results_Full/Results_DiffuserBorrvall_TurbulentTO_Full"
-RESULTS_ROOT_NAME_FULL_WITH_G = "Results_FullWithG/Results_DiffuserBorrvall_TurbulentTO_FullWithG"
+RESULTS_ROOT_NAME = "Results_Full/Results_DiffuserBorrvall_TurbulentTO_Full"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

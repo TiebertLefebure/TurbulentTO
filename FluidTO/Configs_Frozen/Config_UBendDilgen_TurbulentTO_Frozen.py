@@ -5,7 +5,7 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Dilgen 2018 U-bend - Turbulent (SA, Re = 5000)
+# Configuration: Dilgen 2018 U-Bend - Turbulent Frozen (SA, Re = 5000)
 #
 # Paper data used here:
 #   Ub = 2.0 m/s, H = 0.1 m, nu = 4.0e-5 m^2/s, Re = Ub * H / nu = 5000
@@ -17,10 +17,9 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 #   and the internal U-bend baffle.
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/UBendDilgen && python3 ubend_dilgen_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/UBendDilgen/mesh.xdmf'),
@@ -75,9 +74,7 @@ DOMAIN_Y_MAX = DESIGN_Y_MAX
 BOUNDARY_TOL = 1.0e-6
 TOL = BOUNDARY_TOL
 
-# -------------------------------------------------------------------
-# Flow settings
-# -------------------------------------------------------------------
+# Flow and Brinkman parameters for the frozen forward solve.
 # Keep the U-bend inlet aligned with the other benchmark cases for now:
 # use the standard parabolic velocity profile, but choose its peak so the
 # cross-section-averaged inlet velocity still matches the paper value Ub.
@@ -96,23 +93,16 @@ U_MAX_INLET = 1.5 * U_BULK_INLET
 ALPHA_SOLID = 1.0e3
 
 
-# -------------------------------------------------------------------
-# Spalart-Allmaras turbulence model settings
-# -------------------------------------------------------------------
+# SA transport parameters for the frozen turbulence update.
 # Use the shared ratio-based inlet treatment from the other turbulent cases.
 SA_MUT_RATIO = 5.0
-SA_DISTANCE_RELAXATION = 0.01
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
-# Wall-distance model selector:
-#   "direct_y"    -> solve a direct distance/eikonal wall-distance PDE
-#   "penalized_g" -> solve the penalized reciprocal-distance model
-#   "geometric"   -> use the plain geometric distance field only
-SA_WALL_MODEL = "penalized_g"
+# Relaxed wall equation parameters for the external reciprocal distance solve.
 SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SIGMA = 0.10
 SA_WALL_G0 = 20.0
@@ -127,9 +117,7 @@ SA_WALL_INITIAL_SOLID_GUESS = 1.0
 SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.1, 0.05, 0.02, 0.01]
 SA_WALL_PREFER_PSEUDO_TIME = True
 
-# -------------------------------------------------------------------
-# Topology optimization settings
-# -------------------------------------------------------------------
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.30
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 60, 60, 60, 60, 60, 60, 60]
 OBJECTIVE_CONVERGENCE_TOL = 5.0e-5
@@ -141,12 +129,10 @@ Q_PENAL_SCHEDULE = [0.1, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.5]
 MOVE_LIMIT_SCHEDULE = [0.10, 0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 14.0]
 
-# -------------------------------------------------------------------
-# Solver settings
-# -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = "mumps"
-FROZEN_PICARD_STEPS = 3
-NUT_RELAXATION_FACTOR = 0.35
+# Frozen flow/turbulence coupling and IPCS solve parameters.
+LINEAR_SOLVER = "mumps"
+PICARD_STEPS = 3
+TURBULENCE_RELAXATION = 0.35
 
 FORWARD_IPCS_DT = 2.0e-4
 FORWARD_IPCS_MAX_ITERS = 400
@@ -160,12 +146,9 @@ FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_MAX_RESTARTS = 3
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_ERROR_ON_NONCONVERGENCE = True
 FORWARD_IPCS_RESTART_WITH_STOKES = False
 
-# -------------------------------------------------------------------
-# Projection, filter, and output
-# -------------------------------------------------------------------
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -176,10 +159,8 @@ FILTER_RADIUS_IN_CELLS = 2.0
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
-SAVE_IPCS_RESIDUAL_PLOTS = False
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (LEFT_BLOCK_X_MIN, OUTLET_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendDilgen_TurbulentTO_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
@@ -338,7 +319,7 @@ def _distance_to_baffle_boundary(x_value, y_value):
     return min(float(distance) for distance in distances)
 
 
-def build_wall_distance_field(space, mesh, boundaries, wall_markers, custom_dx):
+def build_wall_distance_field(space, mesh, _boundaries, _wall_markers, _custom_dx):
     wall_distance = Function(space)
     coords = np.asarray(space.tabulate_dof_coordinates(), dtype=float).reshape((-1, mesh.geometry().dim()))
     values = np.zeros(coords.shape[0], dtype=float)

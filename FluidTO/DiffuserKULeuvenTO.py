@@ -1,17 +1,12 @@
 from dolfin import *
 import numpy as np
 import os
-#import pyipopt
 import shutil
-from IPython.core.debugger import set_trace
-from petsc4py import PETSc
-import logging
-from time import gmtime, strftime, localtime
+from time import strftime, localtime
 try:
     from ufl import tanh
 except ModuleNotFoundError:
     from ufl_legacy import tanh
-from scipy.sparse import csr_matrix, lil_matrix
 from mma import mmasub
 
 # =================================================
@@ -28,11 +23,9 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_ROOT = os.path.join(THIS_DIR, 'Results_DiffuserKULeuvenTO')
 MESH_DIR = os.path.join(RESULTS_ROOT, 'mesh')
 RHO_DIR = os.path.join(RESULTS_ROOT, 'rho_')
-RHOF_DIR = os.path.join(RESULTS_ROOT, 'rho_f')
 RHOP_DIR = os.path.join(RESULTS_ROOT, 'rho_p')
 U_DIR = os.path.join(RESULTS_ROOT, 'u_')
 P_DIR = os.path.join(RESULTS_ROOT, 'p_')
-S_DIR = os.path.join(RESULTS_ROOT, 's_')
 DESIGN_DIR = os.path.join(RESULTS_ROOT, 'design_')
 LOG_FILE = os.path.join(RESULTS_ROOT, 'OptimizationLogDiffuser.txt')
 
@@ -58,11 +51,8 @@ r_filter = L*2.0/(N)
 r = r_filter/(2*3**0.5)
 
 betaproj = Constant(0.1)
-eta_d = 0.25
 eta_i = 0.50
-eta_e = 0.75
 
-advupdate = 1.0
 mmma = 1 # number of constraints
 vol_frac = 0.5 # Target for volume fraction constraint
 
@@ -79,14 +69,6 @@ def alpha(rho):
 
 def my_between(x, range, eps=DOLFIN_EPS):
 	return (range[0]- eps <= x) and (x <= range[1] + eps)
-
-def Array2PETScVector(x):
-    # x is an numpy.ndarray
-    # returns the same array in a Vector or #PETScVector format
-    out = Vector(MPI.comm_self, len(x))
-    out.set_local(x)
-    return out 
-    # return as_backend_type(out)
 
 #########################################################
 #          MESH AND FUNCTION SPACES                     #
@@ -114,7 +96,6 @@ w_adj = Function(FlowSpaceAdj)
 rho = Function(DensitySpace)
 rho_f = Function(DensitySpace)
 
-splot = Function(DensitySpace)
 fplot = Function(DensitySpace)
 
 unfilteredGradient = Function(DensitySpace)
@@ -149,7 +130,6 @@ outlet = Outlet()
 walls.mark(boundaries, mark['walls'])
 inlet.mark(boundaries, mark['inlet'])
 outlet.mark(boundaries, mark['outlet'])
-ds = Measure('ds', domain=mesh, subdomain_data=boundaries)
 
 # Inlet
 u_max_in = 1.0          # [m/s]
@@ -160,9 +140,6 @@ y_local_inlet = Expression('x[1]-y_inlet', degree=1, y_inlet=y_inlet)
 u_inlet = Expression(('u_max_inlet * (1 - pow(2*y_local_inlet/width_inlet, 2))', '0.0'), degree=2, u_max_inlet=u_max_inlet, y_local_inlet=y_local_inlet, width_inlet=width_inlet)
 
 # Outlet
-p_out = -80.0           # [Pa]
-p_outlet = Constant(p_out)
-uy_zero = Constant(0.0)
 u_max_out = 3.0          # [m/s]
 u_max_outlet = Constant(u_max_out)
 width_outlet = Constant(1/3.)
@@ -176,20 +153,14 @@ u_noslip = Constant((0.0, 0.0))
 bcu_walls = DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, mark["walls"])
 bcu_inlet = DirichletBC(FlowSpace.sub(0), u_inlet, boundaries, mark["inlet"])
 bcu_outlet = DirichletBC(FlowSpace.sub(0), u_outlet, boundaries, mark["outlet"])
-# bcp_outlet = DirichletBC(FlowSpace.sub(1), p_outlet, boundaries, mark["outlet"])
-# bcuy_outlet = DirichletBC(FlowSpace.sub(0).sub(1), uy_zero, boundaries, mark["outlet"])
 
 bc_NS = [bcu_walls, bcu_inlet, bcu_outlet]
-# bc_NS = [bcu_walls, bcu_inlet, bcp_outlet, bcuy_outlet]
 
 bcu_wallsAdj = DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, mark["walls"])
 bcu_inletAdj = DirichletBC(FlowSpaceAdj.sub(0), u_inlet, boundaries, mark["inlet"])
 bcu_outletAdj = DirichletBC(FlowSpaceAdj.sub(0), u_outlet, boundaries, mark["outlet"])
-# bcp_outletAdj = DirichletBC(FlowSpaceAdj.sub(1), p_outlet, boundaries, mark["outlet"])
-# bcuy_outletAdj = DirichletBC(FlowSpaceAdj.sub(0).sub(1), uy_zero, boundaries, mark["outlet"])
 
 bc_NS_adj = [bcu_wallsAdj, bcu_inletAdj, bcu_outletAdj]
-# bc_NS_adj = [bcu_wallsAdj, bcu_inletAdj, bcp_outletAdj, bcuy_outletAdj]
 
 #####################################
 #   Active design space
@@ -211,7 +182,6 @@ h_avg = (h('+') + h('-'))/2
 def pdefilter(filterin, filterout):#, uFilter, vFilter, PDEFilterIn, n, h, h_avg, boundaries, ds):
 
     alphaDG = 4.0
-    gammaDG = 8.0
 
     Helmholtz = r**2 * (alphaDG/h_avg*dot(jump(vFilter, n), jump(uFilter, n)))*dS \
         + uFilter * vFilter * dx - PDEFilterIn * vFilter * dx
@@ -231,7 +201,6 @@ ObjFunctional =  AreaOfInterest * (1/2 * mufluid * inner((nabla_grad(u) + nabla_
 
 volume = AreaOfInterest * dx
 volume = assemble(volume)
-vol_target = vol_frac*(volume)
 vol_constraint = AreaOfInterest * projection(rho_f, eta_i) * dx - AreaOfInterest * vol_frac * dx # Old formulation. The value of the volume is not from 0 to 1
 # vol_constraint = (1/vol_target) * AreaOfInterest * projection(rho_f, eta_i) * dx
 
@@ -255,19 +224,15 @@ ddx = derivative(UFL_AL, rho_f)
 ##################################################################
 
 ensure_clean_dir(RHO_DIR)
-ensure_clean_dir(RHOF_DIR)
 ensure_clean_dir(RHOP_DIR)
 ensure_clean_dir(U_DIR)
 ensure_clean_dir(P_DIR)
-ensure_clean_dir(S_DIR)
 ensure_clean_dir(DESIGN_DIR)
 
 rho_out = File(os.path.join(RHO_DIR, "plot_rho.pvd"))
-rhof_out = File(os.path.join(RHOF_DIR, "plot_rho_f.pvd"))
 rhop_out = File(os.path.join(RHOP_DIR, "plot_rho_p.pvd"))
 u_out = File(os.path.join(U_DIR, "plot_u.pvd"))
 p_out = File(os.path.join(P_DIR, "plot_p.pvd"))
-s_out = File(os.path.join(S_DIR, "plot_s.pvd"))
 
 txtout = open(LOG_FILE,"w")
 header1 = "Iteration     "
@@ -287,7 +252,6 @@ assign(rho, interpolate(Expression('(x[0] >= 0.0 && x[0] <= L)  ? 0.5 : 1.0', L 
 
 iter_count = 0
 inner_count = 0
-updateStage = 0
 previousObjective = 0.0
 
 #MMA Parameters
@@ -337,7 +301,6 @@ for jj in range(len(qpen)):
 
         fplot.vector()[:] = project(projection(rho_f, eta_i), DensitySpace).vector()[:]
         rho_out << rho
-        #rhof_out << rho_f
         rhop_out <<  fplot
         u_out << w_fwd.sub(0)
         p_out << w_fwd.sub(1)
@@ -379,7 +342,6 @@ for jj in range(len(qpen)):
 
         unfilteredGradient.vector()[:] = assemble(ddx)[:]
         filteredGradient = pdefilter(unfilteredGradient, filteredGradient)
-        #s_out << filteredGradient
         np.savetxt(os.path.join(DESIGN_DIR, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
         ########################################
@@ -395,7 +357,7 @@ for jj in range(len(qpen)):
         dfdx[0,:] = filtered_s_vol.vector()
 
                 
-        xmma,ymma,zmma,lam,xsi,eta,mufluid,zet,s,low,upp = \
+        xmma,_ymma,_zmma,_lam,_xsi,_eta,_mu_mma,_zet,_s,low,upp = \
             mmasub(mmma,nmma,iter_count,xval,xmin,xmax,xold1,xold2,f0val,df0dx,fval,dfdx,low,upp,a0,a,c,d,move)
 
         xold2 = xold1.copy()

@@ -1,18 +1,17 @@
 import os
-from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Double Pipe — Turbulent (SA, Re = 1,660)
+# Configuration: Borrvall Double Pipe - Turbulent Frozen (SA, Re = 1,660)
 #
 # Two symmetric ports on left (inlets) and right (outlets).
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/DoublePipeBorrvall && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/mesh.xdmf'),
@@ -23,7 +22,7 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# Domain and mesh
+# Geometry and reference meshing parameters for the two-port design box.
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = 1.5
@@ -51,46 +50,34 @@ OUTLET_SEGMENTS = [
     (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
 ]
 
-# Flow settings
-MU_FLUID_VALUE = 1.0e-4
+# Flow and Brinkman parameters for the frozen forward solve.
+MU_FLUID_VALUE = 1.0 / 6.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
-# ----------------------------------------------------------------------------------------------
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
-# ----------------------------------------------------------------------------------------------
-
-# -------------------------------------------------------------------
-# Spalart-Allmaras turbulence model settings
-# -------------------------------------------------------------------
+# SA transport parameters for the frozen turbulence update.
 # SA_MUT_RATIO: target turbulent viscosity ratio nu_t / nu_lam at inlets.
 # The main solver inverts the SA constitutive relation nu_t = nu_tilde * fv1(chi)
 # to get the corresponding nu_tilde BC.  At Re=1660 with fully developed turbulent
 # channel flow, a ratio of ~5-10 is physically reasonable.
 SA_MUT_RATIO = 5.0                      # nu_t / nu_lam at inlets (same for both ports)
-SA_DISTANCE_RELAXATION = 0.01           # Helmholtz relaxation for wall-distance PDE
-SA_SMOOTH_ABS_EPS = 1.0e-12            # smoothing for |nu_tilde| in chi computation
+SA_SMOOTH_ABS_EPS = 1.0e-12             # smoothing for |nu_tilde| in chi computation
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX  # scale for initial nu_tilde ramp from walls
-SA_NU_TILDE_FLOOR = 1.0e-12            # hard floor to prevent negative nu_tilde
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e3      # penalty strength for nu_tilde in solid regions
-SA_NU_TILDE_PENALTY_N = 3.0            # penalty exponent (matches Brinkman)
+SA_NU_TILDE_FLOOR = 1.0e-12             # hard floor to prevent negative nu_tilde
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3       # penalty strength for nu_tilde in solid regions
+SA_NU_TILDE_PENALTY_N = 3.0             # penalty exponent (matches Brinkman)
 
-# Penalized reciprocal wall-distance (Yoon 2016, Eq. 25)
-# Modifies wall distance in solid regions so SA sees a nearby "wall" there.
-SA_USE_PENALIZED_WALL_DISTANCE = True
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION  # PDE regularisation length
+# Relaxed wall equation parameters for the external reciprocal distance solve.
+SA_WALL_SIGMA = 0.01                    # PDE regularisation length
 SA_WALL_G0 = 20.0                       # reference reciprocal distance in solid
 SA_WALL_PENALTY_ALPHA = 1.0e3           # penalty amplitude
 SA_WALL_PENALTY_N = 3.0                 # penalty exponent
-SA_WALL_G_FLOOR = 1.0e-8               # floor on reciprocal distance (avoids division by zero)
+SA_WALL_G_FLOOR = 1.0e-8                # floor on reciprocal distance (avoids division by zero)
 
-# -------------------------------------------------------------------
-# Topology optimization settings
-# -------------------------------------------------------------------
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 1.0 / 3.0          # target fluid volume fraction (two thin channels ≈ 1/3)
 INITIAL_DENSITY_VALUE = 1.0 / 3.0
-MAX_INNER_ITERATIONS_SCHEDULE = [50, 80, 80, 80, 100, 120, 140, 160, 180, 200]
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -103,16 +90,15 @@ OBJECTIVE_STREAK_TO_STOP = 5
 Q_PENAL_SCHEDULE    = [0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00, 3.00, 3.00, 3.00]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.025, 0.015, 0.008, 0.004, 0.002, 0.001, 0.0005]
 BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0,  8.0,  16.0, 32.0, 64.0, 128.0, 256.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [50, 80, 80, 80, 100, 120, 140, 160, 180, 200]
 
-# -------------------------------------------------------------------
-# Solver settings
-# -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = "mumps"   # direct LU solver (adjoint + Stokes warm-start)
+# Frozen flow/turbulence coupling and IPCS solve parameters.
+LINEAR_SOLVER = "mumps"   # direct LU solver for the Stokes warm start and the adjoint
 
-# Outer NS–SA coupling: solve NS → solve SA → repeat FROZEN_PICARD_STEPS times,
+# Outer NS–SA coupling: solve NS → solve SA → repeat PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-FROZEN_PICARD_STEPS = 1
-NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
+PICARD_STEPS = 1
+TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
 #   dt                        : pseudo-time step (smaller → more stable, more iterations needed)
@@ -120,13 +106,13 @@ NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
 #   velocity_rtol             : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
 # Start closer to the previously successful retry settings so the first attempt
 # does not burn the full 400-step budget before adaptive backoff kicks in.
-FORWARD_IPCS_DT                 = 5.0e-5
-FORWARD_IPCS_MAX_ITERS          = 300
+FORWARD_IPCS_DT                 = 2.5e-5
+FORWARD_IPCS_MAX_ITERS          = 150
 FORWARD_IPCS_VELOCITY_RTOL      = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL      = 2.0e-3
 FORWARD_IPCS_LOG_EVERY          = 50
-FORWARD_IPCS_VEL_RELAXATION     = 0.20
-FORWARD_IPCS_P_RELAXATION       = 0.07
+FORWARD_IPCS_VEL_RELAXATION     = 0.14
+FORWARD_IPCS_P_RELAXATION       = 0.05
 FORWARD_IPCS_MAX_RESTARTS       = 3
 FORWARD_IPCS_VEL_SOLVER         = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
@@ -136,24 +122,18 @@ FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
 FORWARD_IPCS_RESTART_WITH_STOKES = False
 
-# -------------------------------------------------------------------
-# Projection, filter, and output
-# -------------------------------------------------------------------
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)
 ETA_I = 0.50           # projection threshold
 QUADRATURE_DEGREE = 6  # raised to handle nonlinear terms accurately
 FILTER_RADIUS_IN_CELLS = 2.0  # PDE filter radius in mesh cell widths
 
-# Outlet BC toggle for the turbulent double-pipe case:
-# Change this to "pressure" to impose p = OUTLET_PRESSURE_VALUE on both outlet markers.
-# Keep "velocity" to impose the two outlet parabolic velocity profiles built below.
+# Use pressure outlets here; switch to "velocity" only when imposing outlet profiles below.
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeBorrvall_TurbulentTO_Frozen"
-SAVE_IPCS_RESIDUAL_PLOTS = False
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

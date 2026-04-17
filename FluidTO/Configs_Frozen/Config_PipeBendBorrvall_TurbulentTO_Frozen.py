@@ -1,19 +1,19 @@
 import os
+import numpy as np
 from math import pi
-from dolfin import DOLFIN_EPS, Expression, Mesh, MeshFunction, MPI, SubDomain, XDMFFile, near
+from dolfin import DOLFIN_EPS, Expression, Function, MeshFunction, MPI, SubDomain, cells, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ===================================================================
-# Configuration: Borrvall Pipe Bend — Turbulent (SA, Re = 2,000)
+# Configuration: Borrvall Pipe Bend - Turbulent Frozen (SA, Re = 2,000)
 #
 # One inlet on the left wall and one outlet on the bottom wall.
 # ===================================================================
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(THIS_DIR)
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
+# Mesh path for this benchmark geometry.
 # Generate via: cd Meshes/PipeBendBorrvall && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendBorrvall/mesh.xdmf'),
@@ -24,7 +24,7 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# Domain and mesh
+# Geometry and reference meshing parameters for the pipe-bend design box.
 L = 1.0
 N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 TOL = DOLFIN_EPS
@@ -35,7 +35,12 @@ INLET_TOP_OFFSET = 0.2
 OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
-# Flow settings
+# Keep only a few x-cells behind the inlet facet non-design so the optimizer
+# cannot choke the prescribed parabolic inflow immediately.
+INLET_BLOCK_CELLS = 3
+INLET_BLOCK_LENGTH = INLET_BLOCK_CELLS * (L / N)
+
+# Flow and Brinkman parameters for the frozen forward solve.
 MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
@@ -45,67 +50,54 @@ U_MAX_OUTLET = 1.0
 # Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2,000
 # ----------------------------------------------------------------------------------------------
 
-# -------------------------------------------------------------------
-# Spalart-Allmaras turbulence model settings
-# -------------------------------------------------------------------
+# SA transport parameters for the frozen turbulence update.
 # SA_MUT_RATIO: target turbulent viscosity ratio nu_t / nu_lam at inlet.
 # The main solver inverts the SA constitutive relation nu_t = nu_tilde * fv1(chi)
 # to get the corresponding nu_tilde BC. At Re=2000 in an internal bend flow,
 # a ratio of ~5-10 is physically reasonable.
 
 SA_MUT_RATIO = 5.0                      # nu_t / nu_lam at inlet
-SA_DISTANCE_RELAXATION = 0.01           # Helmholtz relaxation for wall-distance PDE
 SA_SMOOTH_ABS_EPS = 1.0e-12            # smoothing for |nu_tilde| in chi computation
 SA_INIT_WALL_DIST_SCALE = 0.05 * L     # scale for initial nu_tilde ramp from walls
 SA_NU_TILDE_FLOOR = 1.0e-12            # hard floor to prevent negative nu_tilde
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3      # penalty strength for nu_tilde in solid regions
 SA_NU_TILDE_PENALTY_N = 3.0            # penalty exponent (matches Brinkman)
 
-# Penalized reciprocal wall-distance (Yoon 2016, Eq. 25)
-# Modifies wall distance in solid regions so SA sees a nearby "wall" there.
-
-SA_USE_PENALIZED_WALL_DISTANCE = True
-SA_WALL_SIGMA = SA_DISTANCE_RELAXATION  # PDE regularisation length
+# Relaxed wall equation parameters for the external reciprocal distance solve.
+SA_WALL_SIGMA = 0.01                    # PDE regularisation length
 SA_WALL_G0 = 20.0                       # reference reciprocal distance in solid
 SA_WALL_PENALTY_ALPHA = 1.0e3           # penalty amplitude
 SA_WALL_PENALTY_N = 3.0                 # penalty exponent
 SA_WALL_G_FLOOR = 1.0e-8               # floor on reciprocal distance (avoids division by zero)
 
-# -------------------------------------------------------------------
-# Topology optimization settings
-# -------------------------------------------------------------------
+# MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.08 * pi  # Borrvall pipe-bend benchmark volume fraction
-MAX_INNER_ITERATIONS_SCHEDULE = [60, 70, 80, 90, 90, 90, 75, 60, 50]
-OBJECTIVE_CONVERGENCE_TOL = 1e-4
-OBJECTIVE_STREAK_TO_STOP = 4
+OBJECTIVE_CONVERGENCE_TOL = 1e-5
+OBJECTIVE_STREAK_TO_STOP = 5
 
 # -------------------------------------------------------------------
 # Continuation schedule for the frozen-SA pipe bend
 # -------------------------------------------------------------------
-#Q_PENAL_SCHEDULE = [0.005, 0.01, 0.03, 0.05, 0.1] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
 Q_PENAL_SCHEDULE    = [0.05, 0.10, 0.20, 0.40, 0.80, 1.50, 2.50, 3.00, 3.00]
-#MOVE_LIMIT_SCHEDULE = [0.05, 0.08, 0.1, 0.15, 0.2] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
 MOVE_LIMIT_SCHEDULE = [0.08, 0.07, 0.06, 0.045, 0.03, 0.02, 0.01, 0.005, 0.002]
-#BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0] # Copy from Config_Laminar (compare LaminaTO & TurbulentTO at low Re)
 BETA_PROJ_SCHEDULE  = [0.10, 0.25, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
+MAX_INNER_ITERATIONS_SCHEDULE = [60, 70, 80, 90, 90, 90, 100, 100, 100]
 
-# -------------------------------------------------------------------
-# Solver settings
-# -------------------------------------------------------------------
-SNES_LINEAR_SOLVER = "mumps"   # direct LU solver (adjoint + Stokes warm-start)
+# Frozen flow/turbulence coupling and IPCS solve parameters.
+LINEAR_SOLVER = "mumps"   # direct LU solver for the Stokes warm start and the adjoint
 
-# Outer NS–SA coupling: solve NS → solve SA → repeat FROZEN_PICARD_STEPS times,
+# Outer NS–SA coupling: solve NS → solve SA → repeat PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-FROZEN_PICARD_STEPS = 1
-NUT_RELAXATION_FACTOR = 0.35   # under-relaxation on SA nu_tilde update
+PICARD_STEPS = 1
+TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
 #   dt                        : pseudo-time step (smaller → more stable, more iterations needed)
 #   u_relaxation/p_relaxation : under-relaxation (lower → more stable at high Re, slower convergence)
 #   rtol_u                    : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
-FORWARD_IPCS_DT = 1.0e-4
-FORWARD_IPCS_MAX_ITERS = 250
-FORWARD_IPCS_VELOCITY_RTOL = 2.0e-4
+FORWARD_IPCS_DT = 2.5e-5
+FORWARD_IPCS_MAX_ITERS = 150
+FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
 FORWARD_IPCS_VEL_RELAXATION = 0.21
 FORWARD_IPCS_P_RELAXATION = 0.07
@@ -119,24 +111,17 @@ FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
 FORWARD_IPCS_RESTART_WITH_STOKES = False
 
-# -------------------------------------------------------------------
-# Projection, filter, and output
-# -------------------------------------------------------------------
+# Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6  # raised to handle nonlinear terms accurately
 FILTER_RADIUS_IN_CELLS = 3.0  # PDE filter radius in mesh cell widths
 
-# Outlet BC toggle for the turbulent pipe-bend case:
-# Change this to "velocity" to impose the outlet parabolic velocity profile built below.
-# Keep "pressure" to impose p = OUTLET_PRESSURE_VALUE at the outlet instead.
-
+# Use pressure outlets here; switch to "velocity" only when imposing the outlet profile below.
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0  # Used only when OUTLET_BC_TYPE == "pressure".
-SAVE_IPCS_RESIDUAL_PLOTS = False
 
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (0.0, 0.0)
 RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendBorrvall_TurbulentTO_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
@@ -236,3 +221,53 @@ def build_velocity_profile_sets():
         degree=2, u_max=U_MAX_OUTLET, x_c=x_outlet_center, width=OUTLET_WIDTH,
     )
     return [u_inlet], [u_outlet]
+
+
+def build_density_bounds(mesh, density_space):
+    lower = Function(density_space)
+    upper = Function(density_space)
+
+    lower_values = np.zeros(density_space.dim())
+    upper_values = np.ones(density_space.dim())
+    dofmap = density_space.dofmap()
+    inlet_y_min, inlet_y_max, _, _ = compute_port_extents(
+        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
+    )
+    inlet_block_x_max = INLET_BLOCK_LENGTH
+
+    for cell in cells(mesh):
+        dof = dofmap.cell_dofs(cell.index())[0]
+        midpoint = cell.midpoint()
+        x_coord = midpoint.x()
+        y_coord = midpoint.y()
+
+        if 0.0 - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
+            if between(y_coord, (inlet_y_min, inlet_y_max), TOL):
+                lower_values[dof] = 1.0
+                upper_values[dof] = 1.0
+            else:
+                lower_values[dof] = 0.0
+                upper_values[dof] = 0.0
+
+    lower.vector().set_local(lower_values)
+    lower.vector().apply("insert")
+    upper.vector().set_local(upper_values)
+    upper.vector().apply("insert")
+    return lower, upper
+
+
+def build_volume_region(mesh, density_space):
+    volume_region = Function(density_space)
+    region_values = np.ones(density_space.dim())
+    dofmap = density_space.dofmap()
+    inlet_block_x_max = INLET_BLOCK_LENGTH
+
+    for cell in cells(mesh):
+        dof = dofmap.cell_dofs(cell.index())[0]
+        x_coord = cell.midpoint().x()
+        if 0.0 - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
+            region_values[dof] = 0.0
+
+    volume_region.vector().set_local(region_values)
+    volume_region.vector().apply("insert")
+    return volume_region

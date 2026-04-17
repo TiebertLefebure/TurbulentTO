@@ -23,9 +23,7 @@ from Utilities_SharedTO import (
     ResilientVTKFile,
 )
 from Utilities_TurbulentTO_Frozen import (
-    build_direct_wall_distance_solver,
     build_penalized_wall_distance_solver,
-    calculate_distance_field,
     enforce_scalar_floor,
     nu_tilde_from_viscosity_ratio,
     positive_part,
@@ -58,6 +56,7 @@ root_print("Using config module: {}".format(CONFIG_MODULE_NAME))
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
 FORWARD_IPCS_LOG_EVERY = max(1, int(globals().get("FORWARD_IPCS_LOG_EVERY", 25)))
+LINEAR_SOLVER_NAME = str(globals().get("LINEAR_SOLVER", globals().get("SNES_LINEAR_SOLVER", "mumps")))
 
 if not SHOW_DOLFIN_SOLVER_LOGS:
     try:
@@ -466,139 +465,60 @@ rho_projected = projection(rho_f, ETA_I) # projected design variable
 rho_effective = density_lower_bound + (density_upper_bound - density_lower_bound) * rho_projected
 
 custom_wall_distance_builder = globals().get("build_wall_distance_field")
-use_penalized_wall_distance = bool(globals().get("SA_USE_PENALIZED_WALL_DISTANCE", True))
-sa_wall_model = str(globals().get("SA_WALL_MODEL", "")).strip().lower()
-if not sa_wall_model:
-    if use_penalized_wall_distance:
-        sa_wall_model = "penalized_g"
-    elif callable(custom_wall_distance_builder):
-        sa_wall_model = "custom_initial"
-    else:
-        sa_wall_model = "geometric"
-
-valid_sa_wall_models = {"custom_initial", "direct_y", "geometric", "penalized_g"}
-if sa_wall_model not in valid_sa_wall_models:
-    raise ValueError(
-        "Unsupported SA_WALL_MODEL={!r}. Expected one of {}.".format(
-            sa_wall_model, sorted(valid_sa_wall_models)
-        )
-    )
-
 custom_initial_wall_distance = None
-if callable(custom_wall_distance_builder) and sa_wall_model != "geometric":
+if callable(custom_wall_distance_builder):
     custom_initial_wall_distance = custom_wall_distance_builder(
         TurbulenceSpace, mesh, boundaries, wall_markers, dx
     )
 
-if sa_wall_model == "direct_y":
-    sa_wall_density_source = str(globals().get("SA_WALL_DENSITY_SOURCE", "design")).strip().lower()
-    sa_wall_relaxation = float(
-        globals().get("SA_WALL_Y_RELAXATION", globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
+sa_wall_density_source = str(globals().get("SA_WALL_DENSITY_SOURCE", "design")).strip().lower()
+if sa_wall_density_source not in {"design", "passive"}:
+    raise ValueError(
+        "SA_WALL_DENSITY_SOURCE must be either 'design' or 'passive'. "
+        "Got {!r}.".format(sa_wall_density_source)
     )
-    sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
-    sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
-    sa_wall_eikonal_eps = float(globals().get("SA_WALL_EIKONAL_EPS", DOLFIN_EPS))
-    sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
-    sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
-    sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
-    sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAXATION", 0.5))
-    sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
-    sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
-    sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
-    sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
-    if sa_wall_density_source == "passive":
-        wall_penalty_fluid_indicator = density_upper_bound
-    else:
-        wall_penalty_fluid_indicator = rho_effective
-
-    (
-        wall_distance,
-        update_wall_distance_field,
-    ) = build_direct_wall_distance_solver(
-        TurbulenceSpace,
-        boundaries,
-        wall_markers,
-        dx,
-        wall_penalty_fluid_indicator,
-        sa_wall_relaxation,
-        sa_wall_penalty_alpha,
-        sa_wall_penalty_power,
-        eikonal_eps=sa_wall_eikonal_eps,
-        newton_rtol=sa_wall_newton_rtol,
-        newton_atol=sa_wall_newton_atol,
-        newton_max_iters=sa_wall_newton_max_iters,
-        newton_relax=sa_wall_newton_relax,
-        penalty_homotopy=sa_wall_penalty_homotopy,
-        solid_guess_weight=sa_wall_initial_solid_guess,
-        extra_relaxations=sa_wall_extra_relaxations,
-        solid_threshold=sa_wall_solid_threshold,
-        initial_wall_distance=custom_initial_wall_distance,
-    )
-    root_print("Direct SA wall-distance enabled: source={}, init_y={}, eta_y={}, eps_y={}, alpha_y={}, n_y={}, rho_cut_y={}, relax_y={}, maxit_y={}".format(
-        sa_wall_density_source, "custom" if custom_initial_wall_distance is not None else "geometric",
-        sa_wall_relaxation, sa_wall_eikonal_eps, sa_wall_penalty_alpha, sa_wall_penalty_power,
-        sa_wall_solid_threshold, sa_wall_newton_relax, sa_wall_newton_max_iters,
-    ))
-elif sa_wall_model == "penalized_g":
-    sa_wall_density_source = str(globals().get("SA_WALL_DENSITY_SOURCE", "design")).strip().lower()
-    sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
-    sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
-    sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
-    sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
-    sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
-    sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
-    sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
-    sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
-    sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAXATION", 0.5))
-    sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
-    sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
-    sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
-    sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
-    sa_wall_prefer_pseudo_time = bool(globals().get("SA_WALL_PREFER_PSEUDO_TIME", False))
-    if sa_wall_density_source == "passive":
-        wall_penalty_fluid_indicator = density_upper_bound
-    else:
-        wall_penalty_fluid_indicator = rho_effective
-
-    (
-        wall_distance,
-        update_wall_distance_field,
-    ) = build_penalized_wall_distance_solver(
-        TurbulenceSpace, boundaries, wall_markers, dx, wall_penalty_fluid_indicator,
-        sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power, sa_wall_g_floor,
-        newton_rtol=sa_wall_newton_rtol,
-        newton_atol=sa_wall_newton_atol,
-        newton_max_iters=sa_wall_newton_max_iters,
-        newton_relax=sa_wall_newton_relax,
-        penalty_homotopy=sa_wall_penalty_homotopy,
-        solid_guess_weight=sa_wall_initial_solid_guess,
-        extra_relaxations=sa_wall_extra_relaxations,
-        solid_threshold=sa_wall_solid_threshold,
-        initial_wall_distance=custom_initial_wall_distance,
-        prefer_pseudo_time=sa_wall_prefer_pseudo_time,
-    )
-    root_print("Penalized SA wall-distance enabled: source={}, init_G={}, pseudo_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}, relax_G={}, maxit_G={}".format(
-        sa_wall_density_source, "custom" if custom_initial_wall_distance is not None else "geometric",
-        sa_wall_prefer_pseudo_time,
-        sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power,
-        sa_wall_solid_threshold, sa_wall_newton_relax, sa_wall_newton_max_iters,
-    ))
-elif sa_wall_model == "custom_initial":
-    if custom_initial_wall_distance is None:
-        raise ValueError("SA_WALL_MODEL='custom_initial' requires build_wall_distance_field in the config.")
-    wall_distance = custom_initial_wall_distance
-    root_print("Custom SA wall-distance field enabled from config.")
-
-    def update_wall_distance_field():
-        return None
+sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
+sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
+sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
+sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
+sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
+sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
+sa_wall_newton_max_iters = int(globals().get("SA_WALL_NEWTON_MAX_ITERS", 80))
+sa_wall_newton_relax = float(globals().get("SA_WALL_NEWTON_RELAXATION", 0.5))
+sa_wall_penalty_homotopy = globals().get("SA_WALL_PENALTY_HOMOTOPY", (0.0, 0.1, 0.25, 0.5, 1.0))
+sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS", 1.0))
+sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
+sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
+sa_wall_prefer_pseudo_time = bool(globals().get("SA_WALL_PREFER_PSEUDO_TIME", False))
+if sa_wall_density_source == "passive":
+    wall_penalty_fluid_indicator = density_upper_bound
 else:
-    wall_distance = calculate_distance_field(
-        TurbulenceSpace, boundaries, wall_markers, dx,
-        relaxation=float(globals().get("SA_DISTANCE_RELAXATION", 0.01)),
-    )
+    wall_penalty_fluid_indicator = rho_effective
 
-    def update_wall_distance_field():
-        return None
+(
+    wall_distance,
+    update_wall_distance_field,
+) = build_penalized_wall_distance_solver(
+    TurbulenceSpace, boundaries, wall_markers, dx, wall_penalty_fluid_indicator,
+    sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power, sa_wall_g_floor,
+    newton_rtol=sa_wall_newton_rtol,
+    newton_atol=sa_wall_newton_atol,
+    newton_max_iters=sa_wall_newton_max_iters,
+    newton_relax=sa_wall_newton_relax,
+    penalty_homotopy=sa_wall_penalty_homotopy,
+    solid_guess_weight=sa_wall_initial_solid_guess,
+    extra_relaxations=sa_wall_extra_relaxations,
+    solid_threshold=sa_wall_solid_threshold,
+    initial_wall_distance=custom_initial_wall_distance,
+    prefer_pseudo_time=sa_wall_prefer_pseudo_time,
+)
+root_print("Penalized SA wall-distance enabled: source={}, init_G={}, pseudo_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}, relax_G={}, maxit_G={}".format(
+    sa_wall_density_source, "custom" if custom_initial_wall_distance is not None else "geometric",
+    sa_wall_prefer_pseudo_time,
+    sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power,
+    sa_wall_solid_threshold, sa_wall_newton_relax, sa_wall_newton_max_iters,
+))
 
 # Initial SA field.
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL",
@@ -613,7 +533,7 @@ sa_nu_tilde_penalty_reaction = Constant(float(globals().get("SA_NU_TILDE_PENALTY
 
 sa_model = SpalartAllmarasSteadyState(
     TurbulenceSpace, bcn_turbulence, sa_nu_tilde_init, nu_laminar,
-    Constant((0.0, 0.0)), dx, ds, wall_distance,
+    dx, wall_distance,
     nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
     wall_distance_floor=float(globals().get("SA_WALL_DISTANCE_FLOOR", 0.0)),
 )
@@ -928,7 +848,7 @@ def initialize_forward_guess_with_stokes():
     b = assemble(l_stokes)
     for bc in bc_NS:
         bc.apply(A, b)
-    solve(A, w_fwd.vector(), b, SNES_LINEAR_SOLVER)
+    solve(A, w_fwd.vector(), b, LINEAR_SOLVER_NAME)
 
     wall_dist_scale = max(float(globals().get("SA_INIT_WALL_DIST_SCALE", 0.05 * float(globals().get("L", 1.0)))), 1.0e-12)
     nu_guess = project(
@@ -1163,7 +1083,7 @@ def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
     b_adj *= -1.0
     for bc in bc_NS_adj:
         bc.apply(A_adj, b_adj)
-    solve(A_adj, w_adj.vector(), b_adj, SNES_LINEAR_SOLVER)
+    solve(A_adj, w_adj.vector(), b_adj, LINEAR_SOLVER_NAME)
 
 # ---------------------------------------------------------------
 # Output setup.
@@ -1285,7 +1205,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # Forward flow and SA updates.
         root_print("  [Forward solve]")
-        picard_steps = max(1, int(globals().get("FROZEN_PICARD_STEPS", 1)))
+        picard_steps = max(1, int(globals().get("PICARD_STEPS", globals().get("FROZEN_PICARD_STEPS", 1))))
         for picard_idx in range(picard_steps):
             solver_log("    [Picard {}/{}] flow".format(picard_idx + 1, picard_steps))
             solve_forward_with_recovery("stage{:02d}_iter{:03d}_picard{:02d}".format(
@@ -1295,7 +1215,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             sa_model.construct_forms(velocity_for_sa)
             solver_log("    [Picard {}/{}] SA transport".format(picard_idx + 1, picard_steps))
             sa_model.solve_turbulence_model()
-            sa_model.update_variables(relaxation=float(globals().get("NUT_RELAXATION_FACTOR", 1.0)))
+            sa_model.update_variables(
+                relaxation=float(globals().get("TURBULENCE_RELAXATION", globals().get("NUT_RELAXATION_FACTOR", 1.0)))
+            )
             nu_tilde_frozen.assign(sa_model.nu_tilde0)
             enforce_scalar_floor(nu_tilde_frozen, float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12)))
             sa_model.nu_tilde0.assign(nu_tilde_frozen)

@@ -22,7 +22,6 @@ This file gives the functions mmasub, gcmmasub, subsolv and kktcheck.
 ########################################################################################################
 
 # Loading modules
-from __future__ import division
 from scipy.sparse import diags # or use numpy: from numpy import diag as diags
 from scipy.linalg import solve # or use numpy: from numpy.linalg import solve
 import numpy as np
@@ -587,4 +586,3 @@ def asymp(outeriter,n,xval,xold1,xold2,xmin,xmax,low,upp,raa0,raa,raa0eps,raaeps
         upp = np.minimum(upp,uppmax)
         upp=np.maximum(upp,uppmin)
     return low,upp,raa0,raa
-
