@@ -18,7 +18,11 @@
 
 ## Benchmark Cases
 Automated execution scripts are provided for three foundational internal-flow benchmarks, elevated to the turbulent regime:
-1. **The Diffuser ($Re = 1000$)** 2. **The Double Pipe ($Re = 1660$)** 3. **The Pipe Bend ($Re = 2000$)** ## Dependencies
+1. **The Diffuser ($Re = 1000$)**
+2. **The Double Pipe ($Re = 1660$)**
+3. **The Pipe Bend ($Re = 2000$)**
+
+## Dependencies
 * **FEniCS** (dolfin, UFL)
 * **Gmsh** (Mesh generation)
 * **SciPy / NumPy / Matplotlib**
