@@ -264,6 +264,8 @@ outlet_markers = as_list(mark["outlet"])
 density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
+fixed_density_mask = np.abs(density_upper_values - density_lower_values) < 1.0e-12
+has_fixed_density_cells = bool(np.any(fixed_density_mask))
 ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
 
@@ -482,6 +484,17 @@ def enforce_density_bounds_inplace(density_field):
     density_field.vector().set_local(values)
     density_field.vector().apply("insert")
     return density_field
+
+
+def zero_fixed_density_sensitivities_inplace(sensitivity_field):
+    if not has_fixed_density_cells:
+        return sensitivity_field
+
+    values = sensitivity_field.vector().get_local()
+    values[fixed_density_mask] = 0.0
+    sensitivity_field.vector().set_local(values)
+    sensitivity_field.vector().apply("insert")
+    return sensitivity_field
 
 
 rho_projected = projection(rho_f, ETA_I)
@@ -1213,6 +1226,8 @@ d = np.ones((mmma, 1))
 
 xmin = np.zeros((num_mma, 1))
 xmax = np.ones((num_mma, 1))
+xmin[:, 0] = density_lower_values
+xmax[:, 0] = density_upper_values
 
 df0dx = np.zeros((num_mma, 1))
 fval = np.zeros((mmma, 1))
@@ -1297,10 +1312,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         # 3. Assemble filtered sensitivities and constraint gradients for MMA.
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
+        zero_fixed_density_sensitivities_inplace(filtered_gradient)
 
         fval[0, 0] = assemble(vol_constraint)
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
         filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
+        zero_fixed_density_sensitivities_inplace(filtered_s_vol)
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
@@ -1318,6 +1335,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             filtered_constraint_gradient = pde_filter(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
+            zero_fixed_density_sensitivities_inplace(filtered_constraint_gradient)
             dfdx[constraint_idx, :] = filtered_constraint_gradient.vector()[:]
 
             marker = constraint_spec["marker"]
@@ -1389,5 +1407,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 stage_idx + 1, len(Q_PENAL_SCHEDULE), max_iters_now,
             )
         )
+
+# The per-iteration VTK writes happen before the MMA update, so append one
+# more density snapshot after the last accepted design step.
+rho_f = pde_filter(rho, rho_f)
+rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
+rho_out << rho
+rhop_out << rho_proj_plot
 
 root_print("Optimization finished. Results written to {}".format(results_root))

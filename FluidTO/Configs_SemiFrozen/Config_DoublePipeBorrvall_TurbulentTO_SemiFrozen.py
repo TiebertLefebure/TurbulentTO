@@ -66,9 +66,9 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
-# ----------------------------------------------------------------------------------------------
+# =============================================================================================
 # Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
-# ----------------------------------------------------------------------------------------------
+# =============================================================================================
 
 # SA transport parameters for the monolithic primal state.
 SA_MUT_RATIO = 5.0
@@ -152,7 +152,7 @@ FILTER_RADIUS_IN_CELLS = 2.0
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 
-ENABLE_PRESSURE_PIN = True
+ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_DoublePipeBorrvall_TurbulentTO_SemiFrozen"
 

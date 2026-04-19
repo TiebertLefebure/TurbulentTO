@@ -27,6 +27,7 @@ def create_design_mesh():
 
 # Geometry and reference meshing parameters for the design box.
 L = 1.0
+N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = L
@@ -67,13 +68,14 @@ VOL_FRAC = 0.50
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-# The original diffuser continuation stopped with broad gray zones because the
-# Brinkman penalization never increased beyond q=0.1. Push q up in the later
-# stages and give the sharper stages more iterations to settle.
-Q_PENAL_SCHEDULE = [0.1, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 3.0]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
-BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
-MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
+# The raw diffuser design can become nearly binary while the filtered/projected
+# physical density remains gray. Keep q fixed at its sharpest setting in the
+# final stages, then raise beta and shrink the MMA move limit so the projected
+# field can collapse toward 0/1 instead of stalling around the threshold.
+Q_PENAL_SCHEDULE = [0.1, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 3.0, 3.0, 3.0]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005, 0.003, 0.0015]
+BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 160, 180, 220]
 
 # SemiFrozen primal-state solve parameters.
 LINEAR_SOLVER = "mumps"
@@ -81,7 +83,33 @@ STATE_SOLVE_METHOD = "newtonls"
 STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
-STATE_MAX_ITERS = 50
+STATE_MAX_ITERS = 80
+STATE_INITIAL_SA_SWEEPS = 4
+# The diffuser usually solves cleanly, so keep this continuation light. The
+# goal is only to soften occasional startup failures without importing the much
+# heavier double-pipe rescue schedule.
+STATE_TURBULENCE_COUPLING_SCHEDULE = [
+    {"weight": 0.0, "max_iters": 120, "atol": 8.0e-4},
+    {"weight": 0.35, "max_iters": 100, "atol": 5.0e-4},
+    {"weight": 0.70, "max_iters": 100, "atol": 2.0e-4},
+    {"weight": 1.0},
+]
+STATE_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 120,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "Stokes rebuild line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 160,
+        "restart_with_stokes": True,
+    },
+]
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]

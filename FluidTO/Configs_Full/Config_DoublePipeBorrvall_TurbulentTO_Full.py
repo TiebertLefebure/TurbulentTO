@@ -54,9 +54,12 @@ OUTLET_SEGMENTS = [
     (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
 ]
 
-# Optional passive inlet strip that can pin a few x-cells to fluid at the
-# inlet windows and to solid elsewhere in the same strip.
+# Optional passive inlet strip near the left boundary. The default
+# "fluid_only" mode only pins the inlet-window cells to fluid and leaves the
+# rest of the strip free; "block" reproduces the older behavior that also
+# forces the non-port part of the strip to solid.
 ENABLE_INLET_PASSIVE_STRIP = False
+INLET_PASSIVE_STRIP_MODE = "fluid_only"
 INLET_PASSIVE_STRIP_CELLS = 3
 INLET_PASSIVE_STRIP_LENGTH = INLET_PASSIVE_STRIP_CELLS * ((DOMAIN_X_MAX - DOMAIN_X_MIN) / NX)
 
@@ -270,6 +273,10 @@ def _inside_any_segment(y_value, segments, tol=TOL):
     return any(between(y_value, segment, tol) for segment in segments)
 
 
+def _passive_strip_mode():
+    return str(globals().get("INLET_PASSIVE_STRIP_MODE", "fluid_only")).strip().lower()
+
+
 def build_density_bounds(mesh, density_space):
     if not ENABLE_INLET_PASSIVE_STRIP:
         return 0.0, 1.0
@@ -281,6 +288,12 @@ def build_density_bounds(mesh, density_space):
     upper_values = np.ones(density_space.dim())
     dofmap = density_space.dofmap()
     inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
+    strip_mode = _passive_strip_mode()
+    if strip_mode not in {"fluid_only", "block"}:
+        raise ValueError(
+            "INLET_PASSIVE_STRIP_MODE must be either 'fluid_only' or 'block'. "
+            "Got {!r}.".format(strip_mode)
+        )
 
     for cell in cells(mesh):
         dof = dofmap.cell_dofs(cell.index())[0]
@@ -292,7 +305,7 @@ def build_density_bounds(mesh, density_space):
             if _inside_any_segment(y_coord, INLET_SEGMENTS):
                 lower_values[dof] = 1.0
                 upper_values[dof] = 1.0
-            else:
+            elif strip_mode == "block":
                 lower_values[dof] = 0.0
                 upper_values[dof] = 0.0
 
@@ -311,11 +324,20 @@ def build_volume_region(mesh, density_space):
     region_values = np.ones(density_space.dim())
     dofmap = density_space.dofmap()
     inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
+    strip_mode = _passive_strip_mode()
 
     for cell in cells(mesh):
         dof = dofmap.cell_dofs(cell.index())[0]
-        x_coord = cell.midpoint().x()
-        if DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
+        midpoint = cell.midpoint()
+        x_coord = midpoint.x()
+        y_coord = midpoint.y()
+        if (
+            DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS
+            and (
+                strip_mode == "block"
+                or _inside_any_segment(y_coord, INLET_SEGMENTS)
+            )
+        ):
             region_values[dof] = 0.0
 
     volume_region.vector().set_local(region_values)

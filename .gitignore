@@ -2,6 +2,6 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .git.backup/
-BorrvallTO/Results_*/
-TurbulentTO/Results_*/
-TurbulenceModels/Results/
+
+# Generated simulation result output
+FluidTO/Results_*/

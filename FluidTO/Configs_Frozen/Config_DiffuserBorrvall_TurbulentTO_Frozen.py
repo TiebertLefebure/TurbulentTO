@@ -24,6 +24,7 @@ def create_design_mesh():
 
 # Geometry and reference meshing parameters for the design box.
 L = 1.0
+N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
 DOMAIN_X_MIN = 0.0
 DOMAIN_Y_MIN = 0.0
 DOMAIN_X_MAX = L
