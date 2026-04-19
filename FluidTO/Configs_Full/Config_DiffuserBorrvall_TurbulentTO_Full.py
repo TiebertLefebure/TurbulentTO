@@ -84,6 +84,32 @@ STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
 STATE_MAX_ITERS = 50
+STATE_INITIAL_SA_SWEEPS = 4
+# The diffuser usually solves cleanly, so keep this continuation light. The
+# goal is only to soften occasional startup failures without importing the much
+# heavier double-pipe rescue schedule.
+STATE_TURBULENCE_COUPLING_SCHEDULE = [
+    {"weight": 0.0, "max_iters": 120, "atol": 8.0e-4},
+    {"weight": 0.35, "max_iters": 100, "atol": 5.0e-4},
+    {"weight": 0.70, "max_iters": 100, "atol": 2.0e-4},
+    {"weight": 1.0},
+]
+STATE_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 120,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "Stokes rebuild line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 160,
+        "restart_with_stokes": True,
+    },
+]
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]

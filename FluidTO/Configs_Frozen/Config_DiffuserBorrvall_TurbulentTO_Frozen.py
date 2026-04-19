@@ -36,10 +36,14 @@ OUTLET_Y_MIN = 1.0 / 3.0
 OUTLET_Y_MAX = 2.0 / 3.0
 
 # Flow and Brinkman parameters for the frozen forward solve.
-MU_FLUID_VALUE = 1.0
+MU_FLUID_VALUE = 1.0e-3
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 3.0
+
+# =====================================================================================
+# Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,000
+# =====================================================================================
 
 # SA transport parameters for the frozen turbulence update.
 # Use a very small inlet turbulent-viscosity ratio so this case starts from a weak-turbulence state.
@@ -72,7 +76,7 @@ MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
 # Frozen flow/turbulence coupling and IPCS solve parameters.
 LINEAR_SOLVER = "mumps"
-PICARD_STEPS = 1
+PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.5
 
 # IPCS forward solver parameters:
@@ -92,7 +96,7 @@ FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER = "cg"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
-FORWARD_IPCS_LOG_EVERY = 25
+FORWARD_IPCS_LOG_EVERY = 50
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]

@@ -60,11 +60,6 @@ for _name, _value in vars(CONFIG).items():
 FULL_STATE_INCLUDE_G = str(os.environ.get("TURBULENTTO_INCLUDE_G_STATE", "0")).strip().lower() in {
     "1", "true", "yes", "on",
 }
-root_print("Using config module: {}".format(CONFIG_MODULE_NAME))
-if FULL_STATE_INCLUDE_G:
-    root_print("Full solver mode: including reciprocal wall-distance G in the state and adjoint.")
-else:
-    root_print("SemiFrozen solver mode: keeping reciprocal wall-distance G external to the adjoint state.")
 
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
@@ -264,8 +259,6 @@ outlet_markers = as_list(mark["outlet"])
 density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
-fixed_density_mask = np.abs(density_upper_values - density_lower_values) < 1.0e-12
-has_fixed_density_cells = bool(np.any(fixed_density_mask))
 ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
 
@@ -294,7 +287,6 @@ use_outlet_velocity_bc = outlet_bc_type == "velocity"
 use_outlet_pressure_bc = outlet_bc_type == "pressure"
 use_pressure_pin = bool(globals().get("ENABLE_PRESSURE_PIN", True))
 if use_outlet_pressure_bc and use_pressure_pin:
-    root_print("Outlet pressure BC requested; disabling the redundant pointwise pressure pin.")
     use_pressure_pin = False
 outlet_pressure_value_float = float(globals().get("OUTLET_PRESSURE_VALUE", 0.0))
 outlet_pressure_value = Constant(outlet_pressure_value_float)
@@ -313,9 +305,9 @@ if use_outlet_velocity_bc and len(outlet_profiles) != len(outlet_markers):
     )
 
 if use_outlet_pressure_bc:
-    root_print("Outlet BC type: pressure (p = {:.3e} on outlet).".format(outlet_pressure_value_float))
+    root_print("Outlet BC type: pressure")
 else:
-    root_print("Outlet BC type: velocity profile.")
+    root_print("Outlet BC type: velocity")
 
 bcu_walls = [DirichletBC(StateSpace.sub(STATE_VEL_IDX), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(StateSpace.sub(STATE_VEL_IDX), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
@@ -416,7 +408,7 @@ if callable(custom_turbulence_inlet_builder):
                 len(inlet_markers), len(nu_tilde_inlet_bc_values),
             )
         )
-    root_print("Using custom SA inlet profiles from config (nu_lam = {:.3e}).".format(_nu_lam))
+    root_print("SA inlet nu_tilde: custom profiles  (nu_lam = {:.3e})".format(_nu_lam))
 else:
     if "SA_MUT_RATIOS" in globals():
         _sa_nu_tilde_targets = [nu_tilde_from_viscosity_ratio(r, _nu_lam) for r in as_list(SA_MUT_RATIOS)]
@@ -434,7 +426,7 @@ else:
         )
     root_print(
         "SA inlet nu_tilde: {}  (nu_lam = {:.3e})".format(
-            ["  {:.4e}".format(v) for v in _sa_nu_tilde_targets],
+            ", ".join("{:.4e}".format(v) for v in _sa_nu_tilde_targets),
             _nu_lam,
         )
     )
@@ -484,17 +476,6 @@ def enforce_density_bounds_inplace(density_field):
     density_field.vector().set_local(values)
     density_field.vector().apply("insert")
     return density_field
-
-
-def zero_fixed_density_sensitivities_inplace(sensitivity_field):
-    if not has_fixed_density_cells:
-        return sensitivity_field
-
-    values = sensitivity_field.vector().get_local()
-    values[fixed_density_mask] = 0.0
-    sensitivity_field.vector().set_local(values)
-    sensitivity_field.vector().apply("insert")
-    return sensitivity_field
 
 
 rho_projected = projection(rho_f, ETA_I)
@@ -583,17 +564,6 @@ if FULL_STATE_INCLUDE_G:
     def update_wall_distance_field():
         return None
 
-    root_print(
-        "Penalized SA wall-distance enabled (monolithic G): source={}, init_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}".format(
-            sa_wall_density_source,
-            "custom" if custom_initial_wall_distance is not None else "geometric",
-            sa_wall_sigma,
-            sa_wall_g0,
-            sa_wall_penalty_alpha,
-            sa_wall_penalty_power,
-            sa_wall_solid_threshold,
-        )
-    )
 else:
     # SemiFrozen mode: solve G externally, reconstruct y from that solve, and
     # keep the wall-distance update outside the adjointed state system.
@@ -618,20 +588,6 @@ else:
         solid_threshold=sa_wall_solid_threshold,
         initial_wall_distance=custom_initial_wall_distance,
         prefer_pseudo_time=sa_wall_prefer_pseudo_time,
-    )
-    root_print(
-        "Penalized SA wall-distance enabled (external G): source={}, init_G={}, pseudo_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}, relax_G={}, maxit_G={}".format(
-            sa_wall_density_source,
-            "custom" if custom_initial_wall_distance is not None else "geometric",
-            sa_wall_prefer_pseudo_time,
-            sa_wall_sigma,
-            sa_wall_g0,
-            sa_wall_penalty_alpha,
-            sa_wall_penalty_power,
-            sa_wall_solid_threshold,
-            sa_wall_newton_relax,
-            sa_wall_newton_max_iters,
-        )
     )
 
 bc_state = bcu_walls + bcu_inlet + bcu_outlet + bcp_outlet + bcp_pin + bcn_turbulence_state + bcg_state
@@ -1226,8 +1182,6 @@ d = np.ones((mmma, 1))
 
 xmin = np.zeros((num_mma, 1))
 xmax = np.ones((num_mma, 1))
-xmin[:, 0] = density_lower_values
-xmax[:, 0] = density_upper_values
 
 df0dx = np.zeros((num_mma, 1))
 fval = np.zeros((mmma, 1))
@@ -1312,12 +1266,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         # 3. Assemble filtered sensitivities and constraint gradients for MMA.
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
-        zero_fixed_density_sensitivities_inplace(filtered_gradient)
 
         fval[0, 0] = assemble(vol_constraint)
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
         filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
-        zero_fixed_density_sensitivities_inplace(filtered_s_vol)
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
@@ -1335,7 +1287,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             filtered_constraint_gradient = pde_filter(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
-            zero_fixed_density_sensitivities_inplace(filtered_constraint_gradient)
             dfdx[constraint_idx, :] = filtered_constraint_gradient.vector()[:]
 
             marker = constraint_spec["marker"]
@@ -1407,12 +1358,5 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 stage_idx + 1, len(Q_PENAL_SCHEDULE), max_iters_now,
             )
         )
-
-# The per-iteration VTK writes happen before the MMA update, so append one
-# more density snapshot after the last accepted design step.
-rho_f = pde_filter(rho, rho_f)
-rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-rho_out << rho
-rhop_out << rho_proj_plot
 
 root_print("Optimization finished. Results written to {}".format(results_root))

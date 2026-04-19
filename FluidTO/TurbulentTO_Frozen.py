@@ -51,7 +51,6 @@ CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
-root_print("Using config module: {}".format(CONFIG_MODULE_NAME))
 
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
@@ -271,7 +270,6 @@ use_outlet_velocity_bc = outlet_bc_type == "velocity"
 use_outlet_pressure_bc = outlet_bc_type == "pressure"
 use_pressure_pin = bool(globals().get("ENABLE_PRESSURE_PIN", True))
 if use_outlet_pressure_bc and use_pressure_pin:
-    root_print("Outlet pressure BC requested; disabling the redundant pointwise pressure pin.")
     use_pressure_pin = False
 outlet_pressure_value_float = float(globals().get("OUTLET_PRESSURE_VALUE", 0.0))
 outlet_pressure_value = Constant(outlet_pressure_value_float)
@@ -290,9 +288,9 @@ if use_outlet_velocity_bc and len(outlet_profiles) != len(outlet_markers):
     )
 
 if use_outlet_pressure_bc:
-    root_print("Outlet BC type: pressure (p = {:.3e} on outlet).".format(outlet_pressure_value_float))
+    root_print("Outlet BC type: pressure")
 else:
-    root_print("Outlet BC type: velocity profile.")
+    root_print("Outlet BC type: velocity")
 
 bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
@@ -398,7 +396,7 @@ if callable(custom_turbulence_inlet_builder):
                 len(inlet_markers), len(nu_tilde_inlet_bc_values),
             )
         )
-    root_print("Using custom SA inlet profiles from config (nu_lam = {:.3e}).".format(_nu_lam))
+    root_print("SA inlet nu_tilde: custom profiles  (nu_lam = {:.3e})".format(_nu_lam))
 else:
     if "SA_MUT_RATIOS" in globals():
         _sa_nu_tilde_targets = [nu_tilde_from_viscosity_ratio(r, _nu_lam) for r in as_list(SA_MUT_RATIOS)]
@@ -414,9 +412,12 @@ else:
                 len(inlet_markers), len(_sa_nu_tilde_targets),
             )
         )
-    root_print("SA inlet nu_tilde: {}  (nu_lam = {:.3e})".format(
-        ["  {:.4e}".format(v) for v in _sa_nu_tilde_targets], _nu_lam,
-    ))
+    root_print(
+        "SA inlet nu_tilde: {}  (nu_lam = {:.3e})".format(
+            ", ".join("{:.4e}".format(v) for v in _sa_nu_tilde_targets),
+            _nu_lam,
+        )
+    )
     nu_tilde_inlet_bc_values = [Constant(value) for value in _sa_nu_tilde_targets]
 bcn_turbulence = (
     [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_inlet_bc_values, inlet_markers)]
@@ -513,13 +514,6 @@ else:
     initial_wall_distance=custom_initial_wall_distance,
     prefer_pseudo_time=sa_wall_prefer_pseudo_time,
 )
-root_print("Penalized SA wall-distance enabled: source={}, init_G={}, pseudo_G={}, sigma={}, G0={}, alpha_G={}, n_G={}, rho_cut_G={}, relax_G={}, maxit_G={}".format(
-    sa_wall_density_source, "custom" if custom_initial_wall_distance is not None else "geometric",
-    sa_wall_prefer_pseudo_time,
-    sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power,
-    sa_wall_solid_threshold, sa_wall_newton_relax, sa_wall_newton_max_iters,
-))
-
 # Initial SA field.
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL",
     nu_tilde_from_viscosity_ratio(SA_MUT_RATIO, _nu_lam) if "SA_MUT_RATIO" in globals()
