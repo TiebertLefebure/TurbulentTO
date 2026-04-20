@@ -8,7 +8,6 @@ except ModuleNotFoundError:
 
 from mma import mmasub
 from TurbulenceModel_SpalartAllmaras_TO import (
-    _smooth_positive,
     build_spalart_allmaras_residual,
     sa_transport_terms,
     sa_turbulent_viscosity,
@@ -819,6 +818,9 @@ def initialize_state_guess_with_stokes(reset_g=False):
     run_sa_warm_start_sweeps(w_state.sub(STATE_VEL_IDX, deepcopy=True))
 
 
+# ===============================================================
+# Nonlinear state solve
+# ===============================================================
 def solve_state_once(
     method_override=None,
     line_search_override=None,
@@ -1056,7 +1058,6 @@ def solve_state_with_recovery():
     # first nonlinear solve breakdown.
     recovery_attempts = build_state_snes_recovery_attempts()
     coupling_schedule = build_state_turbulence_coupling_schedule()
-    last_error = None
     num_retries = max(0, len(recovery_attempts) - 1)
     try:
         for attempt_idx, attempt in enumerate(recovery_attempts):
@@ -1087,17 +1088,16 @@ def solve_state_with_recovery():
                 solve_state_attempt(attempt, coupling_schedule)
                 state_turbulence_coupling_weight.assign(1.0)
                 return
-            except RuntimeError as error:
-                last_error = error
+            except RuntimeError:
                 if attempt_idx == len(recovery_attempts) - 1:
                     raise
     finally:
         state_turbulence_coupling_weight.assign(1.0)
 
-    if last_error is not None:
-        raise last_error
 
-
+# ===============================================================
+# Adjoint solve
+# ===============================================================
 def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
     # Linear adjoint of the current monolithic state system.
     solver_log("    [Adjoint] linear system")
@@ -1203,8 +1203,9 @@ else:
     MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
 
 
-# Outer continuation/MMA loop. Each stage updates q and beta, then repeatedly
-# solves the turbulent state/adjoint for the current design.
+# ===============================================================
+# Continuation and MMA optimization loop
+# ===============================================================
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
@@ -1227,7 +1228,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             )
         )
 
-        # 1. Filter/project the design and refresh any design-dependent wall data.
+        # --- Filtering and wall distance ---
         solver_log("  [Filter] design density")
         rho_f = pde_filter(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
@@ -1241,10 +1242,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             solver_log("  [Warm start] Stokes-Brinkman plus SA initialization")
             initialize_state_guess_with_stokes(reset_g=True)
 
-        # 2. Solve the primal state, then the adjoint for the current design.
+        # --- State solve ---
         root_print("  [State solve]")
         solve_state_with_recovery()
 
+        # --- Adjoint solve ---
         root_print("  [Adjoint solve]")
         solve_adjoint(objective_adjoint_form)
 
@@ -1263,7 +1265,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             convergence_history = 0
         previous_objective = f0val
 
-        # 3. Assemble filtered sensitivities and constraint gradients for MMA.
+        # --- Sensitivities and constraints ---
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
 
@@ -1302,7 +1304,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 )
                 mass_flow_status_markers.add(marker)
 
-        # 4. MMA updates the density field for the next primal/adjoint pair.
+        # --- MMA update ---
         root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
             mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,

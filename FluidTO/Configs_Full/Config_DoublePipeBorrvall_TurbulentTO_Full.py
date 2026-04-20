@@ -69,10 +69,10 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
-# =============================================================================================
-# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,660
-# =============================================================================================
 
+# =============================================================================================
+# Reynolds number: Re = U_MAX_INLET * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,600
+# =============================================================================================
 
 
 # SA transport parameters for the monolithic primal state.
@@ -84,28 +84,21 @@ SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
 # Relaxed wall equation parameters for the coupled reciprocal distance state.
-SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 
-# Only treat near-solid cells as artificial walls; the initial rho=1/3 gray
-# field should not trigger wall penalties across the whole domain.
-SA_WALL_SOLID_THRESHOLD = 0.10
-SA_WALL_DISTANCE_FLOOR = 1.0e-6 * PORT_WIDTH
-
 # MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 1.0 / 3.0
-INITIAL_DENSITY_VALUE = 1.0 / 3.0
 MAX_INNER_ITERATIONS_SCHEDULE = [35, 80, 100, 120, 120, 120, 100, 100]
-OBJECTIVE_CONVERGENCE_TOL = 5e-5
+OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
 Q_PENAL_SCHEDULE = [0.05, 0.1, 0.1, 0.2, 0.5, 1.0, 1.0, 1.0]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
-BETA_PROJ_SCHEDULE = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
 
 # Full primal-state solve parameters.
 LINEAR_SOLVER = "mumps"

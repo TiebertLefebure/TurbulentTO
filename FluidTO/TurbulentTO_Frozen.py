@@ -853,7 +853,9 @@ def initialize_forward_guess_with_stokes():
     sa_model.nu_tilde0.assign(nu_guess)
     sa_model.nu_tilde1.assign(nu_guess)
 
-# Forward solver.
+# ===============================================================
+# IPCS forward solve
+# ===============================================================
 def solve_forward(solve_label=None):
     """Run IPCS to a steady state and store the result in w_fwd."""
     global ipcs_solve_counter
@@ -1021,8 +1023,7 @@ def solve_forward(solve_label=None):
             dt_pc.assign(base_dt)
             return float(du_rel), float(dp_rel)
 
-        # Retry from the best iterate seen in this attempt, not from the
-        # potentially degraded final iterate after a long failed march.
+        # Continue the adaptive attempt ladder from the best iterate seen so far.
         assign(u_start, attempt_best_u)
         assign(p_start, attempt_best_p)
 
@@ -1050,24 +1051,9 @@ def solve_forward(solve_label=None):
     return float(best_du), float(best_dp)
 
 
-def solve_forward_with_recovery(solve_label=None):
-    """Retry a failed IPCS solve from a fresh Stokes-Brinkman warm start."""
-    try:
-        return solve_forward(solve_label)
-    except RuntimeError:
-        if not bool(globals().get("FORWARD_IPCS_RESTART_WITH_STOKES", True)):
-            raise
-        if int(globals().get("FORWARD_IPCS_MAX_RESTARTS", 0)) > 0:
-            solver_log(
-                "      [IPCS] adaptive attempts already exhausted; skipping duplicate Stokes rerun"
-            )
-            raise
-        solver_log("      [IPCS] rebuilding Stokes-Brinkman warm start and retrying once")
-        initialize_forward_guess_with_stokes()
-        retry_label = solve_label if solve_label is not None else "solve"
-        return solve_forward("{}_stokes".format(retry_label))
-
-# Adjoint solver.
+# ===============================================================
+# Adjoint solve
+# ===============================================================
 def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
     """Assemble and solve the linear adjoint system."""
     solver_log("    [Adjoint] linear system")
@@ -1161,9 +1147,9 @@ if isinstance(_max_iters_raw, (list, tuple)):
 else:
     MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
 
-# ---------------------------------------------------------------
-# Optimization loop.
-# ---------------------------------------------------------------
+# ===============================================================
+# Continuation and MMA optimization loop
+# ===============================================================
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
@@ -1182,9 +1168,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
         ))
 
-        # Update the filtered and projected design.
+        # --- Filtering and wall distance ---
         solver_log("  [Filter] design density")
-        rho_f = pde_filter(rho, rho_f) # filtered design variable
+        rho_f = pde_filter(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
         solver_log("  [Wall distance] update")
         update_wall_distance_field()
@@ -1192,17 +1178,16 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         rho_out << rho
         rhop_out << rho_proj_plot
 
-        # Build the initial guess once.
         if iter_count == 0:
             solver_log("  [Warm start] Stokes-Brinkman and initial SA field")
             initialize_forward_guess_with_stokes()
 
-        # Forward flow and SA updates.
+        # --- Forward solve: IPCS + frozen SA Picard updates ---
         root_print("  [Forward solve]")
         picard_steps = max(1, int(globals().get("PICARD_STEPS", globals().get("FROZEN_PICARD_STEPS", 1))))
         for picard_idx in range(picard_steps):
             solver_log("    [Picard {}/{}] flow".format(picard_idx + 1, picard_steps))
-            solve_forward_with_recovery("stage{:02d}_iter{:03d}_picard{:02d}".format(
+            solve_forward("stage{:02d}_iter{:03d}_picard{:02d}".format(
                 stage_idx + 1, inner_count, picard_idx + 1,
             ))
             velocity_for_sa = w_fwd.sub(0, deepcopy=True)
@@ -1217,13 +1202,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             sa_model.nu_tilde0.assign(nu_tilde_frozen)
             sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
-        # Final flow solve with the updated turbulent viscosity.
         solver_log("    [Final flow] IPCS with updated turbulent viscosity")
-        final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward_with_recovery("stage{:02d}_iter{:03d}_final".format(
+        final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward("stage{:02d}_iter{:03d}_final".format(
             stage_idx + 1, inner_count,
         ))
 
-        # Adjoint solve.
+        # --- Adjoint solve ---
         root_print("  [Adjoint solve]")
         solve_adjoint(objective_adjoint_form)
 
@@ -1242,12 +1226,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             convergence_history = 0
         previous_objective = f0val
 
-        # Objective gradient.
+        # --- Sensitivities and constraints ---
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
-        # Volume constraint and gradient.
         fval[0, 0] = assemble(vol_constraint)
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
         filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
@@ -1283,7 +1266,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 )
                 mass_flow_status_markers.add(marker)
 
-        # MMA update.
+        # --- MMA update ---
         root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
             mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,

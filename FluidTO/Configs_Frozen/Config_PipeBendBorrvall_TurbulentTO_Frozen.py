@@ -109,7 +109,6 @@ FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_MAX_RESTARTS = 3
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_RESTART_WITH_STOKES = False
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)

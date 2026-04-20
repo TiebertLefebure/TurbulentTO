@@ -57,10 +57,6 @@ U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
 
 # SA transport parameters for the frozen turbulence update.
-# SA_MUT_RATIO: target turbulent viscosity ratio nu_t / nu_lam at inlets.
-# The main solver inverts the SA constitutive relation nu_t = nu_tilde * fv1(chi)
-# to get the corresponding nu_tilde BC.  At Re=1660 with fully developed turbulent
-# channel flow, a ratio of ~5-10 is physically reasonable.
 SA_MUT_RATIO = 5.0                      # nu_t / nu_lam at inlets (same for both ports)
 SA_SMOOTH_ABS_EPS = 1.0e-12             # smoothing for |nu_tilde| in chi computation
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX  # scale for initial nu_tilde ramp from walls
@@ -77,15 +73,11 @@ SA_WALL_G_FLOOR = 1.0e-8                # floor on reciprocal distance (avoids d
 
 # MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 1.0 / 3.0          # target fluid volume fraction (two thin channels ≈ 1/3)
-INITIAL_DENSITY_VALUE = 1.0 / 3.0
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
 # -------------------------------------------------------------------
 # Continuation schedules — one entry per stage, applied in order.
-# q_penal: low → convex alpha (gray-friendly); high → penalises intermediate densities.
-# beta:    Heaviside sharpness; 1 = smooth sigmoid, 64 = near step function.
-# move:    MMA move limit; large at start (topology formation), small at end (refinement).
 # -------------------------------------------------------------------
 Q_PENAL_SCHEDULE    = [0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00, 3.00, 3.00, 3.00]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.025, 0.015, 0.008, 0.004, 0.002, 0.001, 0.0005]
@@ -120,7 +112,6 @@ FORWARD_IPCS_P_SOLVER           = "cg"
 FORWARD_IPCS_P_PRECONDITIONER   = "ilu"
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_RESTART_WITH_STOKES = False
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)
