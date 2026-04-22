@@ -18,12 +18,6 @@ def _infer_mesh_label_from_path(path):
 
 UBEND_KE_MESH_LABEL = _infer_mesh_label_from_path(mesh_files['MESH_DIRECTORY'])
 UBEND_KE_RESULTS_ROOT = f'Results/U-Bend_K-E/{UBEND_KE_MESH_LABEL}'
-# Fine runs are much cheaper to start from a converged coarse field than from zero.
-# Change to 'Medium' if you generate and prefer medium-mesh warm-start data later.
-UBEND_KE_WARM_START_LABEL = 'Fine'
-UBEND_KE_WARM_START_ROOT = f'Results/U-Bend_K-E/{UBEND_KE_WARM_START_LABEL}'
-UBEND_KE_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_KE_WARM_START_LABEL}/mesh.xdmf'
-UBEND_KE_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_KE_WARM_START_LABEL}/facet.xdmf'
 
 # Specify type of boundaries
 boundary_markers = {
@@ -124,15 +118,6 @@ simulation_prm = {
     'RUNTIME_WRITE_INTERVAL': 25,
     'RUNTIME_WRITE_PVD': True,
     'RUNTIME_WRITE_RESIDUALS': True,
-
-    # Optional warm-start from saved fields (same mesh or cross-mesh transfer)
-    'WARM_START_ENABLED': False,
-    'WARM_START_SOURCE_MESH_XDMF': UBEND_KE_WARM_START_MESH_XDMF,
-    'WARM_START_SOURCE_FACET_XDMF': UBEND_KE_WARM_START_FACET_XDMF,
-    'WARM_START_U_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/u.h5',
-    'WARM_START_P_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/p.h5',
-    'WARM_START_K_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/k.h5',
-    'WARM_START_E_H5': f'{UBEND_KE_WARM_START_ROOT}/H5 files/e.h5',
 }
 
 # Specify where results are saved

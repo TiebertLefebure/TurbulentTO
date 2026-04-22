@@ -1,6 +1,5 @@
 from dolfin import *
 from Utilities import *
-import gc
 import importlib.util as _ilu
 import os
 import time
@@ -28,88 +27,6 @@ def _mesh_save_dirs(d, mesh_path):
         parent = os.path.dirname(path)
         out[key] = os.path.join(path, '') if os.path.basename(parent) == mesh_name else os.path.join(parent, mesh_name, os.path.basename(path), '')
     return out
-
-
-def _try_load_warm_start(target_function, path, label):
-    if not path:
-        return False
-    if not os.path.exists(path):
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (file not found): {path}')
-        return False
-
-    try:
-        load_h5_into_function(target_function, path, label=f'warm-start {label}')
-    except Exception as exc:
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (failed to load {path}): {type(exc).__name__}: {exc}')
-        return False
-
-    if IS_ROOT:
-        print(f'Warm-start loaded for {label}: {path}')
-    return True
-
-
-def _same_path(path_a, path_b):
-    if not path_a or not path_b:
-        return False
-    return os.path.abspath(os.path.normpath(path_a)) == os.path.abspath(os.path.normpath(path_b))
-
-
-def _try_transfer_warm_start_between_meshes(target_function, target_space, source_space, path, label):
-    if not path:
-        return False
-    if not os.path.exists(path):
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (file not found): {path}')
-        return False
-
-    try:
-        source_function = load_H5_files(source_space, path, label=f'warm-start source {label}')
-    except Exception as exc:
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (failed to load source {path}): {type(exc).__name__}: {exc}')
-        return False
-
-    try:
-        source_function.set_allow_extrapolation(True)
-    except Exception:
-        pass
-
-    transfer_method = None
-    lagrange_error = None
-    interpolate_error = None
-    try:
-        LagrangeInterpolator.interpolate(target_function, source_function)
-        transfer_method = 'LagrangeInterpolator'
-    except Exception as exc:
-        lagrange_error = exc
-        try:
-            transferred = interpolate(source_function, target_space)
-            target_function.assign(transferred)
-            del transferred
-            transfer_method = 'interpolate'
-        except Exception as exc:
-            interpolate_error = exc
-            try:
-                transferred = project(source_function, target_space)
-                target_function.assign(transferred)
-                del transferred
-                transfer_method = 'project'
-            except Exception as exc_project:
-                if IS_ROOT:
-                    print(
-                        f'Warm-start {label} skipped (failed to transfer from source mesh): '
-                        f'LagrangeInterpolator -> {type(lagrange_error).__name__}: {lagrange_error}; '
-                        f'interpolate -> {type(interpolate_error).__name__}: {interpolate_error}; '
-                        f'project -> {type(exc_project).__name__}: {exc_project}'
-                    )
-                return False
-
-    del source_function
-    if IS_ROOT:
-        print(f'Warm-start loaded for {label} from other mesh via {transfer_method}: {path}')
-    return True
 
 
 def _solve_linear_system(A, x, b, linear_solver, linear_preconditioner):
@@ -187,59 +104,6 @@ turbulence_model = KEpsilon(
     y,
     ke_options=ke_options,
 )
-
-if simulation_prm.get('WARM_START_ENABLED', False):
-    warm_start_source_mesh_xdmf = simulation_prm.get('WARM_START_SOURCE_MESH_XDMF', mesh_files['MESH_DIRECTORY'])
-    warm_start_same_mesh = _same_path(warm_start_source_mesh_xdmf, mesh_files['MESH_DIRECTORY'])
-
-    if warm_start_same_mesh:
-        same_mesh_warm_starts = [
-            (u0, u1, simulation_prm.get('WARM_START_U_H5', None), 'u0'),
-            (p0, p1, simulation_prm.get('WARM_START_P_H5', None), 'p0'),
-            (turbulence_model.k0, turbulence_model.k1, simulation_prm.get('WARM_START_K_H5', None), 'k0'),
-            (turbulence_model.e0, turbulence_model.e1, simulation_prm.get('WARM_START_E_H5', None), 'e0'),
-        ]
-        for target_function, current_function, path, label in same_mesh_warm_starts:
-            if _try_load_warm_start(target_function, path, label):
-                current_function.assign(target_function)
-    else:
-        if IS_ROOT:
-            print(
-                'Warm-start source mesh differs from active mesh; '
-                'loading source fields and transferring to active mesh.'
-            )
-            print(f'  source mesh: {warm_start_source_mesh_xdmf}')
-            print(f'  active mesh: {mesh_files["MESH_DIRECTORY"]}')
-
-        source_mesh = None
-        try:
-            source_mesh = Mesh()
-            with XDMFFile(warm_start_source_mesh_xdmf) as infile:
-                infile.read(source_mesh)
-        except Exception as exc:
-            if IS_ROOT:
-                print(
-                    f'Cross-mesh warm-start skipped (failed to load source mesh {warm_start_source_mesh_xdmf}): '
-                    f'{type(exc).__name__}: {exc}'
-                )
-
-        if source_mesh is not None:
-            cross_mesh_warm_starts = [
-                (u0, u1, V, VectorFunctionSpace(source_mesh, 'CG', 2), simulation_prm.get('WARM_START_U_H5', None), 'u0'),
-                (p0, p1, Q, FunctionSpace(source_mesh, 'CG', 1), simulation_prm.get('WARM_START_P_H5', None), 'p0'),
-                (turbulence_model.k0, turbulence_model.k1, K, FunctionSpace(source_mesh, 'CG', 1), simulation_prm.get('WARM_START_K_H5', None), 'k0'),
-                (turbulence_model.e0, turbulence_model.e1, K, FunctionSpace(source_mesh, 'CG', 1), simulation_prm.get('WARM_START_E_H5', None), 'e0'),
-            ]
-            for target_function, current_function, target_space, source_space, path, label in cross_mesh_warm_starts:
-                if _try_transfer_warm_start_between_meshes(
-                    target_function, target_space, source_space, path, label
-                ):
-                    current_function.assign(target_function)
-                del source_space
-                gc.collect()
-
-            del source_mesh
-            gc.collect()
 
 turbulence_model.construct_forms(u1)
 nu_t = turbulence_model.nu_t

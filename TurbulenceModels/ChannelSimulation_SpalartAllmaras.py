@@ -4,7 +4,7 @@ from Configs.ConfigChannel_SpalartAllmaras import *
 from TurbulenceModel_SpalartAllmaras import SpalartAllmarasTransient as SpalartAllmaras
 import time
 
-# Use SA-specific parameters from the config file
+# Use transient SA parameters from the config file.
 simulation_prm = simulation_prm_SA
 saving_directory = saving_directory_SA
 
@@ -42,7 +42,7 @@ for boundary_name, markers in boundary_markers.items():
         for variable, bc_list, function_space in zip(['U','P','NU_TILDE'], [bcu,bcp,bcn], [V,Q,K]):
                 
             condition_value = boundary_conditions[boundary_name].get(variable)
-            if condition_value != None:
+            if condition_value is not None:
                 bc_list.append(DirichletBC(function_space, condition_value, marked_facets, marker))
 
 # Initialize constants and expressions
@@ -57,8 +57,11 @@ u, v, u1, u0 = initialize_functions(V, Constant(initial_conditions['U']))
 p, q, p1, p0 = initialize_functions(Q, Constant(initial_conditions['P']))
 
 # Initialize turbulence model
+sa_options = {
+    'SUPG_FACTOR': simulation_prm.get('SA_SUPG_FACTOR', 1.0)
+}
 turbulence_model = SpalartAllmaras(K, bcn, initial_conditions['NU_TILDE'],
-                            nu, force, dx, ds, dt, y)
+                            nu, force, dx, ds, dt, y, sa_options=sa_options)
 turbulence_model.construct_forms(u1)
 
 # Construct RANS forms
@@ -97,11 +100,6 @@ for iter in range(simulation_prm['MAX_ITERATIONS']):
     A_2 = assemble(a_2); b_2 = assemble(l_2)
     [bc.apply(A_2,b_2) for bc in bcp]
     solve(A_2, p1.vector(), b_2, 'mumps')
-
-    # Normalize pressure to have zero mean for stability in periodic/closed domains
-    p1_average = assemble(p1*dx) / assemble(1*dx(mesh))
-    p1.vector()[:] -= p1_average
-
 
     A_3 = assemble(a_3); b_3 = assemble(l_3)
     [bc.apply(A_3,b_3) for bc in bcu]
@@ -147,20 +145,3 @@ if post_processing['SAVE']==True:
 
     for (key, f) in residuals.items():
         save_list(f, saving_directory['RESIDUALS'] + key + '.txt')
-
-### ChannelSimulation_Spalart-Allmaras.py ###
-
-### INPUT ###
-
-# cd /Users/tiebertlefebure/Documents/FEniCS-Tiebert/Turbulence_models/
-
-# docker run -ti --rm \
-#   -v "$(pwd)":/home/fenics/shared \
-#   -w /home/fenics/shared \
-#   quay.io/fenicsproject/stable:current
-
-# python3 ChannelSimulation_Spalart-Allmaras.py
-
-
-
-### OUTPUT ###

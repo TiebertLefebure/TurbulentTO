@@ -2,7 +2,6 @@ from dolfin import *
 from Utilities import *
 from Configs.ConfigUBend_SpalartAllmaras import *
 from TurbulenceModel_SpalartAllmaras import SpalartAllmarasTransient as SpalartAllmaras
-import gc
 import os
 import time
 
@@ -17,100 +16,7 @@ def _l2_norm_diff(f1, f0, dx_measure):
         return sqrt(assemble(diff**2 * dx_measure))
     return sqrt(assemble(dot(diff, diff) * dx_measure))
 
-
-def _try_load_warm_start(target_function, path, label):
-    """Load a warm-start field into target_function if the H5 path exists."""
-    if not path:
-        return False
-    if not os.path.exists(path):
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (file not found): {path}')
-        return False
-
-    try:
-        load_h5_into_function(target_function, path, label=f'warm-start {label}')
-    except Exception as exc:
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (failed to load {path}): {type(exc).__name__}: {exc}')
-        return False
-    if IS_ROOT:
-        print(f'Warm-start loaded for {label}: {path}')
-    return True
-
-
-def _same_path(path_a, path_b):
-    if not path_a or not path_b:
-        return False
-    return os.path.abspath(os.path.normpath(path_a)) == os.path.abspath(os.path.normpath(path_b))
-
-# ---------------------------------------
-# Warm-start with different meshes
-# ---------------------------------------
-
-def _try_transfer_warm_start_between_meshes(target_function, target_space, source_space, path, label):
-    """Load a field on source_space and transfer it onto target_space."""
-    if not path:
-        return False
-    if not os.path.exists(path):
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (file not found): {path}')
-        return False
-
-    try:
-        source_function = load_H5_files(source_space, path, label=f'warm-start source {label}')
-    except Exception as exc:
-        if IS_ROOT:
-            print(f'Warm-start {label} skipped (failed to load source {path}): {type(exc).__name__}: {exc}')
-        return False
-
-    # Cross-mesh interpolation can fail on boundary points due to tiny geometric
-    # mismatches/tolerances. Allow extrapolation on the source field so points
-    # that are numerically just outside still evaluate.
-    try:
-        source_function.set_allow_extrapolation(True)
-    except Exception:
-        pass
-
-    transfer_method = None
-    lagrange_error = None
-    interpolate_error = None
-    try:
-        LagrangeInterpolator.interpolate(target_function, source_function)
-        transfer_method = 'LagrangeInterpolator'
-    except Exception as exc:
-        lagrange_error = exc
-        try:
-            transferred = interpolate(source_function, target_space)
-            target_function.assign(transferred)
-            del transferred
-            transfer_method = 'interpolate'
-        except Exception as exc:
-            interpolate_error = exc
-            try:
-                # Fallback for cases where direct interpolation between meshes fails.
-                transferred = project(source_function, target_space)
-                target_function.assign(transferred)
-                del transferred
-                transfer_method = 'project'
-            except Exception as exc_project:
-                if IS_ROOT:
-                    print(
-                        f'Warm-start {label} skipped (failed to transfer from source mesh): '
-                        f'LagrangeInterpolator -> {type(lagrange_error).__name__}: {lagrange_error}; '
-                        f'interpolate -> {type(interpolate_error).__name__}: {interpolate_error}; '
-                        f'project -> {type(exc_project).__name__}: {exc_project}'
-                    )
-                return False
-
-    del source_function
-    if IS_ROOT:
-        print(f'Warm-start loaded for {label} from other mesh via {transfer_method}: {path}')
-    return True
-
-
-
-
-# Use SA-specific parameters from the config file if available
+# Use transient SA parameters from the config file.
 if 'simulation_prm_SA' in globals():
     simulation_prm = simulation_prm_SA
 if 'saving_directory_SA' in globals():
@@ -138,16 +44,16 @@ for boundary_name, markers in boundary_markers.items():
         continue  
 
     for marker in markers:
-        for variable, bc_list, function_space in zip(['U','P','NU_TILDE'], [bcu,bcp,bcn], [V,Q,K,K]):
+        for variable, bc_list, function_space in zip(['U','P','NU_TILDE'], [bcu,bcp,bcn], [V,Q,K]):
                 
             condition_value = boundary_conditions[boundary_name].get(variable)
-            if condition_value != None:
+            if condition_value is not None:
                 bc_list.append(DirichletBC(function_space, condition_value, marked_facets, marker))
 
 # Initialize constants and expressions
 nu = Constant(physical_prm['VISCOSITY'])
 force = Constant(physical_prm['FORCE'])
-dt = Constant(simulation_prm_SA['STEP_SIZE'])
+dt = Constant(simulation_prm['STEP_SIZE'])
 NS_LINEAR_SOLVER = simulation_prm.get('NS_LINEAR_SOLVER', simulation_prm.get('LINEAR_SOLVER', 'mumps'))
 NS_LINEAR_PRECONDITIONER = simulation_prm.get(
     'NS_LINEAR_PRECONDITIONER', simulation_prm.get('LINEAR_PRECONDITIONER', None)
@@ -176,89 +82,12 @@ p, q, p1, p0 = initialize_functions(Q, Constant(initial_conditions['P']))
 
 # Initialize turbulence model
 sa_options = dict(simulation_prm.get('SA_OPTIONS', {}))
+sa_options['SUPG_FACTOR'] = simulation_prm.get('SA_SUPG_FACTOR', sa_options.get('SUPG_FACTOR', 1.0))
 sa_options['LINEAR_SOLVER'] = SA_LINEAR_SOLVER
 sa_options['LINEAR_PRECONDITIONER'] = SA_LINEAR_PRECONDITIONER
 turbulence_model = SpalartAllmaras(K, bcn, initial_conditions['NU_TILDE'],
                             nu, force, dx, ds, dt, y, sa_options=sa_options)
 turbulence_model.construct_forms(u1)
-
-
-# ---------------------------------------------
-# Warm-start 
-# ---------------------------------------------
-
-# Optional warm-start from saved H5 fields.
-# If the warm-start source mesh differs from the active mesh, fields are
-# transferred via interpolation/projection onto the active function spaces.
-if simulation_prm.get('WARM_START_ENABLED', False):
-    warm_start_source_mesh_xdmf = simulation_prm.get('WARM_START_SOURCE_MESH_XDMF', mesh_files['MESH_DIRECTORY'])
-    warm_start_same_mesh = _same_path(warm_start_source_mesh_xdmf, mesh_files['MESH_DIRECTORY'])
-
-    if warm_start_same_mesh:
-        u_path = simulation_prm.get('WARM_START_U_H5', None)
-        p_path = simulation_prm.get('WARM_START_P_H5', None)
-        if _try_load_warm_start(u0, u_path, 'u0'):
-            u1.assign(u0)
-        if _try_load_warm_start(p0, p_path, 'p0'):
-            p1.assign(p0)
-        nu_tilde_path = simulation_prm.get('WARM_START_NU_TILDE_H5', None)
-        if _try_load_warm_start(turbulence_model.nu_tilde0, nu_tilde_path, 'nu_tilde0'):
-            turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
-    else:
-        if IS_ROOT:
-            print(
-                'Warm-start source mesh differs from active mesh; '
-                'loading source fields and transferring to active mesh.'
-            )
-            print(f'  source mesh: {warm_start_source_mesh_xdmf}')
-            print(f'  active mesh: {mesh_files["MESH_DIRECTORY"]}')
-
-        source_mesh = None
-        try:
-            source_mesh = Mesh()
-            with XDMFFile(warm_start_source_mesh_xdmf) as infile:
-                infile.read(source_mesh)
-        except Exception as exc:
-            if IS_ROOT:
-                print(
-                    f'Cross-mesh warm-start skipped (failed to load source mesh {warm_start_source_mesh_xdmf}): '
-                    f'{type(exc).__name__}: {exc}'
-                )
-
-        if source_mesh is not None:
-            u_path = simulation_prm.get('WARM_START_U_H5', None)
-            p_path = simulation_prm.get('WARM_START_P_H5', None)
-            nu_tilde_path = simulation_prm.get('WARM_START_NU_TILDE_H5', None)
-
-            if u_path:
-                source_space_v = VectorFunctionSpace(source_mesh, "CG", 2)
-                if _try_transfer_warm_start_between_meshes(
-                    u0, V, source_space_v, u_path, 'u0'
-                ):
-                    u1.assign(u0)
-                del source_space_v
-                gc.collect()
-
-            if p_path:
-                source_space_q = FunctionSpace(source_mesh, "CG", 1)
-                if _try_transfer_warm_start_between_meshes(
-                    p0, Q, source_space_q, p_path, 'p0'
-                ):
-                    p1.assign(p0)
-                del source_space_q
-                gc.collect()
-
-            if nu_tilde_path:
-                source_space_k = FunctionSpace(source_mesh, "CG", 1)
-                if _try_transfer_warm_start_between_meshes(
-                    turbulence_model.nu_tilde0, K, source_space_k, nu_tilde_path, 'nu_tilde0'
-                ):
-                    turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
-                del source_space_k
-                gc.collect()
-
-            del source_mesh
-            gc.collect()
 
 
 # Construct RANS forms
@@ -267,7 +96,8 @@ h = CellDiameter(mesh)
 u_mag = sqrt(dot(u0, u0) + 1e-10)
 tau = h / (2.0 * u_mag)
 residual = (u - u0) / dt + dot(u0, nabla_grad(u)) - force
-F_supg = inner(tau * dot(u0, nabla_grad(v)), residual) * dx
+momentum_supg_factor = Constant(float(simulation_prm.get('MOMENTUM_SUPG_FACTOR', 1.0)))
+F_supg = momentum_supg_factor * inner(tau * dot(u0, nabla_grad(v)), residual) * dx
 
 
 # Projection/pressure-correction split

@@ -1,9 +1,9 @@
 from dolfin import *
 from Utilities import *
 
-# --------------------------------- #
+# ================================= #
 # Spalart-Allmaras turbulence model #
-# --------------------------------- #
+# ================================= #
 
 class SpalartAllmarasGeneral:
     def __init__(self, N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field, sa_options=None):
@@ -170,15 +170,48 @@ class SpalartAllmarasSteadyState(SpalartAllmarasGeneral):
         super().__init__(N, bcn, nu_tilde_init, nu, force, custom_dx, custom_ds, distance_field, sa_options=sa_options)
 
     def construct_forms(self, external_u1):
-        self._construct_turbulent_quantities(external_u1)
+        # Match FluidTO/TurbulenceModel_SpalartAllmaras_TO_Frozen.py without
+        # the topology-optimization nu_tilde penalty reaction.
+        sigma = Constant(2.0 / 3.0)
+        cb1 = Constant(0.1355)
+        cb2 = Constant(0.622)
+        kappa = Constant(0.41)
+        cw2 = Constant(0.3)
+        cw3 = Constant(2.0)
+        cw1 = cb1 / kappa**2 + (Constant(1.0) + cb2) / sigma
 
-        sigma = 2.0/3.0
+        chi = self._nu_tilde0 / (self._nu + DOLFIN_EPS)
+        f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
+        f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
+        # Yoon 2016 uses the no-ft2 SA form in Eqs. (10)-(15).
+        f_t2 = Constant(0.0)
+
+        omega_sq = Constant(2.0) * inner(skew(nabla_grad(external_u1)), skew(nabla_grad(external_u1)))
+        S = sqrt(omega_sq + DOLFIN_EPS)
+
+        y_safe = self._y + DOLFIN_EPS
+        S_tilde = S + self._nu_tilde0 / (kappa**2 * y_safe**2) * f_v2
+
+        r_arg = self._nu_tilde0 / (S_tilde * kappa**2 * y_safe**2 + DOLFIN_EPS)
+        r = (r_arg + Constant(10.0) - abs(r_arg - Constant(10.0))) / Constant(2.0)
+
+        g = r + cw2 * (r**6 - r)
+        f_w = g * ((Constant(1.0) + cw3**6) / (g**6 + cw3**6))**(Constant(1.0) / Constant(6.0))
+
+        self._nu_t = self._nu_tilde0 * f_v1
+        self._react_nt = cw1 * f_w * (self._nu_tilde0 / y_safe**2)
+        self._source_nt = (
+            cb1 * (Constant(1.0) - f_t2) * S_tilde * self._nu_tilde0
+            + (cb2 / sigma) * inner(nabla_grad(self._nu_tilde0), nabla_grad(self._nu_tilde0))
+        )
 
         # Weak form for steady-state SA model
-        FNT  = dot(dot(external_u1, nabla_grad(self._nu_tilde)), self._xi)*self._dx \
-            + inner((self._nu + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi))*self._dx \
-            + dot(self._react_nt * self._nu_tilde, self._xi)*self._dx \
-            - dot(self._source_nt, self._xi)*self._dx
+        FNT = (
+            dot(external_u1, nabla_grad(self._nu_tilde)) * self._xi * self._dx
+            + inner((self._nu + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi)) * self._dx
+            + self._react_nt * self._nu_tilde * self._xi * self._dx
+            - self._source_nt * self._xi * self._dx
+        )
         self._a_nt = lhs(FNT); self._l_nt = rhs(FNT)
 
 

@@ -1,6 +1,7 @@
 from dolfin import *
 import numpy as np
 import os
+import time
 try:
     from ufl import tanh
 except ModuleNotFoundError:
@@ -211,7 +212,7 @@ def build_density_bounds_from_config():
         num_fixed_fluid = int(np.count_nonzero(fixed_cells & (lower_values > 0.5)))
         num_fixed_solid = int(np.count_nonzero(fixed_cells & (upper_values < 0.5)))
         root_print(
-            "Density bounds: {} passive cells ({} fluid, {} solid).".format(
+            "Density bounds: {} fixed density cells ({} fluid, {} solid).".format(
                 num_fixed, num_fixed_fluid, num_fixed_solid,
             )
         )
@@ -872,6 +873,7 @@ def solve_forward(solve_label=None):
     dt_reduction = float(globals().get("FORWARD_IPCS_DT_REDUCTION_FACTOR", 0.5))
     relax_reduction = float(globals().get("FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR", 0.7))
     error_on_nonconvergence = bool(globals().get("FORWARD_IPCS_ERROR_ON_NONCONVERGENCE", True))
+    accept_best_score = float(globals().get("FORWARD_IPCS_ACCEPT_BEST_SCORE", 1.0))
     vel_solver_name = str(globals().get("FORWARD_IPCS_VEL_SOLVER", "bicgstab"))
     p_solver_name = str(globals().get("FORWARD_IPCS_P_SOLVER", "cg"))
     direct_solver_names = {"lu", "mumps", "umfpack", "superlu", "superlu_dist"}
@@ -1045,6 +1047,14 @@ def solve_forward(solve_label=None):
         max_restarts + 1, best_attempt_idx, best_step_idx, best_du, rtol_u,
         best_dp, rtol_p, "; ".join(attempt_summaries),
     )
+    if best_score <= accept_best_score:
+        root_print(
+            "Warning: {} Accepting best iterate because normalized residual score "
+            "{:.2f} <= acceptance limit {:.2f}.".format(
+                message, best_score, accept_best_score,
+            )
+        )
+        return float(best_du), float(best_dp)
     if error_on_nonconvergence:
         raise RuntimeError(message)
     root_print("Warning: {}".format(message))
@@ -1150,6 +1160,7 @@ else:
 # ===============================================================
 # Continuation and MMA optimization loop
 # ===============================================================
+optimization_start_time = time.perf_counter()
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
@@ -1164,6 +1175,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     ))
 
     while inner_count < max_iters_now and not objective_converged:
+        iteration_start_time = time.perf_counter()
         root_print("--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
         ))
@@ -1300,9 +1312,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         if mass_flow_status:
             constraint_status_text = " " + " ".join(mass_flow_status)
 
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+        iteration_elapsed = time.perf_counter() - iteration_start_time
+        optimization_elapsed = time.perf_counter() - optimization_start_time
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-            inner_count, f0val, obj_conv, vol_fraction_now,
+            inner_count, iteration_elapsed, optimization_elapsed, f0val, obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
             constraint_status_text,
         ))
@@ -1326,4 +1340,13 @@ rho_out << rho
 rhop_out << rho_proj_plot
 np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
+optimization_elapsed = time.perf_counter() - optimization_start_time
+if iter_count > 0:
+    root_print("Average time per MMA iteration: {:.1f}s ({} iterations, total {:.1f}s).".format(
+        optimization_elapsed / float(iter_count), iter_count, optimization_elapsed,
+    ))
+else:
+    root_print("Average time per MMA iteration: n/a (0 iterations, total {:.1f}s).".format(
+        optimization_elapsed,
+    ))
 root_print("Optimization finished. Results written to {}".format(results_root))

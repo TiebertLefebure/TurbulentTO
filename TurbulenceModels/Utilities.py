@@ -59,54 +59,6 @@ def save_h5_file(f, directory):
     fFile.write(f,"/f")
     fFile.close()
 
-def _read_h5_into_function(target_function, directory, dataset_name="/f"):
-    '''Read an HDF5 dataset into an existing Function.'''
-    fFile = HDF5File(MPI.COMM_WORLD, directory, "r")
-    try:
-        fFile.read(target_function, dataset_name)
-    finally:
-        fFile.close()
-
-def load_h5_into_function(target_function, directory, dataset_name="/f", label="HDF5 field"):
-    '''
-    Read an HDF5 dataset into target_function.
-
-    If direct access fails on a Docker bind mount or cloud-synced folder,
-    retry from a temporary local copy under /tmp.
-    '''
-    try:
-        _read_h5_into_function(target_function, directory, dataset_name)
-        return target_function
-    except Exception as direct_exc:
-        try:
-            with tempfile.TemporaryDirectory(prefix="fenics_h5_") as tmpdir:
-                staged_h5_path = os.path.join(tmpdir, os.path.basename(os.path.abspath(directory)))
-                shutil.copy2(os.path.abspath(directory), staged_h5_path)
-                _read_h5_into_function(target_function, staged_h5_path, dataset_name)
-        except Exception as staged_exc:
-            raise RuntimeError(
-                "Direct HDF5 read failed.\n"
-                f"H5 path: {os.path.abspath(directory)}\n"
-                f"HDF5_USE_FILE_LOCKING={os.environ.get('HDF5_USE_FILE_LOCKING')!r}\n"
-                "Common cause: HDF5 access on a Docker bind-mounted or cloud-synced folder.\n"
-                "Try running with HDF5_USE_FILE_LOCKING=FALSE or staging the file under /tmp.\n"
-                f"Direct read exception: {type(direct_exc).__name__}: {direct_exc}\n"
-                f"Staged local-copy retry exception: {type(staged_exc).__name__}: {staged_exc}"
-            ) from direct_exc
-
-        if MPI.COMM_WORLD.Get_rank() == 0:
-            print(
-                f"Warning: Loaded {label} via a temporary local copy after shared-folder access "
-                f"failed for {os.path.abspath(directory)}."
-            )
-        return target_function
-
-def load_H5_files(Space, directory, dataset_name="/f", label="HDF5 field"):
-    '''Loads function from .h5 file to Space.'''
-    f = Function(Space)
-    load_h5_into_function(f, directory, dataset_name=dataset_name, label=label)
-    return f
-
 def save_list(dataset, directory):
     '''Saves python list as .txt file'''
     os.makedirs(os.path.dirname(directory), exist_ok=True)
@@ -114,14 +66,6 @@ def save_list(dataset, directory):
     with open(directory, 'w+') as file:
         for value in dataset:
             file.write(str(value) + '\n')
-
-def load_list(directory):
-    '''Loads .txt file into python list'''
-    dataset = []
-    with open(directory, 'r') as file:
-        for line in file:
-            dataset.append(float(line.strip()))
-    return dataset
 
 # ---------------------- Solver utilities ----------------------- #
 
@@ -148,6 +92,11 @@ def bound_from_bellow(f, lb):
     vec.set_local(local_values)
     vec.apply("insert")
     return f
+
+def positive_part(expr):
+    '''UFL positive part, matching the FluidTO wall-distance helper.'''
+    zero = Constant(0.0)
+    return conditional(gt(expr, zero), expr, zero)
 
 # ------------------- Visualization utilities ------------------- #
 
@@ -385,8 +334,9 @@ def _build_wall_bcs(Space, mf, wall_index, value):
     return [DirichletBC(Space, Constant(value), mf, marker) for marker in wall_markers]
 
 # Original Eikonal equation (for initialization) -> Yoon 2016 Eq. 16
-def _calculate_eikonal_distance_field(Space, mf, wall_index, relax):
+def _calculate_eikonal_distance_field(Space, mf, wall_index, relax, custom_dx=None):
     '''Smoothened (with relaxation) Eikonal equation for wall-distance.'''
+    dx_measure = custom_dx if custom_dx is not None else dx
     bcy = _build_wall_bcs(Space, mf, wall_index, 0.0)
 
     y = Function(Space)
@@ -396,13 +346,13 @@ def _calculate_eikonal_distance_field(Space, mf, wall_index, relax):
     g = Constant(1.0)
 
     # Linear approximation
-    F0 = inner(grad(dy), grad(z))*dx - g*z*dx
+    F0 = inner(grad(dy), grad(z))*dx_measure - g*z*dx_measure
     a0, L0 = lhs(F0), rhs(F0)
     solve(a0==L0, y, bcy)
 
     # Non-linear solver
-    F0  = sqrt(inner(grad(y), grad(y)))*z*dx - g*z*dx \
-        + relaxation*inner(grad(y),grad(z))*dx
+    F0  = sqrt(inner(grad(y), grad(y)) + DOLFIN_EPS)*z*dx_measure - g*z*dx_measure \
+        + relaxation*inner(grad(y),grad(z))*dx_measure
     problem = NonlinearVariationalProblem(F0, y,J=derivative(F0, y), bcs=bcy)
     solver = NonlinearVariationalSolver(problem)
     solver.solve()
@@ -417,6 +367,11 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     sigma_w=0.1,
     g0=20.0,
     g_floor=1.0e-12,
+    newton_rtol=1.0e-8,
+    newton_atol=1.0e-10,
+    newton_max_iters=80,
+    newton_relax=0.5,
+    custom_dx=None,
 ):
     '''
     Yoon 2016 Eq. (19) relaxed wall equation in reciprocal-distance form G.
@@ -428,33 +383,40 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     if float(g_floor) <= 0.0:
         raise ValueError("Yoon Eq. (19) requires g_floor > 0.")
 
+    dx_measure = custom_dx if custom_dx is not None else dx
     sigma_w_const = Constant(float(sigma_w))
-    g0_const = Constant(float(g0))
-    g_floor_const = Constant(float(g_floor))
-
     # Robust initialization from the standard smoothed Eikonal distance.
-    y_initial = _calculate_eikonal_distance_field(Space, mf, wall_index, relax)
+    y_initial = _calculate_eikonal_distance_field(Space, mf, wall_index, relax, custom_dx=dx_measure)
     G = project(Constant(1.0) / (y_initial + Constant(1.0 / float(g0))), Space)
-    G.vector()[:] = np.maximum(G.vector()[:], float(g_floor))
+    bound_from_bellow(G, float(g_floor))
 
     wall_bcs = _build_wall_bcs(Space, mf, wall_index, float(g0))
     z = TestFunction(Space)
 
-    # Weak form corresponding to Yoon 2016 Eq. (19):
+    # Weak form corresponding to Yoon 2016 Eq. (19). This is the Chapter 4
+    # penalized reciprocal-distance residual with the TO penalty term set to 0:
     # |grad G|^2 + sigma_w * G * div(grad G) = (1 + 2 sigma_w) * G^4
     # using |grad G|^2 = div(G grad G) - G * div(grad G).
     F = (
-        (Constant(1.0) - sigma_w_const) * inner(grad(G), grad(G)) * z * dx
-        - sigma_w_const * G * inner(grad(G), grad(z)) * dx
-        - (Constant(1.0) + Constant(2.0) * sigma_w_const) * G**4 * z * dx
+        (Constant(1.0) - sigma_w_const) * inner(grad(G), grad(G)) * z * dx_measure
+        - sigma_w_const * G * inner(grad(G), grad(z)) * dx_measure
+        - (Constant(1.0) + Constant(2.0) * sigma_w_const) * G**4 * z * dx_measure
     )
     problem = NonlinearVariationalProblem(F, G, bcs=wall_bcs, J=derivative(F, G))
     solver = NonlinearVariationalSolver(problem)
+    solver.parameters["newton_solver"]["report"] = False
+    solver.parameters["newton_solver"]["relative_tolerance"] = float(newton_rtol)
+    solver.parameters["newton_solver"]["absolute_tolerance"] = float(newton_atol)
+    solver.parameters["newton_solver"]["maximum_iterations"] = int(newton_max_iters)
+    solver.parameters["newton_solver"]["relaxation_parameter"] = float(newton_relax)
+    solver.parameters["newton_solver"]["error_on_nonconvergence"] = True
     solver.solve()
-    G.vector()[:] = np.maximum(G.vector()[:], float(g_floor))
+    bound_from_bellow(G, float(g_floor))
 
-    y = project(Constant(1.0) / G - Constant(1.0) / g0_const, Space)
-    return bound_from_bellow(y, 0.0)
+    return positive_part(
+        Constant(1.0) / (G + Constant(float(g_floor)))
+        - Constant(1.0 / float(g0))
+    )
 
 # Relaxed wall-distance Eikonal equation (Yoon 2016 Eq. 19)
 def calculate_Distance_field(
@@ -466,6 +428,11 @@ def calculate_Distance_field(
     sigma_w=0.1,
     g0=20.0,
     g_floor=1.0e-12,
+    newton_rtol=1.0e-8,
+    newton_atol=1.0e-10,
+    newton_max_iters=80,
+    newton_relax=0.5,
+    custom_dx=None,
 ):
     '''computes distance to boundaries specified by wall_index on mf'''
     method_normalized = method.lower().replace('-', '_')
@@ -479,9 +446,14 @@ def calculate_Distance_field(
             sigma_w=sigma_w,
             g0=g0,
             g_floor=g_floor,
+            newton_rtol=newton_rtol,
+            newton_atol=newton_atol,
+            newton_max_iters=newton_max_iters,
+            newton_relax=newton_relax,
+            custom_dx=custom_dx,
         )
     if method_normalized in {'originaleikonal', 'eikonal'}:
-        return _calculate_eikonal_distance_field(Space, mf, wall_index, relax)
+        return _calculate_eikonal_distance_field(Space, mf, wall_index, relax, custom_dx=custom_dx)
 
     raise ValueError(
         "Unknown wall-distance method '{}'. Use 'OriginalEikonal' or 'RelaxedWallEikonal'.".format(method)

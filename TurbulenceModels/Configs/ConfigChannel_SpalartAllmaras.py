@@ -1,8 +1,8 @@
 
 # File paths for mesh and boundary data
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/Channel/Coarse/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/Channel/Coarse/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/Channel/Medium_WallResolved/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/Channel/Medium_WallResolved/facet.xdmf'
 }
 
 # Specify type of boundaries
@@ -58,12 +58,12 @@ physical_prm = {
     'FORCE': (0.0, 0.0) # 'FORCE': (0.0, 0.0)
 }
 
-# -------------------------------------------------------------------------------
-# Reynolds number: Re = U_ref * D_h / ν = 20.0 * 2.0 / 0.001818 ≈ 2.2 x 10^4
-# -------------------------------------------------------------------------------
+# =============================================================
+# Reynolds number: Re = U * D_h / VISCOSITY = 22,000
+# =============================================================
 
 
-# Simulation parameters for SA model
+# Simulation parameters for the transient SA model.
 simulation_prm_SA = {
     'QUADRATURE_DEGREE': 2,
     'MAX_ITERATIONS': 6000,
@@ -71,7 +71,10 @@ simulation_prm_SA = {
     'CFL_RELAXATION': 0.25,
     'STEP_SIZE': 0.005,
     'U_RELAXATION_FACTOR': 0.3,
-    'NUT_RELAXATION_FACTOR': 0.3
+    'NUT_RELAXATION_FACTOR': 0.3,
+    # SA transport-equation SUPG multiplier. Set to 0.0 to disable SA SUPG.
+    # Used only by the transient SA driver.
+    'SA_SUPG_FACTOR': 1.0
 }
 
 # Specify where SA results are saved

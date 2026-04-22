@@ -2,7 +2,6 @@ from dolfin import (
     Constant,
     DOLFIN_EPS,
     dot,
-    exp,
     grad,
     inner,
     nabla_grad,
@@ -67,7 +66,8 @@ def sa_transport_terms(
     chi = nu_tilde_safe / (nu_laminar + DOLFIN_EPS)
     f_v1 = chi**3 / (chi**3 + Constant(7.1) ** 3)
     f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
-    f_t2 = Constant(1.2) * exp(Constant(-0.5) * chi**2)
+    # Yoon 2016 uses the no-ft2 SA form in Eqs. (10)-(15).
+    f_t2 = Constant(0.0)
 
     omega_sq = Constant(2.0) * inner(
         skew(nabla_grad(external_velocity)),

@@ -75,13 +75,14 @@ SA_WALL_G_FLOOR = 1.0e-8
 
 # MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.08 * pi
-MAX_INNER_ITERATIONS_SCHEDULE = [120, 120, 120, 120, 120, 120, 100, 100, 100]
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
 Q_PENAL_SCHEDULE = [0.05, 0.08, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 1.00]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.08, 0.07, 0.06, 0.05, 0.035, 0.025, 0.015, 0.01]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0]
+MAX_INNER_ITERATIONS_SCHEDULE = [120, 120, 120, 120, 120, 120, 100, 100, 100]
+
 
 # Full primal-state solve parameters.
 LINEAR_SOLVER = "mumps"

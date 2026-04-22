@@ -1,7 +1,6 @@
 import os
-import numpy as np
 from math import pi
-from dolfin import DOLFIN_EPS, Expression, Function, MeshFunction, MPI, SubDomain, cells, near
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import load_mesh_from_xdmf
 
 
@@ -35,20 +34,15 @@ INLET_TOP_OFFSET = 0.2
 OUTLET_WIDTH = 0.2
 OUTLET_RIGHT_OFFSET = 0.2
 
-# Keep only a few x-cells behind the inlet facet non-design so the optimizer
-# cannot choke the prescribed parabolic inflow immediately.
-INLET_BLOCK_CELLS = 3
-INLET_BLOCK_LENGTH = INLET_BLOCK_CELLS * (L / N)
-
 # Flow and Brinkman parameters for the frozen forward solve.
 MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 U_MAX_OUTLET = 1.0
 
-# ----------------------------------------------------------------------------------------------
+# ==============================================================================================
 # Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 2,000
-# ----------------------------------------------------------------------------------------------
+# ==============================================================================================
 
 # SA transport parameters for the frozen turbulence update.
 # SA_MUT_RATIO: target turbulent viscosity ratio nu_t / nu_lam at inlet.
@@ -88,7 +82,7 @@ LINEAR_SOLVER = "mumps"   # direct LU solver for the Stokes warm start and the a
 
 # Outer NS–SA coupling: solve NS → solve SA → repeat PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-PICARD_STEPS = 1
+PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
@@ -220,53 +214,3 @@ def build_velocity_profile_sets():
         degree=2, u_max=U_MAX_OUTLET, x_c=x_outlet_center, width=OUTLET_WIDTH,
     )
     return [u_inlet], [u_outlet]
-
-
-def build_density_bounds(mesh, density_space):
-    lower = Function(density_space)
-    upper = Function(density_space)
-
-    lower_values = np.zeros(density_space.dim())
-    upper_values = np.ones(density_space.dim())
-    dofmap = density_space.dofmap()
-    inlet_y_min, inlet_y_max, _, _ = compute_port_extents(
-        L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
-    )
-    inlet_block_x_max = INLET_BLOCK_LENGTH
-
-    for cell in cells(mesh):
-        dof = dofmap.cell_dofs(cell.index())[0]
-        midpoint = cell.midpoint()
-        x_coord = midpoint.x()
-        y_coord = midpoint.y()
-
-        if 0.0 - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
-            if between(y_coord, (inlet_y_min, inlet_y_max), TOL):
-                lower_values[dof] = 1.0
-                upper_values[dof] = 1.0
-            else:
-                lower_values[dof] = 0.0
-                upper_values[dof] = 0.0
-
-    lower.vector().set_local(lower_values)
-    lower.vector().apply("insert")
-    upper.vector().set_local(upper_values)
-    upper.vector().apply("insert")
-    return lower, upper
-
-
-def build_volume_region(mesh, density_space):
-    volume_region = Function(density_space)
-    region_values = np.ones(density_space.dim())
-    dofmap = density_space.dofmap()
-    inlet_block_x_max = INLET_BLOCK_LENGTH
-
-    for cell in cells(mesh):
-        dof = dofmap.cell_dofs(cell.index())[0]
-        x_coord = cell.midpoint().x()
-        if 0.0 - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
-            region_values[dof] = 0.0
-
-    volume_region.vector().set_local(region_values)
-    volume_region.vector().apply("insert")
-    return volume_region

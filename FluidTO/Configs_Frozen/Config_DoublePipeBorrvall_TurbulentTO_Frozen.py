@@ -51,10 +51,14 @@ OUTLET_SEGMENTS = [
 ]
 
 # Flow and Brinkman parameters for the frozen forward solve.
-MU_FLUID_VALUE = 1.0 / 6.0
+MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 U_MAX_OUTLETS = [1.0, 1.0]
+
+# ================================================================================================
+# Reynolds number: Re = U_MAX_INLETS * PORT_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1,600
+# ================================================================================================
 
 # SA transport parameters for the frozen turbulence update.
 SA_MUT_RATIO = 5.0                      # nu_t / nu_lam at inlets (same for both ports)
@@ -76,42 +80,38 @@ VOL_FRAC = 1.0 / 3.0          # target fluid volume fraction (two thin channels 
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-# -------------------------------------------------------------------
 # Continuation schedules — one entry per stage, applied in order.
-# -------------------------------------------------------------------
 Q_PENAL_SCHEDULE    = [0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00, 3.00, 3.00, 3.00]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.025, 0.015, 0.008, 0.004, 0.002, 0.001, 0.0005]
-BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0,  8.0,  16.0, 32.0, 64.0, 128.0, 256.0]
+BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0,  8.0,  12.0, 16.0, 24.0, 32.0, 64.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [50, 80, 80, 80, 100, 120, 140, 160, 180, 200]
 
-# Frozen flow/turbulence coupling and IPCS solve parameters.
-LINEAR_SOLVER = "mumps"   # direct LU solver for the Stokes warm start and the adjoint
+# Linear solver for the Stokes warm-start and adjoint linear systems.
+LINEAR_SOLVER = "mumps"
 
 # Outer NS–SA coupling: solve NS → solve SA → repeat PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
-PICARD_STEPS = 1
+PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
-#   dt                        : pseudo-time step (smaller → more stable, more iterations needed)
-#   vel_relaxation/p_relaxation : under-relaxation (lower → more stable at high Re, slower convergence)
-#   velocity_rtol             : ||Δu||/||u|| convergence threshold; tighter → smaller R_NS → better adjoint
-# Start closer to the previously successful retry settings so the first attempt
-# does not burn the full 400-step budget before adaptive backoff kicks in.
-FORWARD_IPCS_DT                 = 2.5e-5
-FORWARD_IPCS_MAX_ITERS          = 150
+FORWARD_IPCS_DT                 = 3.13e-6
+FORWARD_IPCS_MAX_ITERS          = 250
 FORWARD_IPCS_VELOCITY_RTOL      = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL      = 2.0e-3
 FORWARD_IPCS_LOG_EVERY          = 50
-FORWARD_IPCS_VEL_RELAXATION     = 0.14
-FORWARD_IPCS_P_RELAXATION       = 0.05
-FORWARD_IPCS_MAX_RESTARTS       = 3
+FORWARD_IPCS_VEL_RELAXATION     = 0.05
+FORWARD_IPCS_P_RELAXATION       = 0.08
+FORWARD_IPCS_MAX_RESTARTS       = 2
 FORWARD_IPCS_VEL_SOLVER         = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER           = "cg"
 FORWARD_IPCS_P_PRECONDITIONER   = "ilu"
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
+# Keep the Picard-3 comparison on the same strict IPCS residual targets. The
+# extra adaptive backoff usually resolves near misses without loosening du/dp.
+FORWARD_IPCS_ACCEPT_BEST_SCORE  = 1.10
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)

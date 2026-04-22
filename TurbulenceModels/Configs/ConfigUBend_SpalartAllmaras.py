@@ -1,14 +1,14 @@
 import os
 
 # File paths for mesh and boundary data
-# Fine_WallRefinement: inflation mesh with first layer ≈ 1.2e-5 m (y+ ≈ 1).
-# This is required for wall-resolved SA — the Ansys_Inflation mesh has
-# first_layer ≈ 2.6e-4 m (y+ ≈ 11), which is too coarse for SA to capture
+# Fine_WallResolved: inflation mesh with first layer ~= 1.2e-5 m (y+ ~= 1).
+# This is required for wall-resolved SA; the Ansys_Inflation mesh has
+# first_layer ~= 2.6e-4 m (y+ ~= 11), which is too coarse for SA to capture
 # the viscous sublayer correctly and is the main cause of profile mismatch.
-# Generate via: cd Meshes/U-Bend/Fine_WallRefinement && python3 u_tube_gmsh.py && python3 gmsh_to_xdmf.py
+# Generate via: cd Meshes/U-Bend/Fine_WallResolved && python3 u_tube_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
-    'MESH_DIRECTORY': 'Meshes/U-Bend/Fine_WallRefinement/mesh.xdmf',
-    'FACET_DIRECTORY': 'Meshes/U-Bend/Fine_WallRefinement/facet.xdmf'
+    'MESH_DIRECTORY': 'Meshes/U-Bend/Fine_WallResolved/mesh.xdmf',
+    'FACET_DIRECTORY': 'Meshes/U-Bend/Fine_WallResolved/facet.xdmf'
 }
 
 
@@ -23,14 +23,6 @@ def _infer_mesh_label_from_path(path):
 
 UBEND_SA_MESH_LABEL = _infer_mesh_label_from_path(mesh_files['MESH_DIRECTORY'])
 UBEND_SA_RESULTS_ROOT = f'Results/U-Bend_SA/{UBEND_SA_MESH_LABEL}'
-UBEND_SA_STEADY_RESULTS_ROOT = f'{UBEND_SA_RESULTS_ROOT}_Steady'
-# Warm-start source can be the same mesh (default) or another U-bend mesh label
-# (e.g. 'Coarse' to accelerate a 'Medium' run via interpolation/projection).
-# Change 'UBEND_SA_WARM_START_LABEL' to desired mesh label.
-UBEND_SA_WARM_START_LABEL = 'Fine_WallRefinement'
-UBEND_SA_WARM_START_ROOT = f'Results/U-Bend_SA/{UBEND_SA_WARM_START_LABEL}'
-UBEND_SA_WARM_START_MESH_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/mesh.xdmf'
-UBEND_SA_WARM_START_FACET_XDMF = f'Meshes/U-Bend/{UBEND_SA_WARM_START_LABEL}/facet.xdmf'
 
 # Specify type of boundaries
 boundary_markers = {
@@ -39,9 +31,9 @@ boundary_markers = {
     'WALLS': [4]
 }
 
-# ------------------------
+# ==================
 # 2D U-bend
-# ------------------------
+# ==================
 
 # pipe radius R_PIPE = 14 mm
 # pipe diameter D_PIPE = 2 * R_PIPE = 28 mm
@@ -101,16 +93,16 @@ boundary_conditions = {
 
 # Physical quantities
 physical_prm = {
-    'VISCOSITY': 8.9e-7, # kinematic viscosity ν (m^2/s)
+    'VISCOSITY': 8.9e-7, # kinematic viscosity  (m^2/s)
     'FORCE': (0.0, 0.0)
 }
 
-# ---------------------------------------------------------------------------------
-# Reynolds number: Re = U_ref * D_h / ν = 1.42 * 0.028 / 8.9e-7 ≈ 4.5 × 10^4
-# ---------------------------------------------------------------------------------
+# =====================================================================================================
+# Reynolds number: Re = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER_INLET / VISCOSITY ≈ 4.5 × 10^4
+# =====================================================================================================
 
 
-# Simulation parameters for SA model
+# Simulation parameters for the transient SA model.
 simulation_prm_SA = {
     # Degree 4 is sufficient for the nonlinear SA terms (chi^3, f_w) on CG2/CG1
     # elements and is noticeably faster than degree 6 without loss of accuracy.
@@ -133,8 +125,16 @@ simulation_prm_SA = {
     # ----------------------
     'U_RELAXATION_FACTOR': 0.7,
     'NUT_RELAXATION_FACTOR': 0.3,
-    # Used by steady Picard solver (UBendSimulation_SpalartAllmaras_Steady.py).
-    'PICARD_RELAXATION': 0.2,
+
+    # ---------------------
+    # SUPG stabilization
+    # ---------------------
+    # SA transport-equation SUPG multiplier. Set to 0.0 to disable SA SUPG.
+    # Used only by the transient SA driver.
+    'SA_SUPG_FACTOR': 1.0,
+    # Momentum-equation SUPG multiplier. Set to 0.0 for a no-momentum-SUPG run.
+    # Used only by the transient SA driver.
+    'MOMENTUM_SUPG_FACTOR': 1.0,
 
     # ---------------------
     # Linear solver
@@ -175,7 +175,7 @@ simulation_prm_SA = {
     # 'RelaxedWallEikonal' -> Yoon 2016 relaxed wall equation (Eq. 19, reciprocal-distance form)
     'WALL_DISTANCE_METHOD': 'OriginalEikonal',
     'WALL_DISTANCE_EIKONAL_RELAXATION': 0.01,
-    # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHO = 'RelaxedWallEikonal')
+    # Yoon 2016 Eq.(19) parameters (used only when WALL_DISTANCE_METHOD = 'RelaxedWallEikonal')
     'WALL_DISTANCE_YOON_SIGMA_W': 0.1,      # sigma_w < 0.5; Yoon 2016 uses sigma_w = 0.1
     'WALL_DISTANCE_YOON_G0': 20.0,          # [1/m], reference reciprocal distance (Eq. 15)
     'WALL_DISTANCE_YOON_G_FLOOR': 1.0e-12,  # numerical floor for G
@@ -196,22 +196,6 @@ simulation_prm_SA = {
     'RUNTIME_WRITE_INTERVAL': 50,
     'RUNTIME_WRITE_PVD': True,
     'RUNTIME_WRITE_RESIDUALS': False,
-
-    # -------------------------
-    # Warm-start
-    # -------------------------
-    # Optional warm-start from saved H5 fields (same mesh/function spaces required).
-    # Set to False to disable warm-start.
-    'WARM_START_ENABLED': False,
-    'WARM_START_SOURCE_MESH_XDMF': UBEND_SA_WARM_START_MESH_XDMF,
-    'WARM_START_SOURCE_FACET_XDMF': UBEND_SA_WARM_START_FACET_XDMF,
-    # Velocity warm-start
-    'WARM_START_U_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/u.h5',
-    # Pressure warm-start
-    'WARM_START_P_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/p.h5',
-    # Modified turbulent viscosity warm-start
-    'WARM_START_NU_TILDE_H5': f'{UBEND_SA_WARM_START_ROOT}/H5 files/nu_tilde.h5',
-
 }
 
 # Specify where results are saved for SA model
@@ -219,13 +203,6 @@ saving_directory_SA = {
     'PVD_FILES': f'{UBEND_SA_RESULTS_ROOT}/PVD files/',
     'H5_FILES':  f'{UBEND_SA_RESULTS_ROOT}/H5 files/',
     'RESIDUALS': f'{UBEND_SA_RESULTS_ROOT}/Residual files/'
-}
-
-# Separate output folders for strict steady SA runs.
-saving_directory_SA_STEADY = {
-    'PVD_FILES': f'{UBEND_SA_STEADY_RESULTS_ROOT}/PVD files/',
-    'H5_FILES':  f'{UBEND_SA_STEADY_RESULTS_ROOT}/H5 files/',
-    'RESIDUALS': f'{UBEND_SA_STEADY_RESULTS_ROOT}/Residual files/'
 }
 
 # Specify what to do after simulation

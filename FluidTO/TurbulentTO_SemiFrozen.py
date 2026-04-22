@@ -1,6 +1,7 @@
 from dolfin import *
 import numpy as np
 import os
+import time
 try:
     from ufl import tanh
 except ModuleNotFoundError:
@@ -1206,6 +1207,7 @@ else:
 # ===============================================================
 # Continuation and MMA optimization loop
 # ===============================================================
+optimization_start_time = time.perf_counter()
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
@@ -1222,6 +1224,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     )
 
     while inner_count < max_iters_now and not objective_converged:
+        iteration_start_time = time.perf_counter()
         root_print(
             "--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
                 stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
@@ -1336,10 +1339,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         if mass_flow_status:
             constraint_status_text = " " + " ".join(mass_flow_status)
 
+        iteration_elapsed = time.perf_counter() - iteration_start_time
+        optimization_elapsed = time.perf_counter() - optimization_start_time
         root_print(
-            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
                 q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-                inner_count, f0val, obj_conv, vol_fraction_now,
+                inner_count, iteration_elapsed, optimization_elapsed, f0val, obj_conv, vol_fraction_now,
                 convergence_history, OBJECTIVE_STREAK_TO_STOP,
                 constraint_status_text,
             )
@@ -1361,4 +1366,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             )
         )
 
+optimization_elapsed = time.perf_counter() - optimization_start_time
+if iter_count > 0:
+    root_print("Average time per MMA iteration: {:.1f}s ({} iterations, total {:.1f}s).".format(
+        optimization_elapsed / float(iter_count), iter_count, optimization_elapsed,
+    ))
+else:
+    root_print("Average time per MMA iteration: n/a (0 iterations, total {:.1f}s).".format(
+        optimization_elapsed,
+    ))
 root_print("Optimization finished. Results written to {}".format(results_root))
