@@ -257,6 +257,7 @@ def run_steady_sa_ipcs_picard(
             turbulence_model.update_variables(relaxation=sa_relaxation)
             if nu_tilde_floor is not None:
                 bound_from_bellow(turbulence_model.nu_tilde0, float(nu_tilde_floor))
+                turbulence_model.enforce_boundary_conditions()
                 turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
 
         picard_errors = [

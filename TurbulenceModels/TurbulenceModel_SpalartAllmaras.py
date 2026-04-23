@@ -26,6 +26,17 @@ class SpalartAllmarasGeneral:
     def _construct_functions(self):
         """Construct model functions for the modified turbulent viscosity."""
         self._nu_tilde, self._xi, self._nu_tilde1, self._nu_tilde0 = initialize_functions(self._N, Constant(self._nu_tilde_init))
+        self.enforce_boundary_conditions()
+
+    def _apply_nu_tilde_bcs(self, field):
+        """Apply SA Dirichlet boundary conditions directly to a stored field."""
+        for bc in self._bcn:
+            bc.apply(field.vector())
+
+    def enforce_boundary_conditions(self):
+        """Reapply SA Dirichlet boundary conditions to stored solution fields."""
+        self._apply_nu_tilde_bcs(self._nu_tilde0)
+        self._apply_nu_tilde_bcs(self._nu_tilde1)
 
     def construct_forms(self):
         """Constructs the variational forms. Must be implemented in subclasses."""
@@ -50,14 +61,16 @@ class SpalartAllmarasGeneral:
             else:
                 solve(A_NT, self._nu_tilde1.vector(), b_nt, sa_linear_solver, sa_linear_preconditioner)
 
-        # Enforce positivity
-        self._nu_tilde1 = bound_from_bellow(self._nu_tilde1, 1e-16)
+        # Enforce positivity, then restore exact Dirichlet boundary values.
+        bound_from_bellow(self._nu_tilde1, 1e-16)
+        self._apply_nu_tilde_bcs(self._nu_tilde1)
 
     def update_variables(self, relaxation = 1.0):
         """Update nu_tilde variable with relaxation."""
         # The assign method can handle linear combinations of Functions.
         # This is more readable and consistent with the k-epsilon implementation.
         self._nu_tilde0.assign(relaxation * self._nu_tilde1 + (1.0 - relaxation) * self._nu_tilde0)
+        self._apply_nu_tilde_bcs(self._nu_tilde0)
 
     def _construct_turbulent_quantities(self, external_u1):
         """

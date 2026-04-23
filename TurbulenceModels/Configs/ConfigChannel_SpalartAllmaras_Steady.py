@@ -4,8 +4,8 @@ import os
 # Mesh and output paths.
 # Medium_WallResolved is the default SA channel validation mesh. Use
 # Coarse_WallResolved for quick diagnostics or Fine_WallResolved for final runs.
-MESH_DIRECTORY = "Meshes/Channel/Medium_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/Channel/Medium_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/Channel/Fine_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/Channel/Fine_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -35,16 +35,23 @@ BOUNDARY_MARKERS = {
 }
 
 # Physical parameters.
-CHANNEL_HEIGHT = 1.0 # [m]
+CHANNEL_HEIGHT = 2.0 # [m]
 HYDRAULIC_DIAMETER = 2.0 * CHANNEL_HEIGHT # [m]
-INLET_BULK_VELOCITY = 20.0 # [m/s] (reference, not an imposed inlet velocity)
+REYNOLDS_LENGTH = CHANNEL_HEIGHT # [m], channel-height-based Reynolds number convention
+INLET_BULK_VELOCITY = 18.5 # [m/s] (reference, not an imposed inlet velocity)
 KINEMATIC_VISCOSITY = 0.00181818 # [m^2/s]
 BODY_FORCE = (0.0, 0.0)
-REYNOLDS_NUMBER = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY
+REYNOLDS_NUMBER = INLET_BULK_VELOCITY * REYNOLDS_LENGTH / KINEMATIC_VISCOSITY
 
 
 # ==================================================================================================
-# Reynolds number: Re = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY = 22,000
+# Reynolds number: Re_H = 18.5 * 2.0 / 0.00181818 ~= 20,350
+# ==================================================================================================
+# Wall-resolved mesh check using Cf = 0.079 Re^(-0.25):
+#   Cf ~= 6.61e-3
+#   u_tau = INLET_BULK_VELOCITY * sqrt(Cf / 2) ~= 1.064 m/s
+#   y_first(y+=1) = KINEMATIC_VISCOSITY / u_tau ~= 1.709e-3 m
+#   wall-resolved channel meshes use y_first ~= 1.709e-3 m.
 # ==================================================================================================
 
 

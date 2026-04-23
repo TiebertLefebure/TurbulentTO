@@ -15,9 +15,9 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh path for this benchmark geometry.
-# Generate via: cd Meshes/DiffuserBorrvall && python3 diffuser_gmsh.py && python3 gmsh_to_xdmf.py
+# Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh.xdmf'),
+    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh_guided.xdmf'),
 }
 
 
@@ -25,12 +25,16 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
 
 
-# Geometry and reference meshing parameters for the design box.
+# Geometry and reference meshing parameters.
 L = 1.0
 N = 120  # reference resolution used to generate the Gmsh mesh (LC = L/N)
-DOMAIN_X_MIN = 0.0
+INLET_EXTENSION_WIDTH = 0.2 * L
+OUTLET_EXTENSION_WIDTH = 0.2 * L
+DESIGN_X_MIN = 0.0
+DESIGN_X_MAX = L
+DOMAIN_X_MIN = DESIGN_X_MIN - INLET_EXTENSION_WIDTH
 DOMAIN_Y_MIN = 0.0
-DOMAIN_X_MAX = L
+DOMAIN_X_MAX = DESIGN_X_MAX + OUTLET_EXTENSION_WIDTH
 DOMAIN_Y_MAX = L
 TOL = DOLFIN_EPS
 
@@ -49,7 +53,10 @@ U_MAX_OUTLET = 3.0
 # ===================================================================================
 
 # SA transport parameters for the monolithic primal state.
-SA_MUT_RATIO = 2.794e-7
+SA_TURBULENCE_INTENSITY = 0.075
+SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.10
+SA_REFERENCE_VELOCITY = U_MAX_INLET
+SA_REFERENCE_LENGTH = L
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
@@ -135,8 +142,12 @@ class WallsBoundary(SubDomain):
         return on_boundary and (
             near(x[1], DOMAIN_Y_MIN, TOL)
             or near(x[1], DOMAIN_Y_MAX, TOL)
+            or (near(x[0], DESIGN_X_MAX, TOL) and between(x[1], (DOMAIN_Y_MIN, OUTLET_Y_MIN), TOL))
+            or (near(x[0], DESIGN_X_MAX, TOL) and between(x[1], (OUTLET_Y_MAX, DOMAIN_Y_MAX), TOL))
             or (near(x[0], DOMAIN_X_MAX, TOL) and between(x[1], (DOMAIN_Y_MIN, OUTLET_Y_MIN), TOL))
             or (near(x[0], DOMAIN_X_MAX, TOL) and between(x[1], (OUTLET_Y_MAX, DOMAIN_Y_MAX), TOL))
+            or (near(x[1], OUTLET_Y_MIN, TOL) and between(x[0], (DESIGN_X_MAX, DOMAIN_X_MAX), TOL))
+            or (near(x[1], OUTLET_Y_MAX, TOL) and between(x[0], (DESIGN_X_MAX, DOMAIN_X_MAX), TOL))
         )
 
 
@@ -163,28 +174,39 @@ def mark_boundaries(mesh):
     return boundaries
 
 
-def build_velocity_profile_sets():
-    inlet_center = 0.5 * (DOMAIN_Y_MIN + DOMAIN_Y_MAX)
-    inlet_width = DOMAIN_Y_MAX - DOMAIN_Y_MIN
-    u_inlet = Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=U_MAX_INLET,
-        y_c=inlet_center,
-        width=inlet_width,
+def build_density_bounds(mesh, density_space):
+    non_design_fluid_lower = Expression(
+        "(x[0] < x_min || x[0] > x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
+    )
+    return non_design_fluid_lower, 1.0
+
+
+def build_volume_region(mesh, density_space):
+    return Expression(
+        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
     )
 
-    outlet_center = 0.5 * (OUTLET_Y_MIN + OUTLET_Y_MAX)
-    outlet_width = OUTLET_Y_MAX - OUTLET_Y_MIN
+
+def build_velocity_profile_sets():
+    u_inlet = Expression(
+        ("u_max", "0.0"),
+        degree=0,
+        u_max=U_MAX_INLET,
+    )
+
     if OUTLET_BC_TYPE == "pressure":
         return [u_inlet], []
 
     u_outlet = Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
+        ("u_max", "0.0"),
+        degree=0,
         u_max=U_MAX_OUTLET,
-        y_c=outlet_center,
-        width=outlet_width,
     )
 
     return [u_inlet], [u_outlet]

@@ -1,0 +1,224 @@
+\documentclass[master=ewtk,masteroption=,openany]{kulemt}
+\setup{
+  title={Topology Optimization of Heat Transfer Applications Operating in the Turbulent Regime},
+  author={Tiebert Lefebure},
+  promotor={Prof. Niels Horsten\and Prof. Maarten Blommaert},
+  assessor={Prof. Elke Deckers\and Olivier Renders},
+  assistant={Esteban Foronda Obando}}
+% Remove the "%" on the next line for generating the cover page
+%\setup{coverpageonly}
+% Remove the "%" before the next "\setup" to generate only the first pages
+% (e.g., if you are a Word user).
+%\setup{frontpagesonly}
+
+% If you want to include other LaTeX packages, do it here. 
+
+% Finally the hyperref package is used for pdf files.
+% This can be commented out for printed versions.
+\usepackage[pdfusetitle,colorlinks,plainpages=false]{hyperref}
+\usepackage[table]{xcolor} % 'table'optie is handig voor cell backgrounds
+\usepackage{xltabular}    % combinatie van longtable + tabularx
+\usepackage{enumitem}
+\usepackage{stmaryrd}
+\usepackage{placeins}
+\usepackage{xltabular,enumitem} 
+\usepackage{pdflscape}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\graphicspath{%
+	{Figures/Figures-Ch1/}%
+	{Figures/Figures-Ch2/}%
+	{Figures/Figures-Ch3/}%
+	{Figures/Figures-Ch4/}%
+	{Figures/Figures-Ch5/}%
+	{Figures/Figures-Ch6/}%
+}
+\usepackage[utf8]{inputenc}
+\DeclareUnicodeCharacter{00A0}{ }
+\DeclareUnicodeCharacter{200B}{ }
+\DeclareUnicodeCharacter{202F}{ }
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single
+}
+%%%%%%%
+% The lipsum package is used to generate random text.
+% You never need this in a real master's thesis text!
+\IfFileExists{lipsum.sty}%
+ {\usepackage{lipsum}\SetLipsumDefault{11-13}}%
+ {\newcommand{\lipsum}[1][11-13]{\par And some text: lipsum ##1.\par}}
+%%%%%%%
+\usepackage{longtable}
+\setlength{\headheight}{28pt}
+%%%%%%%
+%\includeonly{chapter-n}
+\begin{document}
+
+\begin{preface}
+
+This thesis marks the culmination of my Master of Science in Mechanical Engineering at KU Leuven. The journey of exploring computational fluid dynamics and mathematical optimization has been both intensely challenging and deeply rewarding. Bridging the gap between theoretical mathematics and practical engineering applications required countless hours of coding, debugging, and analyzing flow fields, but seeing the optimizer successfully carve out organic, aerodynamic fluid channels made the entire process worthwhile. 
+
+I would like to express my sincere gratitude to my supervisors, Prof. Niels Horsten and Prof. Maarten Blommaert, for providing me with the opportunity to work on this fascinating topic. Their academic guidance, critical insights, and continuous support were instrumental in shaping the direction and rigor of this research. A very special thanks goes to my assistant-supervisor, Esteban Foronda Obando, for his day-to-day patience, technical expertise, and willingness to help me navigate the complex numerical hurdles within FEniCS.
+
+Furthermore, I would like to thank the assessors, Prof. Elke Deckers and Olivier Renders, for their time and valuable feedback in evaluating this work. 
+
+Finally, I want to thank my family and friends for their unwavering encouragement, patience, and perspective throughout the course of my studies. 
+
+\end{preface}
+
+\tableofcontents*
+
+\begin{abstract}
+
+As modern electronic and automotive systems grow increasingly compact and powerful, efficient thermal management has emerged as a fundamental engineering challenge. While topology optimization has proven to be a highly effective computational design tool for the fluid manifolds that drive these cooling systems, traditional methodologies rely heavily on laminar flow approximations. These laminar assumptions severely limit industrial applicability, as they fail to capture the separation, curvature effects, and turbulence-model dependence inherent to high-speed internal flows.
+
+This thesis develops and implements a density-based topology optimization framework for turbulent internal flows as a baseline for future heat-transfer applications. The computational methodology is built upon the open-source FEniCS platform and utilizes the fictitious domain method with Brinkman penalization to conceptualize solid boundaries within a continuous fluid mesh. To capture the complex physics of high-Reynolds flows, the framework integrates the one-equation Spalart-Allmaras (SA) turbulence model. The optimization process is primarily driven by a frozen-turbulence continuous adjoint, while an exploratory semi-frozen coupled adjoint is also examined.
+
+The assessment strategy is deliberately separated into three stages. First, the predictive scope of the SA model for curvature-dominated internal flows is established and benchmarked against Ansys Fluent. Second, the custom SA implementation in FEniCS is verified on turbulent benchmark flows. Third, the final optimized geometries are exported from FEniCS and re-analyzed in Ansys Fluent. This final stage compares FEniCS-SA with Ansys-SA on the same geometry and then evaluates the same designs with SST $k$-$\omega$ and, secondarily, standard $k$-$\epsilon$ to quantify turbulence-model sensitivity. In this revised framing, laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
+
+The resulting thesis is therefore intentionally conservative in its claims. Its central question is not merely whether turbulent topologies look different from laminar ones, but whether SA-driven topology optimization produces low-loss designs whose predicted performance remains credible under independent CFD re-analysis. This establishes a more defensible and transparent baseline for future three-dimensional and conjugate heat-transfer extensions.
+
+\end{abstract}
+
+% A list of figures and tables is optional
+%\listoffigures
+%\listoftables
+% If there are only a few figures and tables, it is better to use the following:
+\listoffiguresandtables
+
+
+% The list of symbols is also optional.
+% This list must be created manually, e.g. as follows:
+\chapter{List of Abbreviations and Symbols}
+
+\section*{Abbreviations}
+\begin{flushleft}
+	\renewcommand{\arraystretch}{1.1}
+	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
+		CAD & Computer-Aided Design \\
+		CEV & Constant Eddy Viscosity \\
+		CFD & Computational Fluid Dynamics \\
+		CG1 & Continuous Galerkin (Linear Basis Functions) \\
+		CHT & Conjugate Heat Transfer \\
+		DG0 & Discontinuous Galerkin (Piecewise Constant Elements) \\
+		DNS & Direct Numerical Simulation \\
+		FEM & Finite Element Method \\
+		FVM & Finite Volume Method \\
+		IPCS & Incremental Pressure Correction Scheme \\
+		MMA & Method of Moving Asymptotes \\
+		PDE & Partial Differential Equation \\
+		RAMP & Rational Approximation of Material Properties \\
+		RANS & Reynolds-Averaged Navier-Stokes \\
+		SA  & Spalart-Allmaras \\
+		SIMP & Solid Isotropic Material with Penalization \\
+		SST & Shear Stress Transport \\
+		SUPG & Streamline Upwind Petrov-Galerkin \\
+		TO  & Topology Optimization \\
+		UFL & Unified Form Language \\
+	\end{tabularx}
+\end{flushleft}
+
+\section*{Symbols}
+
+\subsection*{Fluid Dynamics \& Turbulence}
+\begin{flushleft}
+	\renewcommand{\arraystretch}{1.1}
+	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
+		$d, y$ & Distance to the nearest wall / Hydraulic diameter [m] \\
+		$De$ & Dean number [-] \\
+		$k$ & Turbulent kinetic energy [m$^2$/s$^2$] \\
+		$p, \bar{p}, p'$ & Instantaneous, mean, and fluctuating static pressure [Pa] \\
+		$\Delta P$ & Macroscopic total pressure drop [Pa] \\
+		$R_c$ & Radius of curvature [m] \\
+		$Re$ & Bulk Reynolds number [-] \\
+		$S, \tilde{S}$ & Scalar vorticity magnitude and modified SA vorticity magnitude [1/s] \\
+		$t$ & Time / Pseudo-time [s] \\
+		$\mathbf{u}, \bar{u}_i$ & Velocity vector / Mean velocity component [m/s] \\
+		$u'_i$ & Fluctuating velocity component [m/s] \\
+		$u_\tau$ & Friction velocity [m/s] \\
+		$y^+$ & Non-dimensional wall distance [-] \\
+		$\mu, \mu_t$ & Dynamic and turbulent eddy viscosity [Pa$\cdot$s] \\
+		$\nu, \nu_t$ & Kinematic and turbulent eddy kinematic viscosity [m$^2$/s] \\
+		$\tilde{\nu}$ & Spalart-Allmaras working variable [m$^2$/s] \\
+		$\rho$ & Fluid density [kg/m$^3$] \\
+		$\Omega_{ij}$ & Vorticity tensor [1/s] \\
+		$\kappa$ & von Kármán constant [-] \\
+	\end{tabularx}
+\end{flushleft}
+
+\subsection*{Numerical Implementation (FEniCS)}
+\begin{flushleft}
+	\renewcommand{\arraystretch}{1.1}
+	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
+		$G, G_0$ & Relaxed Eikonal field variable and boundary value [1/m] \\
+		$h, h_{avg}$ & Finite element cell diameter and average cell size [m] \\
+		$||\cdot||_{L_2}$ & $L_2$ (Euclidean) norm [-] \\
+		$\llbracket \cdot \rrbracket$ & Jump operator across an internal element facet [-] \\
+		$\mathbf{n}$ & Outward-pointing normal vector [-] \\
+		$v, \xi$ & Test functions for pressure and turbulence equations [-] \\
+		$\alpha_u, \alpha_{\tilde{\nu}}$ & Relaxation factors for velocity and turbulence [-] \\
+		$\Delta t$ & Pseudo-time step [s] \\
+		$\epsilon_{tol}$ & Convergence tolerance [-] \\
+		$\phi$ & General scalar field variable [-] \\
+		$\sigma_w$ & Eikonal relaxation constant [-] \\
+		$\tau$ & SUPG stabilization time parameter [s] \\
+	\end{tabularx}
+\end{flushleft}
+
+\subsection*{Topology Optimization}
+\begin{flushleft}
+	\renewcommand{\arraystretch}{1.1}
+	\begin{tabularx}{\textwidth}{@{}p{25mm}X@{}}
+		$\alpha(\gamma)$ & Continuous Brinkman penalization term / inverse permeability \\
+		$\alpha_{solid}, \alpha_{fluid}$ & Maximum solid and minimum fluid Brinkman penalties \\
+		$\alpha_{dg}$ & Artificial diffusion scaling factor for DG0 filter [-] \\
+		$\beta$ & Heaviside projection steepness parameter [-] \\
+		$\gamma, \gamma_{raw}$ & Continuous and raw design variable (1 for fluid, 0 for solid) [-] \\
+		$\tilde{\gamma}, \bar{\gamma}$ & Filtered and Heaviside-projected design variables [-] \\
+		$\eta$ & Heaviside projection threshold [-] \\
+		$J$ & Objective function (Power Dissipation) [W] \\
+		$q$ & RAMP penalization tuning parameter [-] \\
+		$r$ & Continuous Helmholtz filter radius [m] \\
+		$\mathbf{s}, \mathbf{s}^*$ & Monolithic forward state and continuous adjoint state vectors \\
+		$V_f, V_{domain}$ & Physical fluid volume and total design domain volume [m$^3$] \\
+		$V_{max}$ & Maximum allowable fluid volume fraction constraint [-] \\
+		$\Omega, \partial\Omega, \Gamma_{int}$ & Computational domain, domain boundary, and internal element facets \\
+	\end{tabularx}
+\end{flushleft}
+
+
+% Now comes the main text
+\mainmatter
+
+\include{chapter-1-introduction}
+\include{chapter-2}
+\include{chapter-3}
+\include{chapter-4}
+% ... and so on until
+\include{chapter-5}
+\include{chapter-6-conclusion}
+
+% If you have appendices:
+\appendixpage*          % if wanted
+\appendix
+\include{appendix-1}
+\include{appendix-2}
+% ... and so on until
+\include{appendix-3}
+\include{appendix-4}
+\backmatter
+% The bibliography comes after the appendices.
+% You can replace the standard "abbrv" bibliography style by another one.
+\bibliographystyle{abbrv}
+\bibliography{references}
+\include{CoC}
+\end{document}

@@ -17,7 +17,7 @@ BOTTOM_PORT_Y_MIN = PORT_BOTTOM_MARGIN                # 0.25
 BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_WIDTH    # 5/12
 
 # Uniform mesh size matched to NX=150, NY=100 in the config
-LC = min(L_X / 150.0, L_Y / 100.0)
+LC = min(L_X / 150.0, L_Y / 100.0) # LC = 0.01 m
 
 
 def create_mesh(output_filename='double_pipe_2d.msh'):

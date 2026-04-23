@@ -1,0 +1,125 @@
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\contentsline {chapter}{Preface}{i}{chapter*.1}%
+\contentsline {chapter}{Abstract}{iv}{chapter*.3}%
+\contentsline {chapter}{List of Figures and Tables}{v}{chapter*.4}%
+\contentsline {chapter}{List of Abbreviations and Symbols}{viii}{chapter*.9}%
+\contentsline {chapter}{\chapternumberline {1}Introduction}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Background and Motivation}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Conceptual Overview of Density-Based Topology Optimization}{1}{section.1.2}%
+\contentsline {section}{\numberline {1.3}The Evolution of Fluid Topology Optimization}{2}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Objectives and Research Questions}{4}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Outline of the Thesis}{5}{section.1.5}%
+\contentsline {chapter}{\chapternumberline {2}Turbulence Modeling}{6}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Introduction to Fluid Dynamics and Turbulence}{6}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Reynolds-Averaged Navier-Stokes (RANS) Equations}{7}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}The Boussinesq Hypothesis and the Isotropic Assumption}{7}{subsection.2.2.1}%
+\contentsline {section}{\numberline {2.3}Boundary Layer Theory and Near-Wall Treatment}{8}{section.2.3}%
+\contentsline {section}{\numberline {2.4}The Spalart-Allmaras One-Equation Model}{8}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Evaluation of Curvature Effects and the Dean Number}{9}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Benchmark Studies in Ansys Fluent}{11}{section.2.6}%
+\contentsline {subsection}{\numberline {2.6.1}Mild Curvature: The U-Bend Case}{12}{subsection.2.6.1}%
+\contentsline {subsection}{\numberline {2.6.2}Strong Curvature: The $90^\circ $ Bend Case}{12}{subsection.2.6.2}%
+\contentsline {section}{\numberline {2.7}Conclusion}{13}{section.2.7}%
+\contentsline {chapter}{\chapternumberline {3}Implementation and Verification of the Spalart-Allmaras Model in FEniCS}{14}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Introduction to FEniCS and the Finite Element Method}{14}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Derivation of a Weak Formulation}{15}{subsection.3.1.1}%
+\contentsline {section}{\numberline {3.2}Numerical Solution Strategy for Fluid Dynamics}{15}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Decoupling the Physics: The Picard Iteration Scheme}{15}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Incremental Pressure Correction Scheme (IPCS)}{16}{subsection.3.2.2}%
+\contentsline {section}{\numberline {3.3}Detailed Formulation of the Spalart-Allmaras Model}{17}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}Closure Terms and Calibration Constants}{17}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.2}Wall-Distance Calculation via the Relaxed Eikonal Equation}{18}{subsection.3.3.2}%
+\contentsline {section}{\numberline {3.4}Variational Formulation and FEniCS Implementation}{19}{section.3.4}%
+\contentsline {section}{\numberline {3.5}General Solver Configuration and Numerical Parameters}{20}{section.3.5}%
+\contentsline {section}{\numberline {3.6}Verification Benchmark 1: Channel Flow}{20}{section.3.6}%
+\contentsline {subsection}{\numberline {3.6.1}Mesh Resolution Requirements}{21}{subsection.3.6.1}%
+\contentsline {subsection}{\numberline {3.6.2}FEniCS vs. Ansys Comparison}{21}{subsection.3.6.2}%
+\contentsline {section}{\numberline {3.7}Verification Benchmark 2: U-Bend Geometry}{22}{section.3.7}%
+\contentsline {subsection}{\numberline {3.7.1}Mesh Resolution Requirements}{23}{subsection.3.7.1}%
+\contentsline {subsection}{\numberline {3.7.2}FEniCS vs. Ansys Comparison}{23}{subsection.3.7.2}%
+\contentsline {section}{\numberline {3.8}Conclusion}{24}{section.3.8}%
+\contentsline {chapter}{\chapternumberline {4}Topology Optimization for Turbulent Flows: Methodology}{26}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Introduction}{26}{section.4.1}%
+\contentsline {section}{\numberline {4.2}The Fictitious Domain Method and Brinkman Penalization}{27}{section.4.2}%
+\contentsline {section}{\numberline {4.3}Penalization of the Governing Equations}{27}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Modified Reynolds-Averaged Navier-Stokes Equations}{28}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Modified Spalart-Allmaras Transport Equation}{28}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.3.3}Modified Relaxed Eikonal Equation}{29}{subsection.4.3.3}%
+\contentsline {section}{\numberline {4.4}Sensitivity Analysis and the Frozen Turbulence Assumption}{29}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Mechanism of Frozen Turbulence}{30}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Justification and Limitations}{30}{subsection.4.4.2}%
+\contentsline {section}{\numberline {4.5}The Coupled "Semi-Frozen" Adjoint Formulation}{31}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}The Monolithic State and Geometric Decoupling}{31}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Physical Advantages}{31}{subsection.4.5.2}%
+\contentsline {subsection}{\numberline {4.5.3}Mathematical Smoothing and FEniCS UFL Limitations}{32}{subsection.4.5.3}%
+\contentsline {subsection}{\numberline {4.5.4}Theoretical Vulnerability to Boundary Singularities}{32}{subsection.4.5.4}%
+\contentsline {section}{\numberline {4.6}Optimization Problem Formulation}{32}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}The Objective Function: Power Dissipation}{33}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Volume Constraint}{33}{subsection.4.6.2}%
+\contentsline {subsection}{\numberline {4.6.3}The Complete Continuous Optimization Problem}{34}{subsection.4.6.3}%
+\contentsline {section}{\numberline {4.7}Density Filtering and Projection}{34}{section.4.7}%
+\contentsline {subsection}{\numberline {4.7.1}The Discontinuous Galerkin Helmholtz Filter}{34}{subsection.4.7.1}%
+\contentsline {subsection}{\numberline {4.7.2}Heaviside Projection}{36}{subsection.4.7.2}%
+\contentsline {section}{\numberline {4.8}Algorithmic Workflow and Solver Implementation}{36}{section.4.8}%
+\contentsline {subsection}{\numberline {4.8.1}Decoupling the Physics: The Picard Iteration Scheme}{37}{subsection.4.8.1}%
+\contentsline {subsection}{\numberline {4.8.2}Sensitivity of the Frozen Adjoint to Forward State Convergence}{37}{subsection.4.8.2}%
+\contentsline {subsection}{\numberline {4.8.3}Python Implementation and Continuation Strategy}{38}{subsection.4.8.3}%
+\contentsline {chapter}{\chapternumberline {5}Topology Optimization: Results and CFD Re-analysis}{40}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Introduction}{40}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Revised Validation Strategy and Common Metrics}{41}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}What is Meant by ``CFD Validation'' in This Thesis}{41}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Boundary Conditions and Comparison Metrics}{41}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Geometry Extraction and Ansys Pipeline}{41}{subsection.5.2.3}%
+\contentsline {section}{\numberline {5.3}Benchmark Case 1: The Diffuser}{42}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Geometry and Role in the Thesis}{43}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}FEniCS-SA Topology Optimization Results}{43}{subsection.5.3.2}%
+\contentsline {subsection}{\numberline {5.3.3}Independent Re-analysis in Ansys}{43}{subsection.5.3.3}%
+\contentsline {section}{\numberline {5.4}Benchmark Case 2: The Double Pipe}{46}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}Geometry and Role in the Thesis}{46}{subsection.5.4.1}%
+\contentsline {subsection}{\numberline {5.4.2}FEniCS-SA Topology Optimization Results}{46}{subsection.5.4.2}%
+\contentsline {subsection}{\numberline {5.4.3}Independent Re-analysis in Ansys}{46}{subsection.5.4.3}%
+\contentsline {section}{\numberline {5.5}Benchmark Case 3: The Curved Benchmark}{49}{section.5.5}%
+\contentsline {subsection}{\numberline {5.5.1}Benchmark Selection, Boundary Conditions, and Dean Number}{49}{subsection.5.5.1}%
+\contentsline {subsection}{\numberline {5.5.2}FEniCS-SA Topology Optimization Results}{49}{subsection.5.5.2}%
+\contentsline {subsection}{\numberline {5.5.3}Ansys-SA Re-analysis and Turbulence-Model Sensitivity}{49}{subsection.5.5.3}%
+\contentsline {section}{\numberline {5.6}Evaluation of the Coupled ``Semi-Frozen'' Adjoint}{53}{section.5.6}%
+\contentsline {section}{\numberline {5.7}Synthesis and Answer to the Revised Third Research Question}{53}{section.5.7}%
+\contentsline {chapter}{\chapternumberline {6}Conclusion and Future Work}{55}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Conclusion}{55}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Limitations and Future Work}{56}{section.6.2}%
+\contentsline {subsection}{\numberline {6.2.1}Frozen Adjoint as a Tractable Approximation}{56}{subsection.6.2.1}%
+\contentsline {subsection}{\numberline {6.2.2}Cross-Code Verification Is Not Experimental Validation}{56}{subsection.6.2.2}%
+\contentsline {subsection}{\numberline {6.2.3}Geometry Extraction and Benchmark Choice}{57}{subsection.6.2.3}%
+\contentsline {subsection}{\numberline {6.2.4}Model Hierarchy, Three-Dimensionality, and Heat Transfer}{57}{subsection.6.2.4}%
+\contentsline {appendix}{\chapternumberline {A}Configuration and Spatial Verification of the Baselines}{59}{appendix.A}%
+\contentsline {section}{\numberline {A.1}Verification Benchmark 1: Channel Flow}{59}{section.A.1}%
+\contentsline {subsection}{\numberline {A.1.1}Physical and Geometric Parameters}{59}{subsection.A.1.1}%
+\contentsline {subsection}{\numberline {A.1.2}Numerical Simulation Parameters}{59}{subsection.A.1.2}%
+\contentsline {subsection}{\numberline {A.1.3}Spatial Verification and Grid Independence}{59}{subsection.A.1.3}%
+\contentsline {section}{\numberline {A.2}Verification Benchmark 2: U-Bend Geometry}{62}{section.A.2}%
+\contentsline {subsection}{\numberline {A.2.1}Physical and Geometric Parameters}{62}{subsection.A.2.1}%
+\contentsline {subsection}{\numberline {A.2.2}Numerical Simulation Parameters}{62}{subsection.A.2.2}%
+\contentsline {subsection}{\numberline {A.2.3}Domain Truncation Study}{62}{subsection.A.2.3}%
+\contentsline {subsection}{\numberline {A.2.4}Spatial Verification and Grid Independence}{63}{subsection.A.2.4}%
+\contentsline {appendix}{\chapternumberline {B}Sensitivity of the Frozen Adjoint to Forward State Convergence}{66}{appendix.B}%
+\contentsline {section}{\numberline {B.1}Visual Comparison of Topologies}{66}{section.B.1}%
+\contentsline {section}{\numberline {B.2}Numerical Performance Metrics}{66}{section.B.2}%
+\contentsline {appendix}{\chapternumberline {C}Mesh Independence of Validation Geometries}{69}{appendix.C}%
+\contentsline {section}{\numberline {C.1}Mesh Generation for Extracted Geometries}{69}{section.C.1}%
+\contentsline {section}{\numberline {C.2}Mesh Study Template by Benchmark}{69}{section.C.2}%
+\contentsline {section}{\numberline {C.3}Convergence of Performance Metrics}{70}{section.C.3}%
+\contentsline {appendix}{\chapternumberline {D}Chapter 5 Result Templates}{72}{appendix.D}%
+\contentsline {section}{\numberline {D.1}Minimum Plot Set per Benchmark}{72}{section.D.1}%
+\contentsline {section}{\numberline {D.2}Per-Benchmark Result Sheets}{72}{section.D.2}%
+\contentsline {subsection}{\numberline {D.2.1}Diffuser Sheet}{72}{subsection.D.2.1}%
+\contentsline {subsection}{\numberline {D.2.2}Double-Pipe Sheet}{72}{subsection.D.2.2}%
+\contentsline {subsection}{\numberline {D.2.3}Curved-Benchmark Sheet}{72}{subsection.D.2.3}%
+\contentsline {section}{\numberline {D.3}Composite Figure Templates}{72}{section.D.3}%
+\contentsline {chapter}{Bibliography}{76}{appendix*.57}%
+\contentsline {chapter}{Code of Conduct}{80}{appendix*.58}%

@@ -142,11 +142,11 @@ solutions, residuals = run_steady_sa_ipcs_picard(
 
 domain_area = assemble(Constant(1.0) * dx)
 u_bulk = assemble(solutions["u"][0] * dx) / domain_area
-re_actual = u_bulk * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY
+re_actual = u_bulk * REYNOLDS_LENGTH / KINEMATIC_VISCOSITY
 
 if IS_ROOT:
     print(
-        "Channel bulk diagnostics: U_bulk={:.6e} m/s, Re_actual={:.6e}".format(
+        "Channel bulk diagnostics: U_bulk={:.6e} m/s, Re_H_actual={:.6e}".format(
             u_bulk,
             re_actual,
         )

@@ -1,0 +1,38 @@
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\babel@toc {english}{}\relax 
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\addvspace {10pt}
+\contentsline {table}{\numberline {5.1}{\ignorespaces Recommended performance metrics for the revised Chapter 5 comparison.}}{42}{table.caption.24}%
+\contentsline {table}{\numberline {5.2}{\ignorespaces Result template for the diffuser benchmark.}}{45}{table.caption.28}%
+\contentsline {table}{\numberline {5.3}{\ignorespaces Result template for the double-pipe benchmark.}}{47}{table.caption.32}%
+\contentsline {table}{\numberline {5.4}{\ignorespaces Result template for the curved benchmark.}}{50}{table.caption.36}%
+\contentsline {table}{\numberline {5.5}{\ignorespaces Combined summary template for the revised Chapter 5 analysis.}}{54}{table.caption.38}%
+\addvspace {10pt}
+\addvspace {10pt}
+\contentsline {table}{\numberline {A.1}{\ignorespaces Geometric, physical, and boundary-condition parameters for the periodic channel flow benchmark.}}{60}{table.caption.39}%
+\contentsline {table}{\numberline {A.2}{\ignorespaces Numerical simulation parameters for the FEniCS steady Spalart-Allmaras channel benchmark.}}{61}{table.caption.40}%
+\contentsline {table}{\numberline {A.3}{\ignorespaces Wall-resolved channel mesh hierarchy used for the grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx 1$, while the streamwise resolution, wall-normal resolution, and inflation-layer resolution are refined.}}{61}{table.caption.41}%
+\contentsline {table}{\numberline {A.4}{\ignorespaces Geometric, physical, and boundary-condition parameters for the U-bend benchmark.}}{62}{table.caption.43}%
+\contentsline {table}{\numberline {A.5}{\ignorespaces Numerical simulation parameters for the highly convective FEniCS U-bend benchmark.}}{63}{table.caption.44}%
+\contentsline {table}{\numberline {A.6}{\ignorespaces Wall-resolved U-bend mesh hierarchy used for the grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx 1$, while the bulk element size and inflation-layer resolution are refined.}}{64}{table.caption.46}%
+\addvspace {10pt}
+\contentsline {table}{\numberline {B.1}{\ignorespaces Comparative performance metrics for $N_{Picard}=1$ and $N_{Picard}=3$.}}{68}{table.caption.49}%
+\addvspace {10pt}
+\contentsline {table}{\numberline {C.1}{\ignorespaces Template for the Ansys mesh-independence study on extracted geometries.}}{70}{table.caption.50}%
+\addvspace {10pt}
+\contentsline {table}{\numberline {D.1}{\ignorespaces Recommended minimum plot checklist for each benchmark in Chapter~\ref {ch:benchmark_results}.}}{73}{table.caption.52}%
+\contentsline {table}{\numberline {D.2}{\ignorespaces Compact result sheet for the diffuser benchmark.}}{73}{table.caption.53}%
+\contentsline {table}{\numberline {D.3}{\ignorespaces Compact result sheet for the double-pipe benchmark.}}{74}{table.caption.54}%
+\contentsline {table}{\numberline {D.4}{\ignorespaces Compact result sheet for the curved benchmark.}}{74}{table.caption.55}%

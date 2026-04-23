@@ -1,0 +1,159 @@
+\chapter{Turbulence Modeling}
+\label{ch:turbulence_modeling}
+
+\section{Introduction to Fluid Dynamics and Turbulence}
+Fluid dynamics is governed by the Navier-Stokes equations, which describe the conservation of mass and momentum for a viscous continuum fluid \cite{White2006}. In this introductory text, these equations are presented using index notation (Einstein summation convention) to clearly illustrate the individual tensor components. In this convention, the indices $i$ and $j$ represent the three spatial dimensions (1, 2, and 3, corresponding to the $x$, $y$, and $z$ axes). Consequently, $x_i$ denotes the Cartesian coordinates, and $u_i$ represents the corresponding components of the velocity vector. A repeated index within a single term implies a mathematical summation over all three spatial directions. (Note: In subsequent chapters dealing with finite element implementation, this notation will shift to standard vector calculus to align with FEniCS unified form language syntax).
+
+The fundamental principle of mass conservation is expressed by the continuity equation. For a general, compressible fluid, this is defined as:
+\begin{equation}
+	\frac{\partial \rho}{\partial t} + \frac{\partial (\rho u_i)}{\partial x_i} = 0
+\end{equation}
+where $\rho$ is the fluid density. However, for most liquid cooling applications and low-speed fluid manifolds, the fluid can be safely assumed to be incompressible. Under the incompressible flow assumption, the density $\rho$ is constant in both space and time. Therefore, the time derivative of density becomes zero, and the constant density can be factored out of the spatial derivative. Dividing the equation by $\rho$ yields the simplified, incompressible continuity equation:
+\begin{equation}
+	\frac{\partial u_i}{\partial x_i} = 0
+	\label{eq:continuity}
+\end{equation}
+
+Similarly, for an incompressible, Newtonian fluid with a constant dynamic viscosity $\mu$, the conservation of momentum is expressed as:
+\begin{equation}
+	\rho \left( \frac{\partial u_i}{\partial t} + u_j \frac{\partial u_i}{\partial x_j} \right) = -\frac{\partial p}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial u_i}{\partial x_j} \right)
+	\label{eq:navier_stokes}
+\end{equation}
+where $p$ represents the static pressure of the fluid. In principle, solving Equation \ref{eq:navier_stokes} directly yields the exact flow field. This approach is known as Direct Numerical Simulation (DNS). However, as the Reynolds number ($Re$) increases, the flow transitions into a chaotic turbulent state characterized by a broad spectrum of spatial and temporal scales \cite{Pope2000}. Resolving the smallest turbulent eddies requires extremely fine spatial grids. For industrial applications, including the design of electronics cooling manifolds, DNS is computationally prohibitive. Therefore, engineers rely on turbulence modeling to predict the averaged effects of these fluctuations without resolving the complete turbulent spectrum \cite{Versteeg2007, Altair}.
+
+\section{Reynolds-Averaged Navier-Stokes (RANS) Equations}
+The most common approach to turbulence modeling in engineering is the Reynolds-Averaged Navier-Stokes (RANS) framework, based on the theories originally introduced by Osborne Reynolds \cite{Pope2000}. The core principle of RANS is the Reynolds decomposition. This mathematical operation separates the instantaneous flow variables into a time-averaged mean component ($\bar{u}_i$, $\bar{p}$) and a fluctuating component ($u'_i$, $p'$):
+
+\begin{equation}
+	u_i = \bar{u}_i + u'_i \quad \text{and} \quad p = \bar{p} + p'
+\end{equation}
+
+Substituting these decomposed variables into the standard Navier-Stokes equations and taking the time average yields the RANS momentum equations:
+
+\begin{equation}
+	\rho \left( \frac{\partial \bar{u}_i}{\partial t} + \bar{u}_j \frac{\partial \bar{u}_i}{\partial x_j} \right) = -\frac{\partial \bar{p}}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial \bar{u}_i}{\partial x_j} - \rho \overline{u'_i u'_j} \right)
+	\label{eq:rans_momentum}
+\end{equation}
+
+The averaging process introduces a new term, $-\rho \overline{u'_i u'_j}$, known as the Reynolds stress tensor. This tensor represents the momentum transfer caused by turbulent fluctuations. The introduction of this term creates a fundamental mathematical closure problem because the RANS equations now contain more unknowns than available physical equations \cite{Versteeg2007}.
+
+\subsection{The Boussinesq Hypothesis and the Isotropic Assumption}
+To close the system and solve for the mean flow, most RANS models rely on the Boussinesq eddy viscosity hypothesis \cite{Pope2000}. This hypothesis assumes that the turbulent momentum transfer is analogous to molecular momentum transfer. It relates the Reynolds stresses linearly to the mean velocity gradients using a proportionality constant called the turbulent eddy viscosity ($\mu_t$):
+
+\begin{equation}
+	-\rho \overline{u'_i u'_j} = \mu_t \left( \frac{\partial \bar{u}_i}{\partial x_j} + \frac{\partial \bar{u}_j}{\partial x_i} \right) - \frac{2}{3} \rho k \delta_{ij}
+	\label{eq:boussinesq}
+\end{equation}
+where $k$ is the turbulent kinetic energy and $\delta_{ij}$ is the Kronecker delta. The primary task of any Boussinesq-based turbulence model is to calculate this local eddy viscosity. It is crucial to highlight a fundamental physical limitation of Equation \ref{eq:boussinesq}: the Boussinesq hypothesis inherently assumes that $\mu_t$ is an \textit{isotropic} scalar quantity. It mathematically enforces that turbulence behaves identically in all spatial directions and aligns perfectly with the mean strain rate. While this assumption holds for simple shear flows, it systematically fails in predicting anisotropic phenomena, such as the strong secondary flows induced by streamline curvature.
+
+\section{Boundary Layer Theory and Near-Wall Treatment}
+Before selecting a specific turbulence equation to calculate $\mu_t$, the physical structure of a turbulent boundary layer must be considered, as the model must accurately resolve these near-wall regions. The boundary layer is traditionally divided into three distinct regions based on the non-dimensional wall distance ($y^+$) and non-dimensional velocity ($u^+$):
+\begin{equation}
+	y^+ = \frac{y u_\tau}{\nu}, \quad u^+ = \frac{\bar{u}}{u_\tau}
+\end{equation}
+where $y$ is the absolute distance from the wall, $\nu$ is the kinematic viscosity ($\mu/\rho$), and $u_\tau = \sqrt{\tau_w/\rho}$ is the friction velocity derived from the wall shear stress ($\tau_w$) \cite{Pope2000}.
+\begin{enumerate}
+	\item \textbf{The Viscous Sublayer ($y^+ < 5$):} Immediately adjacent to the wall, turbulent fluctuations are damped out by kinematic constraints. Viscous shear dominates, and the velocity profile is strictly linear ($u^+ = y^+$).
+	\item \textbf{The Buffer Layer ($5 < y^+ < 30$):} A transition region where both viscous and turbulent shear stresses are of equal magnitude.
+	\item \textbf{The Log-Law Region ($y^+ > 30$):} Farther from the wall, turbulence dominates, and the velocity follows a logarithmic distribution predicted by the von Kármán constant \cite{Versteeg2007}.
+\end{enumerate}
+
+High-Reynolds models (like the standard $k-\epsilon$ model) use empirical "wall functions" to bridge the gap between the wall and the log-law region, requiring the first computational mesh element to be placed at $y^+ > 30$. However, for topology optimization, where solid-fluid boundaries continuously evolve during the optimization loop, empirical wall functions introduce severe mathematical discontinuities and numerical instabilities. Therefore, a "wall-resolved" model that integrates the governing equations all the way through the viscous sublayer ($y^+ \approx 1$) is strictly required for robust gradient-based optimization.
+
+\section{The Spalart-Allmaras One-Equation Model}
+While two-equation models (such as $k-\epsilon$ or $k-\omega$) solve separate transport equations for the turbulent kinetic energy and a turbulent length scale, they introduce highly non-linear source terms. These terms frequently cause numerical instabilities during the adjoint sensitivity analysis required for topology optimization. To achieve a trade-off between physical accuracy and computational efficiency, this thesis utilizes the Spalart-Allmaras (SA) model, originally developed in 1992 for aerodynamic flows with adverse pressure gradients \cite{Spalart1992}. 
+
+The SA model is a one-equation model that solves a single transport equation directly for a working variable, $\tilde{\nu}$, which is subsequently linked to the true kinematic eddy viscosity ($\nu_t = \mu_t / \rho$) \cite{Spalart1994}. The transport equation for the standard SA model is given by:
+
+\begin{equation}
+	\frac{\partial \tilde{\nu}}{\partial t} + \bar{u}_j \frac{\partial \tilde{\nu}}{\partial x_j} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{d} \right)^2 + \frac{1}{\sigma} \left[ \frac{\partial}{\partial x_j} \left( (\nu + \tilde{\nu}) \frac{\partial \tilde{\nu}}{\partial x_j} \right) + c_{b2} \left( \frac{\partial \tilde{\nu}}{\partial x_j} \right)^2 \right]
+	\label{eq:sa_transport}
+\end{equation}
+
+The terms on the right-hand side represent the production, destruction, and diffusion of the turbulent working variable, respectively. Crucially, the production term relies on a modified vorticity scalar, $\tilde{S}$. This indicates that turbulence generation in the SA model is fundamentally driven by fluid shear, a physical characteristic that introduces unique boundary-condition sensitivities during advanced adjoint calculations (discussed further in Chapter~\ref{ch:topology_optimization_methodology}). 
+
+Furthermore, the destruction term is explicitly a function of $d$, the absolute distance to the nearest wall. This makes the SA model a highly effective "wall-resolved" low-Reynolds model. It is inherently sensitive to near-wall damping effects and integrates smoothly through the viscous sublayer without requiring complex empirical wall functions or a second length-scale equation \cite{NasaTurb}. Detailed derivations of the model constants and wall damping functions are deferred to Chapter~\ref{ch:fenics_implementation}, where the numerical implementation in FEniCS is discussed.
+
+\section{Evaluation of Curvature Effects and the Dean Number}
+\label{sec:curvature_effects}
+Despite its computational advantages for topology optimization, the standard SA model relies on a single length scale tied to the nearest wall distance, making it mathematically blind to the anisotropic physics of streamline curvature. When fluid passes through a bend, centrifugal forces induce secondary flows perpendicular to the main flow direction. To quantify the strength of these secondary flows, the dimensionless Dean number ($De$) is utilized:
+\begin{equation}
+	De = Re_d \sqrt{\frac{d}{2R_c}}
+\end{equation}
+where $d$ is the characteristic length of the cross-section (e.g., the pipe diameter $D$ or hydraulic diameter $D_h$), $R_c$ is the radius of curvature, and $Re_d$ is the bulk Reynolds number based strictly on that exact same characteristic length. A higher Dean number indicates a stronger cross-sectional influence of centrifugal forces. 
+
+A review of the literature demonstrates that the predictive capability of the SA model is heavily dependent on this Dean number. For mildly curved flows, the SA model performs relatively well. Apalowo \cite{Apalowo2022} evaluated a $90^\circ$ circular pipe bend with a Dean number of $De \approx 9,000$ (operating at $Re_D \approx 34,000$, based on the pipe diameter). Under these moderate conditions, where the bend radius was seven times larger than the pipe diameter ($R_c = 7D$), the SA model provided a highly acceptable approximation of the streamwise velocity profiles compared to higher-order models, successfully capturing the primary flow physics.
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=0.8\textwidth]{example-image}
+	\caption{Streamwise velocity profiles in a $90^\circ$ pipe bend ($R_c = 7D$, $Re_D \approx 34,000$, $De \approx 9,000$). The SA model performs relatively well, closely matching the experimental data and two-equation models for mild curvature. Reprinted from Apalowo \cite{Apalowo2022}.}
+	\label{fig:apalowo_profiles}
+\end{figure}
+
+However, as the curvature tightens and the Dean number increases, the limitations of the isotropic Boussinesq assumption become severe. Rumsey et al. \cite{Rumsey2000} evaluated the internal flow through a strongly curved $180^\circ$ turnaround duct (the Monson U-Duct). While this benchmark operated at a higher bulk Reynolds number ($Re_H = 100,000$, based on the duct height $H$), the extremely tight geometry ($R_c \approx 0.83H$) generated massive centrifugal forces and an extreme equivalent Dean number. 
+
+It is critical to note that the Spalart-Allmaras model was fundamentally designed for high-Reynolds aerospace applications and remains mathematically stable well beyond $Re = 100,000$ in straight or mildly curved flows. Therefore, the subsequent failure of the model in this benchmark cannot be attributed to inertial scaling, but is strictly driven by the extreme geometric curvature. Under these severe centrifugal conditions, the uncorrected SA model drastically overpredicted the production of eddy viscosity on the inner radius of the bend. This artificial excess of viscosity suppressed the adverse pressure gradients, causing the standard SA formulation to completely fail at predicting the massive flow separation bubble that physically occurs on the inner convex wall (Figure~\ref{fig:rumsey_uduct}).
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=0.7\textwidth]{example-image} % Replace with an image from Rumsey 2000
+	\caption{Turbulence model predictions in a strongly curved internal U-duct ($R_c \approx 0.83H$, $Re_H = 100,000$, $De \approx 109,500$). Due to the extreme curvature, the standard Spalart-Allmaras model overpredicts eddy viscosity and fails to capture the inner-wall separation. Adapted from Rumsey et al. \cite{Rumsey2000}.}
+	\label{fig:rumsey_uduct}
+\end{figure}
+
+While the literature clearly establishes that the SA model is viable at $De \approx 9,000$ and fails catastrophically in extreme bends, the specific operational threshold between these extremes must be defined to justify its use in topology optimization. Therefore, to explicitly isolate the threshold where the model breaks down, rigorous benchmark studies were subsequently conducted within Ansys Fluent.
+
+\section{Benchmark Studies in Ansys Fluent}
+\label{sec:ansys_benchmarks}
+To investigate the exact physical breaking point of the SA model, benchmark simulations were performed using \textbf{Ansys Fluent}. The study focused on two distinct, fully three-dimensional (3D) internal flow geometries: a $180^\circ$ U-bend and a tighter $90^\circ$ pipe bend. To ensure a standardized and rigorously tested numerical baseline, the computational meshes, fluid properties, and boundary conditions for these simulations were adopted directly from the official Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}. Specifically, the $90^\circ$ bend corresponds to verification case VMFL030, while the 3D U-bend corresponds to case VMFL048. 
+
+These cases evaluate industrial flow regimes ($Re_D > 40,000$) to ensure the turbulence model is rigorously verified against dominant inertial physics before being implemented into the custom FEniCS solver. To evaluate the accuracy of the one-equation model, the results were compared directly against the $k-\omega$ SST model, an industry standard for accurately predicting adverse pressure gradients and flow separation.
+\subsection{Mild Curvature: The U-Bend Case}
+The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$. Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$. Consistent with the findings of Apalowo for moderate bends, the SA model performed well under these conditions. As shown in Figure~\ref{fig:ansys_ubend_comparison}(b), the velocity contours generated by the SA model closely matched those of the high-fidelity $k-\omega$ SST model (Figure~\ref{fig:ansys_ubend_comparison}(a)), accurately capturing the bulk flow distribution without severe artificial diffusion.
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{$k-\omega$ SST Model}
+		\label{fig:ubend_komega}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Spalart-Allmaras Model}
+		\label{fig:ubend_sa}
+	\end{subfigure}
+	\caption{Comparison of velocity contours in a $180^\circ$ U-bend ($R_c \approx 4.46D$, $Re_D \approx 44,700$, $De \approx 15,000$). The SA model performs well, closely matching the high-fidelity prediction.}
+	\label{fig:ansys_ubend_comparison}
+\end{figure}
+
+\subsection{Strong Curvature: The $90^\circ$ Bend Case}
+The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by a severe curvature ratio of $R_c = 2.8D$. Despite operating at a very similar bulk Reynolds number of $Re_D \approx 43,000$ compared to the U-bend, this significantly tighter bend radius pushed the Dean number up to $De \approx 18,000$. Because the bulk flow speed and Reynolds number remain effectively constant between these two benchmark cases, this comparison successfully isolates the geometric effect of streamline curvature. It clearly demonstrates that the subsequent failure of the SA model is driven purely by the tighter bend radius, which elevates the Dean number and amplifies anisotropic centrifugal effects.
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{$k-\omega$ SST Model}
+		\label{fig:90bend_komega}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Spalart-Allmaras Model}
+		\label{fig:90bend_sa}
+	\end{subfigure}
+	\caption{Comparison of velocity contours in a $90^\circ$ pipe bend ($R_c = 2.8D$, $Re_D \approx 43,000$, $De \approx 18,000$). The SA model over-smooths the velocity gradients compared to the $k-\omega$ SST model.}
+	\label{fig:ansys_90bend_comparison}
+\end{figure}
+
+\section{Conclusion}
+This chapter directly addresses the first research question regarding the predictive capabilities and physical limitations of the Spalart-Allmaras model. The theoretical breakdown and Ansys benchmark studies confirm that for internal geometries with moderate curvature (up to $De \approx 15,000$), the SA model performs accurately and successfully captures the primary flow physics. Furthermore, because it is a wall-resolved model, it avoids the numerical pitfalls of empirical wall functions, making it exceptionally well-suited for boundary-evolving topology optimization. 
+
+However, its physical limitation lies in the isotropic Boussinesq assumption. When streamline curvature induces strong anisotropic secondary flows (heuristically observed to cause model breakdown beyond a threshold of $De \approx 18,000$), the uncompensated SA model systematically overpredicts eddy viscosity and fails to capture flow separation. Consequently, while the SA model provides the necessary numerical stability to drive the optimization algorithms in FEniCS, the final topological designs must be critically verified. Any complex manifold generated by the SA optimizer must be subsequently evaluated in commercial software using a higher-fidelity two-equation model to confirm its true aerodynamic performance.

@@ -16,6 +16,7 @@ from TurbulenceModel_SpalartAllmaras_TO import (
 from Utilities_SharedTO import (
     append_optimization_log_entry,
     as_list,
+    build_sa_inlet_nu_tilde_targets,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
     create_design_mesh_from_config,
@@ -398,6 +399,8 @@ if "MASS_FLOW_TARGET_FRACTIONS" in globals():
         )
     )
 
+# Build SA inlet values from custom profiles, turbulence-intensity inputs,
+# direct eddy-viscosity ratios, or direct nu_tilde values.
 _nu_lam = MU_FLUID_VALUE / RHO_FLUID_VALUE
 custom_turbulence_inlet_builder = globals().get("build_turbulence_inlet_profile_sets")
 if callable(custom_turbulence_inlet_builder):
@@ -409,21 +412,16 @@ if callable(custom_turbulence_inlet_builder):
             )
         )
     root_print("SA inlet nu_tilde: custom profiles  (nu_lam = {:.3e})".format(_nu_lam))
+    _sa_nu_tilde_initial_default = _nu_lam
 else:
-    if "SA_MUT_RATIOS" in globals():
-        _sa_nu_tilde_targets = [nu_tilde_from_viscosity_ratio(r, _nu_lam) for r in as_list(SA_MUT_RATIOS)]
-    elif "SA_MUT_RATIO" in globals():
-        _sa_nu_tilde_targets = [nu_tilde_from_viscosity_ratio(SA_MUT_RATIO, _nu_lam)] * len(inlet_markers)
-    elif "SA_NU_TILDE_INLETS" in globals():
-        _sa_nu_tilde_targets = [float(value) for value in as_list(SA_NU_TILDE_INLETS)]
-    else:
-        _sa_nu_tilde_targets = [float(SA_NU_TILDE_INLET)]
-    if len(_sa_nu_tilde_targets) != len(inlet_markers):
-        raise ValueError(
-            "Expected {} SA inlet nu_tilde values, got {}.".format(
-                len(inlet_markers), len(_sa_nu_tilde_targets),
-            )
-        )
+    _sa_nu_tilde_targets, _sa_inlet_description = build_sa_inlet_nu_tilde_targets(
+        globals(),
+        len(inlet_markers),
+        _nu_lam,
+        nu_tilde_from_viscosity_ratio,
+    )
+    _sa_nu_tilde_initial_default = float(_sa_nu_tilde_targets[0])
+    root_print("SA inlet setup: {}".format(_sa_inlet_description))
     root_print(
         "SA inlet nu_tilde: {}  (nu_lam = {:.3e})".format(
             ", ".join("{:.4e}".format(v) for v in _sa_nu_tilde_targets),
@@ -801,12 +799,7 @@ def initialize_state_guess_with_stokes(reset_g=False):
             )
             assign(w_state.sub(STATE_G_IDX), state_g_projected)
 
-    sa_nu_tilde_init = float(globals().get(
-        "SA_NU_TILDE_INITIAL",
-        nu_tilde_from_viscosity_ratio(SA_MUT_RATIO, _nu_lam)
-        if "SA_MUT_RATIO" in globals()
-        else float(_sa_nu_tilde_targets[0]),
-    ))
+    sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", _sa_nu_tilde_initial_default))
     wall_dist_scale = max(
         float(globals().get("SA_INIT_WALL_DIST_SCALE", 0.05 * float(globals().get("L", 1.0)))),
         1.0e-12,

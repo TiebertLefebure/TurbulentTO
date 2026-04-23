@@ -1,0 +1,155 @@
+\chapter[Chapter 5 Result Templates]{Chapter 5 Result Templates and Plot Checklist}
+\label{app:chapter5_templates}
+
+\providecommand{\resultplaceholder}[1]{%
+	\fbox{\parbox[c][0.18\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
+}
+
+This appendix collects practical fill-in templates for the final version of Chapter~\ref{ch:benchmark_results}. Its purpose is simple: prevent the last month of work from ending in an inconsistent chapter with missing figures, mismatched metrics, or vague conclusions.
+
+\section{Minimum Plot Set per Benchmark}
+Table~\ref{tab:app_plot_checklist} lists the minimum figure set that should be completed for each benchmark. The goal is to keep the chapter disciplined. If a panel does not support one of the claims in Chapter~\ref{ch:benchmark_results}, it should not displace a more relevant result.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Recommended minimum plot checklist for each benchmark in Chapter~\ref{ch:benchmark_results}.}
+	\label{tab:app_plot_checklist}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X X}
+		\hline
+		\textbf{Plot or table} & \textbf{Why it is needed} & \textbf{Status in draft} \\
+		\hline
+		FEniCS objective history & Shows whether the optimization materially improved the native objective. & Placeholder inserted in Chapter 5 \\
+		FEniCS projected topology & Shows the final extracted design field. & Existing image available for current cases \\
+		FEniCS velocity field & Shows whether losses are reduced through smoother routing rather than geometry alone. & Placeholder inserted in Chapter 5 \\
+		FEniCS eddy-viscosity field & Shows where turbulence production remains concentrated. & Placeholder inserted in Chapter 5 \\
+		Ansys geometry and mesh & Documents the extraction step and near-wall treatment. & Placeholder inserted in Chapter 5 \\
+		FEniCS-SA versus Ansys-SA comparison & Core cross-code check. & Placeholder inserted in Chapter 5 \\
+		Ansys SST $k$-$\omega$ comparison & Main model-sensitivity check. & Placeholder inserted in Chapter 5 \\
+		Optional standard $k$-$\epsilon$ comparison & Secondary reference only. & Placeholder inserted in Chapter 5 \\
+		Combined benchmark summary table & Forces a precise answer to the research question. & Placeholder inserted in Chapter 5 \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\section{Per-Benchmark Result Sheets}
+Each benchmark should ultimately produce one compact data sheet. The point is not to fill a large appendix with raw solver output, but to ensure that the same questions are answered for each case.
+
+\subsection{Diffuser Sheet}
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Compact result sheet for the diffuser benchmark.}
+	\label{tab:app_diffuser_sheet}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Field} & \textbf{Entry} \\
+		\hline
+		Benchmark definition & [TBD] \\
+		Inlet condition & [TBD: uniform velocity and turbulence intensity] \\
+		FEniCS initial objective $J_{TO,0}$ & [TBD] \\
+		FEniCS final objective $J_{TO,f}$ & [TBD] \\
+		FEniCS objective reduction & [TBD] \\
+		Common comparison metric & [TBD] \\
+		FEniCS-SA on extracted geometry & [TBD] \\
+		Ansys-SA & [TBD] \\
+		Ansys SST $k$-$\omega$ & [TBD] \\
+		Optional standard $k$-$\epsilon$ & [TBD] \\
+		One-sentence conclusion & [TBD] \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Double-Pipe Sheet}
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Compact result sheet for the double-pipe benchmark.}
+	\label{tab:app_doublepipe_sheet}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Field} & \textbf{Entry} \\
+		\hline
+		Benchmark definition & [TBD] \\
+		Inlet condition & [TBD: uniform velocity and turbulence intensity] \\
+		FEniCS initial objective $J_{TO,0}$ & [TBD] \\
+		FEniCS final objective $J_{TO,f}$ & [TBD] \\
+		FEniCS objective reduction & [TBD] \\
+		Common comparison metric & [TBD] \\
+		FEniCS-SA on extracted geometry & [TBD] \\
+		Ansys-SA & [TBD] \\
+		Ansys SST $k$-$\omega$ & [TBD] \\
+		Optional standard $k$-$\epsilon$ & [TBD] \\
+		One-sentence conclusion & [TBD] \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Curved-Benchmark Sheet}
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Compact result sheet for the curved benchmark.}
+	\label{tab:app_curved_sheet}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Field} & \textbf{Entry} \\
+		\hline
+		Selected geometry & [TBD: Bayat--Li--Alexandersen pipe bend / U-bend / fallback case] \\
+		Inlet condition & [TBD: uniform velocity and turbulence intensity] \\
+		Characteristic length and curvature radius & [TBD] \\
+		Reynolds number & [TBD] \\
+		Dean number & [TBD] \\
+		FEniCS initial objective $J_{TO,0}$ & [TBD] \\
+		FEniCS final objective $J_{TO,f}$ & [TBD] \\
+		FEniCS objective reduction & [TBD] \\
+		Common comparison metric & [TBD] \\
+		FEniCS-SA on extracted geometry & [TBD] \\
+		Ansys-SA & [TBD] \\
+		Ansys SST $k$-$\omega$ & [TBD] \\
+		Optional standard $k$-$\epsilon$ & [TBD] \\
+		Consistency with Chapter~\ref{ch:turbulence_modeling} & [TBD] \\
+		One-sentence conclusion & [TBD] \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\section{Composite Figure Templates}
+The following figure layout is the recommended default for each benchmark. It keeps the chapter visually consistent and forces the chapter text to stay tied to evidence rather than to impression.
+
+\begin{figure}[htbp]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\resultplaceholder{Projected topology or objective history panel.}
+		\caption{FEniCS optimization panel}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\resultplaceholder{Velocity or eddy-viscosity field from FEniCS-SA.}
+		\caption{FEniCS field panel}
+	\end{subfigure}
+
+	\vspace{0.5cm}
+
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\resultplaceholder{Ansys-SA panel on the extracted geometry.}
+		\caption{Cross-code comparison panel}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\resultplaceholder{Ansys SST $k$-$\omega$ panel on the extracted geometry.}
+		\caption{Model-sensitivity panel}
+	\end{subfigure}
+	\caption{Reusable figure template for the main Chapter~\ref{ch:benchmark_results} benchmark panels.}
+	\label{fig:app_result_template}
+\end{figure}
+
+The purpose of this appendix is intentionally pragmatic. It keeps the final month of thesis work focused on the outputs that actually answer the research questions, and it reduces the risk that the final document overstates what the CFD campaign can support.

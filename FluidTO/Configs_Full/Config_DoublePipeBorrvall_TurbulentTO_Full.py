@@ -16,9 +16,9 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh path for this benchmark geometry.
-# Generate via: cd Meshes/DoublePipeBorrvall && python3 double_pipe_gmsh.py && python3 gmsh_to_xdmf.py
+# Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/DoublePipeBorrvall/mesh.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/DoublePipeBorrvall/mesh_guided.xdmf"),
 }
 
 
@@ -26,11 +26,18 @@ def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
 
 
-# Geometry and reference meshing parameters for the two-port design box.
-DOMAIN_X_MIN = 0.0
-DOMAIN_Y_MIN = 0.0
-DOMAIN_X_MAX = 1.5
-DOMAIN_Y_MAX = 1.0
+# Geometry and reference meshing parameters.
+L = 1.0
+INLET_EXTENSION_WIDTH = 0.2 * L
+OUTLET_EXTENSION_WIDTH = 0.2 * L
+DESIGN_X_MIN = 0.0
+DESIGN_Y_MIN = 0.0
+DESIGN_X_MAX = 1.5 * L
+DESIGN_Y_MAX = L
+DOMAIN_X_MIN = DESIGN_X_MIN - INLET_EXTENSION_WIDTH
+DOMAIN_Y_MIN = DESIGN_Y_MIN
+DOMAIN_X_MAX = DESIGN_X_MAX + OUTLET_EXTENSION_WIDTH
+DOMAIN_Y_MAX = DESIGN_Y_MAX
 NX = 150  # reference resolution used to generate the Gmsh mesh
 NY = 100
 TOL = DOLFIN_EPS
@@ -54,15 +61,6 @@ OUTLET_SEGMENTS = [
     (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX),
 ]
 
-# Optional passive inlet strip near the left boundary. The default
-# "fluid_only" mode only pins the inlet-window cells to fluid and leaves the
-# rest of the strip free; "block" reproduces the older behavior that also
-# forces the non-port part of the strip to solid.
-ENABLE_INLET_PASSIVE_STRIP = False
-INLET_PASSIVE_STRIP_MODE = "fluid_only"
-INLET_PASSIVE_STRIP_CELLS = 3
-INLET_PASSIVE_STRIP_LENGTH = INLET_PASSIVE_STRIP_CELLS * ((DOMAIN_X_MAX - DOMAIN_X_MIN) / NX)
-
 # Flow and Brinkman parameters for the monolithic primal solve.
 MU_FLUID_VALUE = 1.0e-4
 RHO_FLUID_VALUE = 1.0
@@ -76,7 +74,9 @@ U_MAX_OUTLETS = [1.0, 1.0]
 
 
 # SA transport parameters for the monolithic primal state.
-SA_MUT_RATIO = 5.0
+SA_TURBULENCE_INTENSITY = 0.075
+SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.06
+SA_REFERENCE_LENGTH = PORT_WIDTH
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
 SA_NU_TILDE_FLOOR = 1.0e-12
@@ -172,10 +172,23 @@ class VerticalPortBoundary(SubDomain):
 
 
 class WallsBoundary(SubDomain):
-    def __init__(self, x_min, x_max, y_min, y_max, tol, inlet_segments, outlet_segments):
+    def __init__(
+        self,
+        design_x_min,
+        design_x_max,
+        domain_x_min,
+        domain_x_max,
+        y_min,
+        y_max,
+        tol,
+        inlet_segments,
+        outlet_segments,
+    ):
         super().__init__()
-        self._x_min = x_min
-        self._x_max = x_max
+        self._design_x_min = design_x_min
+        self._design_x_max = design_x_max
+        self._domain_x_min = domain_x_min
+        self._domain_x_max = domain_x_max
         self._y_min = y_min
         self._y_max = y_max
         self._tol = tol
@@ -186,16 +199,31 @@ class WallsBoundary(SubDomain):
         return any(between(y_value, segment, self._tol) for segment in segments)
 
     def inside(self, x, on_boundary):
-        left_wall_outside_inlets = near(x[0], self._x_min, self._tol) and not self._inside_any_segment(
+        left_wall_outside_inlets = near(x[0], self._design_x_min, self._tol) and not self._inside_any_segment(
             x[1], self._inlet_segments
         )
-        right_wall_outside_outlets = near(x[0], self._x_max, self._tol) and not self._inside_any_segment(
+        right_wall_outside_outlets = near(x[0], self._design_x_max, self._tol) and not self._inside_any_segment(
             x[1], self._outlet_segments
         )
         top_wall = near(x[1], self._y_max, self._tol)
         bottom_wall = near(x[1], self._y_min, self._tol)
+        inlet_strip_caps = any(
+            (near(x[1], y_edge, self._tol) and between(x[0], (self._domain_x_min, self._design_x_min), self._tol))
+            for segment in self._inlet_segments
+            for y_edge in segment
+        )
+        outlet_strip_caps = any(
+            (near(x[1], y_edge, self._tol) and between(x[0], (self._design_x_max, self._domain_x_max), self._tol))
+            for segment in self._outlet_segments
+            for y_edge in segment
+        )
         return on_boundary and (
-            left_wall_outside_inlets or right_wall_outside_outlets or top_wall or bottom_wall
+            left_wall_outside_inlets
+            or right_wall_outside_outlets
+            or top_wall
+            or bottom_wall
+            or inlet_strip_caps
+            or outlet_strip_caps
         )
 
 
@@ -220,6 +248,8 @@ def mark_boundaries(mesh):
     boundaries.set_all(MARK["generic"])
 
     WallsBoundary(
+        DESIGN_X_MIN,
+        DESIGN_X_MAX,
         DOMAIN_X_MIN,
         DOMAIN_X_MAX,
         DOMAIN_Y_MIN,
@@ -236,104 +266,39 @@ def mark_boundaries(mesh):
     return boundaries
 
 
-def _build_horizontal_profile(u_max, y_min, y_max):
-    y_center = 0.5 * (y_min + y_max)
-    width = y_max - y_min
-    return Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=u_max,
-        y_c=y_center,
-        width=width,
-    )
+def _build_uniform_horizontal_profile(u_max):
+    return Expression(("u_max", "0.0"), degree=0, u_max=u_max)
 
 
 def build_velocity_profile_sets():
     inlet_profiles = [
-        _build_horizontal_profile(u_max, segment[0], segment[1])
-        for u_max, segment in zip(U_MAX_INLETS, INLET_SEGMENTS)
+        _build_uniform_horizontal_profile(u_max)
+        for u_max in U_MAX_INLETS
     ]
     if OUTLET_BC_TYPE == "pressure":
         return inlet_profiles, []
 
     outlet_profiles = [
-        _build_horizontal_profile(u_max, segment[0], segment[1])
-        for u_max, segment in zip(U_MAX_OUTLETS, OUTLET_SEGMENTS)
+        _build_uniform_horizontal_profile(u_max)
+        for u_max in U_MAX_OUTLETS
     ]
     return inlet_profiles, outlet_profiles
 
 
-def _inside_any_segment(y_value, segments, tol=TOL):
-    return any(between(y_value, segment, tol) for segment in segments)
-
-
-def _passive_strip_mode():
-    return str(globals().get("INLET_PASSIVE_STRIP_MODE", "fluid_only")).strip().lower()
-
-
 def build_density_bounds(mesh, density_space):
-    if not ENABLE_INLET_PASSIVE_STRIP:
-        return 0.0, 1.0
-
-    lower = Function(density_space)
-    upper = Function(density_space)
-
-    lower_values = np.zeros(density_space.dim())
-    upper_values = np.ones(density_space.dim())
-    dofmap = density_space.dofmap()
-    inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
-    strip_mode = _passive_strip_mode()
-    if strip_mode not in {"fluid_only", "block"}:
-        raise ValueError(
-            "INLET_PASSIVE_STRIP_MODE must be either 'fluid_only' or 'block'. "
-            "Got {!r}.".format(strip_mode)
-        )
-
-    for cell in cells(mesh):
-        dof = dofmap.cell_dofs(cell.index())[0]
-        midpoint = cell.midpoint()
-        x_coord = midpoint.x()
-        y_coord = midpoint.y()
-
-        if DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS:
-            if _inside_any_segment(y_coord, INLET_SEGMENTS):
-                lower_values[dof] = 1.0
-                upper_values[dof] = 1.0
-            elif strip_mode == "block":
-                lower_values[dof] = 0.0
-                upper_values[dof] = 0.0
-
-    lower.vector().set_local(lower_values)
-    lower.vector().apply("insert")
-    upper.vector().set_local(upper_values)
-    upper.vector().apply("insert")
-    return lower, upper
+    non_design_fluid_lower = Expression(
+        "(x[0] < x_min || x[0] > x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
+    )
+    return non_design_fluid_lower, 1.0
 
 
 def build_volume_region(mesh, density_space):
-    if not ENABLE_INLET_PASSIVE_STRIP:
-        return 1.0
-
-    volume_region = Function(density_space)
-    region_values = np.ones(density_space.dim())
-    dofmap = density_space.dofmap()
-    inlet_block_x_max = DOMAIN_X_MIN + INLET_PASSIVE_STRIP_LENGTH
-    strip_mode = _passive_strip_mode()
-
-    for cell in cells(mesh):
-        dof = dofmap.cell_dofs(cell.index())[0]
-        midpoint = cell.midpoint()
-        x_coord = midpoint.x()
-        y_coord = midpoint.y()
-        if (
-            DOMAIN_X_MIN - DOLFIN_EPS <= x_coord <= inlet_block_x_max + DOLFIN_EPS
-            and (
-                strip_mode == "block"
-                or _inside_any_segment(y_coord, INLET_SEGMENTS)
-            )
-        ):
-            region_values[dof] = 0.0
-
-    volume_region.vector().set_local(region_values)
-    volume_region.vector().apply("insert")
-    return volume_region
+    return Expression(
+        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
+    )

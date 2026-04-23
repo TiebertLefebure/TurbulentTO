@@ -10,17 +10,20 @@ L_CHANNEL = 2.0
 H_CHANNEL = 2.0
 
 # Channel SA reference values from ConfigChannel_SpalartAllmaras_Steady.py.
-U_REF = 20.0
-HYDRAULIC_DIAMETER = 2.0
+U_REF = 18.5
+REYNOLDS_LENGTH = H_CHANNEL
 KINEMATIC_VISCOSITY = 0.00181818
-REYNOLDS_NUMBER = U_REF * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY
+REYNOLDS_NUMBER = U_REF * REYNOLDS_LENGTH / KINEMATIC_VISCOSITY
 
-# Estimate y+ ~= 1 first-layer height:
+# Estimate the y+ ~= 1 first-layer height for the pressure-driven channel:
 #   Cf = 0.079 Re^(-0.25), u_tau = U_ref sqrt(Cf / 2)
-#   y_first = nu / u_tau ~= 1.6e-3 m for Re ~= 22,000.
+#   Re_H ~= 20,350, Cf ~= 6.61e-3, u_tau ~= 1.064 m/s
+#   y_first(y+=1) = nu / u_tau ~= 1.709e-3 m.
 SKIN_FRICTION_COEFFICIENT = 0.079 * (REYNOLDS_NUMBER ** -0.25)
 FRICTION_VELOCITY = U_REF * math.sqrt(SKIN_FRICTION_COEFFICIENT / 2.0)
-FIRST_LAYER_HEIGHT = KINEMATIC_VISCOSITY / FRICTION_VELOCITY
+TARGET_FIRST_LAYER_HEIGHT = KINEMATIC_VISCOSITY / FRICTION_VELOCITY
+FIRST_LAYER_HEIGHT = TARGET_FIRST_LAYER_HEIGHT
+FIRST_LAYER_Y_PLUS = FIRST_LAYER_HEIGHT / TARGET_FIRST_LAYER_HEIGHT
 
 # Boundary marker convention used by the existing channel configs:
 #   bottom wall -> 1, right/outflow -> 2, top wall -> 3, left/inflow -> 4.
@@ -173,9 +176,13 @@ def write_mesh(name, settings):
 
 def main():
     print(
-        "Channel wall-resolved first layer: {:.3e} m (Re={:.0f}, y+ ~= 1)".format(
+        "Channel wall-resolved first layer: {:.3e} m "
+        "(Re={:.0f}, u_tau={:.3f} m/s, target y+=1 height={:.3e} m, y+={:.2f})".format(
             FIRST_LAYER_HEIGHT,
             REYNOLDS_NUMBER,
+            FRICTION_VELOCITY,
+            TARGET_FIRST_LAYER_HEIGHT,
+            FIRST_LAYER_Y_PLUS,
         )
     )
     for name, settings in MESHES.items():

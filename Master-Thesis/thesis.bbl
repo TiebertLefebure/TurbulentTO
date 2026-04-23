@@ -1,0 +1,272 @@
+\begin{thebibliography}{10}
+
+\bibitem{Alexandersen2023}
+J.~Alexandersen.
+\newblock A detailed introduction to density-based topology optimisation of
+  fluid flow problems with implementation in matlab.
+\newblock {\em Structural and Multidisciplinary Optimization}, 66(1):12, 2023.
+
+\bibitem{Alexandersen2020}
+J.~Alexandersen and C.~S. Andreasen.
+\newblock A review of topology optimisation for fluid-based problems.
+\newblock {\em Fluids}, 5(1):29, 2020.
+
+\bibitem{Alnaes2015}
+M.~S. Aln{\ae}s, J.~Blechta, J.~Hake, A.~Johansson, B.~Kehlet, A.~Logg,
+  C.~Richardson, J.~Ring, M.~E. Rognes, and G.~N. Wells.
+\newblock The fenics project version 1.5.
+\newblock {\em Archive of Numerical Software}, 3(100), 2015.
+
+\bibitem{Alonso2021}
+D.~H. Alonso, L.~F. Garcia~Rodriguez, and E.~C.~N. Silva.
+\newblock Flexible framework for fluid topology optimization with openfoam and
+  finite element-based high-level discrete adjoint method
+  (fenics/dolfin-adjoint).
+\newblock {\em Structural and Multidisciplinary Optimization},
+  64(6):4409--4440, 2021.
+
+\bibitem{Altair}
+Altair Engineering, Inc.
+\newblock {\em AcuSolve Turbulence Modeling Training Manual}, 2023.
+\newblock Available online:
+  \url{https://help.altair.com/hwcfdsolvers/acusolve}.
+
+\bibitem{Andreassen2011}
+E.~Andreassen, A.~Clausen, M.~Schevenels, B.~S. Lazarov, and O.~Sigmund.
+\newblock Efficient topology optimization in matlab using 88 lines of code.
+\newblock {\em Structural and Multidisciplinary Optimization}, 43(1):1--16,
+  2011.
+
+\bibitem{AnsysVerification2024}
+ANSYS, Inc., Canonsburg, PA.
+\newblock {\em Ansys Fluid Dynamics Verification Manual, Release 2024 R1},
+  January 2024.
+
+\bibitem{Apalowo2022}
+R.~K. Apalowo.
+\newblock Numerical study of different models for turbulent flow in $90^\circ$
+  pipe bend.
+\newblock {\em U.Porto Journal of Engineering}, 8(2):121--134, 2022.
+
+\bibitem{Arnold2002}
+D.~N. Arnold, F.~Brezzi, B.~Cockburn, and L.~D. Marini.
+\newblock Unified analysis of discontinuous galerkin methods for elliptic
+  problems.
+\newblock {\em SIAM Journal on Numerical Analysis}, 39(5):1749--1779, 2002.
+
+\bibitem{Bayat2026}
+A.~Bayat, H.~Li, and J.~Alexandersen.
+\newblock Density-based topology optimization for turbulent fluid flow using
+  the standard k-epsilon rans model with wall-functions imposed through an
+  implicit wall penalty formulation.
+\newblock arXiv preprint arXiv:2601.02202, Jan. 2026.
+\newblock Published 5 January 2026.
+
+\bibitem{Bendsoe1988}
+M.~P. Bends{\o}e and N.~Kikuchi.
+\newblock Generating optimal topologies in structural design using a
+  homogenization method.
+\newblock {\em Computer methods in applied mechanics and engineering},
+  71(2):197--224, 1988.
+
+\bibitem{Borrvall2003}
+T.~Borrvall and J.~Petersson.
+\newblock Topology optimization of fluids in stokes flow.
+\newblock {\em International journal for numerical methods in fluids},
+  41(1):77--107, 2003.
+
+\bibitem{Chorin1968}
+A.~J. Chorin.
+\newblock Numerical solution of the navier-stokes equations.
+\newblock {\em Mathematics of computation}, 22(104):745--762, 1968.
+
+\bibitem{Deng2013}
+Y.~Deng, Z.~Liu, and Y.~Wu.
+\newblock Topology optimization of steady and unsteady incompressible
+  navier-stokes flows driven by body forces.
+\newblock {\em Structural and Multidisciplinary Optimization}, 47:555--570,
+  2013.
+
+\bibitem{Dilgen2018}
+C.~B. Dilgen, S.~B. Dilgen, D.~R. Fuhrman, O.~Sigmund, and B.~S. Lazarov.
+\newblock Topology optimization of turbulent flows.
+\newblock {\em Computer Methods in Applied Mechanics and Engineering},
+  331:363--393, 2018.
+
+\bibitem{Fawaz2022}
+A.~Fawaz, Y.~Hua, S.~Le~Corre, Y.~Fan, and L.~Luo.
+\newblock Topology optimization of heat exchangers: A review.
+\newblock {\em Energy}, 258:124053, 2022.
+
+\bibitem{Ferziger2012}
+J.~H. Ferziger, M.~Peri{\'c}, and R.~L. Street.
+\newblock {\em Computational Methods for Fluid Dynamics}.
+\newblock Springer, Berlin, Heidelberg, 4th edition, 2012.
+
+\bibitem{Gersborg2005}
+A.~Gersborg-Hansen, M.~P. Bends{\o}e, and O.~Sigmund.
+\newblock Topology optimization of channel flow problems.
+\newblock {\em Structural and multidisciplinary optimization}, 30(3):181--192,
+  2005.
+
+\bibitem{Geuzaine2009}
+C.~Geuzaine and J.-F. Remacle.
+\newblock Gmsh: A 3-d finite element mesh generator with built-in pre-and
+  post-processing facilities.
+\newblock {\em International journal for numerical methods in engineering},
+  79(11):1309--1331, 2009.
+
+\bibitem{Hesthaven2007}
+J.~S. Hesthaven and T.~Warburton.
+\newblock {\em Nodal Discontinuous Galerkin Methods: Algorithms, Analysis, and
+  Applications}.
+\newblock Springer Science \& Business Media, New York, NY, 2007.
+
+\bibitem{joove_keps}
+{joove123}.
+\newblock k-epsilon fenics implementation.
+\newblock \url{https://github.com/joove123/k-epsilon.git}, 2026.
+
+\bibitem{Kobayashi2021}
+H.~Kobayashi, K.~Yaji, S.~Yamasaki, and K.~Fujita.
+\newblock Topology design of two-fluid heat exchange.
+\newblock {\em Structural and Multidisciplinary Optimization}, 63:821--834,
+  2021.
+
+\bibitem{Langtangen2016}
+H.~P. Langtangen and A.~Logg.
+\newblock {\em Solving PDEs in Python: The FEniCS Tutorial I}.
+\newblock Springer Nature, 2016.
+
+\bibitem{Lazarov2011}
+B.~S. Lazarov and O.~Sigmund.
+\newblock Filters in topology optimization based on helmholtz-type differential
+  equations.
+\newblock {\em International Journal for Numerical Methods in Engineering},
+  86(6):765--781, 2011.
+
+\bibitem{Logg2012}
+A.~Logg, K.-A. Mardal, and G.~N. Wells.
+\newblock {\em Automated Solution of Differential Equations by the Finite
+  Element Method: The FEniCS Book}, volume~84.
+\newblock Springer Science \& Business Media, 2012.
+
+\bibitem{Marcibal2024}
+J.~Marcib\'{a}l.
+\newblock Turbulence modeling in computational fluid dynamics.
+\newblock Master's thesis, University of Southern Denmark, 6 2024.
+
+\bibitem{Margetis2024}
+A.-S. Margetis, E.~Papoutsis-Kiachagias, and K.~Giannakoglou.
+\newblock The continuous adjoint to the incompressible (d) des spalart-allmaras
+  turbulence models.
+\newblock {\em Computers \& Fluids}, 284:106439, 2024.
+
+\bibitem{Othmer2014}
+C.~Othmer.
+\newblock Adjoint methods for car aerodynamics.
+\newblock {\em Journal of Mathematics in Industry}, 4(1):1--25, 2014.
+
+\bibitem{Papoutsis2016}
+E.~M. Papoutsis-Kiachagias and K.~C. Giannakoglou.
+\newblock Continuous adjoint methods for turbulent flows, applied to shape and
+  topology optimization: industrial applications.
+\newblock {\em Archives of Computational Methods in Engineering},
+  23(2):255--299, 2016.
+
+\bibitem{Pope2000}
+S.~B. Pope.
+\newblock {\em Turbulent Flows}.
+\newblock Cambridge University Press, 2000.
+
+\bibitem{NasaTurb}
+C.~L. Rumsey et~al.
+\newblock Turbulence modeling resource.
+\newblock NASA Langley Research Center, \url{https://turbmodels.larc.nasa.gov},
+  2023.
+\newblock Accessed: 2024-05-15.
+
+\bibitem{Rumsey2000}
+C.~L. Rumsey, T.~B. Gatski, and J.~H. Morrison.
+\newblock Turbulence model predictions of strongly curved flow in a {U-Duct}.
+\newblock {\em AIAA Journal}, 38(8):1394--1402, 2000.
+
+\bibitem{Schramm2018}
+M.~Schramm, B.~Stoevesandt, and J.~Peinke.
+\newblock Optimization of airfoils using the adjoint approach and the influence
+  of adjoint turbulent viscosity.
+\newblock {\em Computation}, 6(1):10, 2018.
+
+\bibitem{Spalart1992}
+P.~Spalart and S.~Allmaras.
+\newblock A one-equation turbulence model for aerodynamic flows.
+\newblock {\em 30th aerospace sciences meeting and exhibit}, page 439, 1992.
+
+\bibitem{Spalart1994}
+P.~R. Spalart and S.~R. Allmaras.
+\newblock A one-equation turbulence model for aerodynamic flows.
+\newblock {\em La Recherche Aérospatiale}, 1:5--21, 1994.
+
+\bibitem{Svanberg1987}
+K.~Svanberg.
+\newblock The method of moving asymptotes—a new method for structural
+  optimization.
+\newblock {\em International journal for numerical methods in engineering},
+  24(2):359--373, 1987.
+
+\bibitem{Temam1969}
+R.~Temam.
+\newblock Sur l'approximation de la solution des {\'e}quations de navier-stokes
+  par la m{\'e}thode des pas fractionnaires (i).
+\newblock {\em Archive for Rational Mechanics and Analysis}, 32(2):135--153,
+  1969.
+
+\bibitem{Tucker2003}
+P.~Tucker.
+\newblock Differential equation-based wall distance computation for des and
+  rans.
+\newblock {\em Journal of Computational Physics}, 190(1):229--248, 2003.
+
+\bibitem{Versteeg2007}
+H.~K. Versteeg and W.~Malalasekera.
+\newblock {\em An introduction to computational fluid dynamics: the finite
+  volume method}.
+\newblock Pearson education, 2007.
+
+\bibitem{White2006}
+F.~M. White and J.~Majdalani.
+\newblock {\em Viscous fluid flow}, volume~3.
+\newblock McGraw-Hill New York, 2006.
+
+\bibitem{Wu2023}
+H.~Wu, D.~Wang, and X.~Huang.
+\newblock Effect of constant eddy viscosity assumption on optimization using a
+  discrete adjoint method.
+\newblock {\em Chinese Journal of Aeronautics}, 36(11):102--118, 2023.
+
+\bibitem{Yoon2016}
+G.~H. Yoon.
+\newblock Topology optimization for turbulent flow with spalart-allmaras model.
+\newblock {\em Computer Methods in Applied Mechanics and Engineering},
+  303:288--311, 2016.
+
+\bibitem{Zhao2021}
+J.~Zhao, M.~Zhang, Y.~Zhu, R.~Cheng, and L.~Wang.
+\newblock Topology optimization of turbulent forced convective heat sinks using
+  a multi-layer thermofluid model.
+\newblock {\em Structural and Multidisciplinary Optimization},
+  64(6):3835--3859, 2021.
+
+\bibitem{Zhou2017}
+T.~Zhou, T.~Liu, Y.~Deng, L.~Chen, S.~Qian, and Z.~Liu.
+\newblock Design of microfluidic channel networks with specified output flow
+  rates using the cfd-based optimization method.
+\newblock {\em Microfluidics and Nanofluidics}, 21(1), 2017.
+
+\bibitem{Zymaris2009}
+A.~Zymaris, D.~Papadimitriou, K.~Giannakoglou, and C.~Othmer.
+\newblock Continuous adjoint approach to the spalart--allmaras turbulence model
+  for incompressible flows.
+\newblock {\em Computers \& Fluids}, 38(8):1528--1538, 2009.
+
+\end{thebibliography}

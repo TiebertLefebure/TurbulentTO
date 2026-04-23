@@ -84,6 +84,237 @@ def as_list(value):
     return [value]
 
 
+def _format_numeric_values(values):
+    return ", ".join("{:.4g}".format(value) for value in values)
+
+
+def _expand_numeric_config_value(config_values, names, count, default=None, required=False):
+    for name in names:
+        if name in config_values:
+            raw_value = config_values[name]
+            break
+    else:
+        if default is None:
+            if required:
+                raise ValueError("Expected one of {} in the configuration.".format(", ".join(names)))
+            return None
+        raw_value = default
+
+    values = [float(value) for value in as_list(raw_value)]
+    if len(values) == 1 and count > 1:
+        values *= count
+    if len(values) != count:
+        raise ValueError(
+            "{} must provide either one value or {} values, got {}.".format(
+                names[0], count, len(values),
+            )
+        )
+    return values
+
+
+def _first_config_value(config_values, names):
+    for name in names:
+        if name in config_values:
+            return config_values[name]
+    return None
+
+
+def eddy_viscosity_ratio_from_turbulence_intensity(
+    intensity,
+    nu_lam,
+    reference_velocity=None,
+    reference_length=None,
+    length_scale=None,
+    length_scale_ratio=None,
+    reynolds_number=None,
+    c_mu=0.09,
+):
+    """Estimate nu_t / nu_lam from inlet turbulence intensity and length scale.
+
+    This uses the standard k-epsilon inlet estimate:
+        k = 3/2 * (U * I)^2
+        epsilon = C_mu^(3/4) * k^(3/2) / ell
+        nu_t = C_mu * k^2 / epsilon
+
+    which gives:
+        nu_t / nu = C_mu^(1/4) * sqrt(3/2) * I * U * ell / nu
+
+    If reynolds_number is supplied, length_scale_ratio is interpreted as ell/L.
+    Otherwise reference_velocity and length_scale are used directly.
+    """
+    intensity = float(intensity)
+    nu_lam = float(nu_lam)
+    if intensity <= 0.0:
+        raise ValueError("SA_TURBULENCE_INTENSITY must be positive.")
+    if nu_lam <= 0.0:
+        raise ValueError("nu_lam must be positive.")
+
+    factor = (float(c_mu) ** 0.25) * (1.5 ** 0.5)
+
+    if reynolds_number is not None:
+        reynolds_number = abs(float(reynolds_number))
+        if reynolds_number <= 0.0:
+            raise ValueError("SA_REYNOLDS_NUMBER must be positive.")
+        if length_scale_ratio is None:
+            if length_scale is None or reference_length is None:
+                raise ValueError(
+                    "Using SA_REYNOLDS_NUMBER requires SA_TURBULENCE_LENGTH_SCALE_RATIO "
+                    "or both SA_TURBULENCE_LENGTH_SCALE and SA_REFERENCE_LENGTH."
+                )
+            length_scale_ratio = float(length_scale) / float(reference_length)
+        return factor * intensity * reynolds_number * float(length_scale_ratio)
+
+    if length_scale is None:
+        if length_scale_ratio is None or reference_length is None:
+            raise ValueError(
+                "SA_TURBULENCE_INTENSITY requires either SA_TURBULENCE_LENGTH_SCALE "
+                "or SA_TURBULENCE_LENGTH_SCALE_RATIO with a reference length."
+            )
+        length_scale = float(length_scale_ratio) * float(reference_length)
+
+    if reference_velocity is None:
+        raise ValueError(
+            "SA_TURBULENCE_INTENSITY requires SA_REFERENCE_VELOCITY, U_BULK_INLET, "
+            "U_MAX_INLET, or SA_REYNOLDS_NUMBER."
+        )
+    return factor * intensity * abs(float(reference_velocity)) * float(length_scale) / nu_lam
+
+
+def build_sa_inlet_nu_tilde_targets(config_values, inlet_count, nu_lam, nu_tilde_from_ratio):
+    """Build inlet nu_tilde values from the configured SA inlet turbulence model."""
+    if "SA_MUT_RATIOS" in config_values or "SA_MUT_RATIO" in config_values:
+        ratio_targets = _expand_numeric_config_value(
+            config_values,
+            ("SA_MUT_RATIOS", "SA_MUT_RATIO"),
+            inlet_count,
+            required=True,
+        )
+        nu_tilde_targets = [nu_tilde_from_ratio(ratio, nu_lam) for ratio in ratio_targets]
+        description = "eddy-viscosity ratio nu_t/nu_lam = {}".format(
+            _format_numeric_values(ratio_targets)
+        )
+        return nu_tilde_targets, description
+
+    uses_intensity = (
+        "SA_TURBULENCE_INTENSITIES" in config_values
+        or "SA_TURBULENCE_INTENSITY" in config_values
+    )
+    if uses_intensity:
+        intensities = _expand_numeric_config_value(
+            config_values,
+            ("SA_TURBULENCE_INTENSITIES", "SA_TURBULENCE_INTENSITY"),
+            inlet_count,
+            required=True,
+        )
+        length_scales = _expand_numeric_config_value(
+            config_values,
+            ("SA_TURBULENCE_LENGTH_SCALES", "SA_TURBULENCE_LENGTH_SCALE"),
+            inlet_count,
+        )
+        length_scale_ratios = None
+        if length_scales is None:
+            length_scale_ratios = _expand_numeric_config_value(
+                config_values,
+                ("SA_TURBULENCE_LENGTH_SCALE_RATIOS", "SA_TURBULENCE_LENGTH_SCALE_RATIO"),
+                inlet_count,
+                default=0.07,
+            )
+
+        reynolds_numbers = _expand_numeric_config_value(
+            config_values,
+            ("SA_REYNOLDS_NUMBERS", "SA_REYNOLDS_NUMBER", "REYNOLDS_NUMBERS", "REYNOLDS_NUMBER", "RE"),
+            inlet_count,
+        )
+        reference_velocity_default = _first_config_value(
+            config_values,
+            ("U_BULK_INLETS", "U_BULK_INLET", "U_MAX_INLETS", "U_MAX_INLET"),
+        )
+        reference_velocities = _expand_numeric_config_value(
+            config_values,
+            ("SA_REFERENCE_VELOCITIES", "SA_REFERENCE_VELOCITY"),
+            inlet_count,
+            default=reference_velocity_default,
+        )
+        reference_length_default = _first_config_value(
+            config_values,
+            (
+                "INLET_WIDTHS",
+                "INLET_WIDTH",
+                "PORT_WIDTHS",
+                "PORT_WIDTH",
+                "HYDRAULIC_DIAMETERS",
+                "HYDRAULIC_DIAMETER",
+                "L",
+            ),
+        )
+        reference_lengths = _expand_numeric_config_value(
+            config_values,
+            ("SA_REFERENCE_LENGTHS", "SA_REFERENCE_LENGTH"),
+            inlet_count,
+            default=reference_length_default,
+        )
+
+        ratio_targets = []
+        for idx in range(inlet_count):
+            ratio_targets.append(
+                eddy_viscosity_ratio_from_turbulence_intensity(
+                    intensities[idx],
+                    nu_lam,
+                    reference_velocity=(
+                        reference_velocities[idx]
+                        if reference_velocities is not None
+                        else None
+                    ),
+                    reference_length=(
+                        reference_lengths[idx]
+                        if reference_lengths is not None
+                        else None
+                    ),
+                    length_scale=(
+                        length_scales[idx]
+                        if length_scales is not None
+                        else None
+                    ),
+                    length_scale_ratio=(
+                        length_scale_ratios[idx]
+                        if length_scale_ratios is not None
+                        else None
+                    ),
+                    reynolds_number=(
+                        reynolds_numbers[idx]
+                        if reynolds_numbers is not None
+                        else None
+                    ),
+                )
+            )
+
+        nu_tilde_targets = [nu_tilde_from_ratio(ratio, nu_lam) for ratio in ratio_targets]
+        if length_scales is not None:
+            length_text = "ell = {}".format(_format_numeric_values(length_scales))
+        else:
+            length_text = "ell/L = {}".format(_format_numeric_values(length_scale_ratios))
+        description = "I = {}, {}, inferred nu_t/nu_lam = {}".format(
+            _format_numeric_values(intensities),
+            length_text,
+            _format_numeric_values(ratio_targets),
+        )
+        return nu_tilde_targets, description
+
+    if "SA_NU_TILDE_INLETS" in config_values or "SA_NU_TILDE_INLET" in config_values:
+        nu_tilde_targets = _expand_numeric_config_value(
+            config_values,
+            ("SA_NU_TILDE_INLETS", "SA_NU_TILDE_INLET"),
+            inlet_count,
+            required=True,
+        )
+        description = "direct nu_tilde = {}".format(_format_numeric_values(nu_tilde_targets))
+        return nu_tilde_targets, description
+
+    raise ValueError(
+        "Define one of SA_TURBULENCE_INTENSITY, SA_MUT_RATIO, or SA_NU_TILDE_INLET."
+    )
+
+
 def create_design_mesh_from_config(config_values):
     mesh_builder = config_values.get("create_design_mesh")
     if callable(mesh_builder):

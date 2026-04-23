@@ -39,7 +39,7 @@ BODY_FORCE = (0.0, 0.0)
 REYNOLDS_NUMBER = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY
 
 # =================================================================================================
-# Reynolds number: Re = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY = 44,700
+# Reynolds number: Re_D = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY = 44,700
 # =================================================================================================
 
 # SA inlet estimate from the ANSYS inlet turbulence specification.
@@ -91,22 +91,22 @@ COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
 COUPLED_PICARD_SA_SWEEPS_PER_STEP = 1
 # The wall-resolved mesh is stiff near the wall. Keep the SA fixed-point update
 # damped so a single SA solve cannot inject a large turbulent-viscosity jump.
-COUPLED_PICARD_SA_RELAXATION = 0.05
+COUPLED_PICARD_SA_RELAXATION = 0.01
 SA_NU_TILDE_FLOOR = 1.0e-12
 
 # Inner pseudo-time flow solve used inside each outer Picard step.
 FLOW_IPCS_TIME_STEP = 1.0e-4
-FLOW_IPCS_MAX_STEPS = 120
-FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-5
-FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-5
+FLOW_IPCS_MAX_STEPS = 180
+FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-4
+FLOW_IPCS_PRESSURE_TOLERANCE = 2.0e-3
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
 FLOW_IPCS_PRESSURE_RELAXATION = 0.1
 FLOW_IPCS_LOG_EVERY = 10
 FLOW_IPCS_NORMALIZE_PRESSURE_MEAN = False
 
 # Fallback solver used by any IPCS block without an explicit block-specific setting.
-FLOW_IPCS_LINEAR_SOLVER = "gmres"
-FLOW_IPCS_LINEAR_PRECONDITIONER = "hypre_amg"
+FLOW_IPCS_LINEAR_SOLVER = "gmres" # Default for solving 3 IPCS blocks
+FLOW_IPCS_LINEAR_PRECONDITIONER = "hypre_amg" # Default for solving 3 IPCS blocks
 FLOW_IPCS_VELOCITY_LINEAR_SOLVER = "gmres"
 FLOW_IPCS_VELOCITY_LINEAR_PRECONDITIONER = "ilu"
 FLOW_IPCS_PRESSURE_LINEAR_SOLVER = "gmres"
