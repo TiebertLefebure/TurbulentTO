@@ -16,3 +16,6 @@ __pycache__/
 # Generated simulation result output
 FluidTO/Results_*/
 TurbulenceModels/Results/
+
+# Matplotlib temp directories
+TurbulenceModels/matplotlib-*/

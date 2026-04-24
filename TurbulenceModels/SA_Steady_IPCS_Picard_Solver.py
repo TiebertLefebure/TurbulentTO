@@ -7,10 +7,12 @@ model object. This file only runs the coupled iteration process.
 from dolfin import *
 from mpi4py import MPI as MPI4PY
 import numpy as np
+import os
 import time
 
 from Utilities import (
     bound_from_bellow,
+    load_h5_file,
     save_h5_file,
     save_list,
     save_pvd_file,
@@ -160,6 +162,63 @@ def run_steady_sa_ipcs_picard(
 
     dt.assign(float(simulation_prm.get("FLOW_IPCS_TIME_STEP", simulation_prm.get("FORWARD_IPCS_DT"))))
     log_every = max(1, int(simulation_prm.get("FLOW_IPCS_LOG_EVERY", simulation_prm.get("FORWARD_IPCS_LOG_EVERY", 25))))
+
+    def maybe_restart_from_saved_state():
+        if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
+            return False
+
+        restart_dir = simulation_prm.get("RESTART_H5_DIRECTORY", saving_directory.get("H5_FILES"))
+        if restart_dir in (None, ""):
+            message = "Restart skipped: no HDF5 restart directory configured."
+            if bool(simulation_prm.get("RESTART_REQUIRE_FILES", False)):
+                raise ValueError(message)
+            root_print(message, is_root=is_root)
+            return False
+
+        restart_files = {
+            "u": os.path.join(restart_dir, "u.h5"),
+            "p": os.path.join(restart_dir, "p.h5"),
+            "nu_tilde": os.path.join(restart_dir, "nu_tilde.h5"),
+        }
+        missing_files = [path for path in restart_files.values() if not os.path.exists(path)]
+        if missing_files:
+            message = "Restart skipped: missing HDF5 state file(s): {}.".format(
+                ", ".join(sorted(missing_files))
+            )
+            if bool(simulation_prm.get("RESTART_REQUIRE_FILES", False)):
+                raise FileNotFoundError(message)
+            root_print(message, is_root=is_root)
+            return False
+
+        load_h5_file(u0, restart_files["u"])
+        load_h5_file(p0, restart_files["p"])
+        load_h5_file(turbulence_model.nu_tilde0, restart_files["nu_tilde"])
+
+        if nu_tilde_floor is not None:
+            bound_from_bellow(turbulence_model.nu_tilde0, float(nu_tilde_floor))
+
+        for bc in bcu:
+            bc.apply(u0.vector())
+        for bc in bcp:
+            bc.apply(p0.vector())
+        turbulence_model.enforce_boundary_conditions()
+
+        u1.assign(u0)
+        for bc in bcu:
+            bc.apply(u1.vector())
+        p1.assign(p0)
+        for bc in bcp:
+            bc.apply(p1.vector())
+        turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
+        turbulence_model.enforce_boundary_conditions()
+
+        root_print(
+            "Loaded restart state from {}.".format(restart_dir),
+            is_root=is_root,
+        )
+        return True
+
+    maybe_restart_from_saved_state()
 
     residuals = {key: [] for key in ["u", "p", "nu_tilde", "flow_u", "flow_p"]}
     start_time = time.time()

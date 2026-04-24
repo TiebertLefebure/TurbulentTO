@@ -84,7 +84,7 @@ QUADRATURE_DEGREE = 4
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 180
+COUPLED_PICARD_MAX_STEPS = 400
 COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
 COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
@@ -95,10 +95,14 @@ COUPLED_PICARD_SA_RELAXATION = 0.01
 SA_NU_TILDE_FLOOR = 1.0e-12
 
 # Inner pseudo-time flow solve used inside each outer Picard step.
+# The medium wall-resolved mesh can falsely look over-diffusive at the bend-exit
+# probe if the IPCS pressure solve is allowed to stop at O(1e-3) relative change.
+# Keep the inner flow solve stricter than before and give it enough iterations to
+# actually reach the target on the stiffer mesh.
 FLOW_IPCS_TIME_STEP = 1.0e-4
-FLOW_IPCS_MAX_STEPS = 180
-FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-4
-FLOW_IPCS_PRESSURE_TOLERANCE = 2.0e-3
+FLOW_IPCS_MAX_STEPS = 600
+FLOW_IPCS_VELOCITY_TOLERANCE = 5.0e-5
+FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-4
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
 FLOW_IPCS_PRESSURE_RELAXATION = 0.1
 FLOW_IPCS_LOG_EVERY = 10
@@ -115,6 +119,13 @@ FLOW_IPCS_CORRECTION_LINEAR_SOLVER = "gmres"
 FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER = "ilu"
 SA_TRANSPORT_LINEAR_SOLVER = "default"
 SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
+
+# Restart controls. Keep this enabled for the current medium-mesh recovery run so
+# the solver resumes from the previously saved HDF5 state instead of starting cold.
+# Set RESTART_FROM_SAVED_STATE = False for a clean run from the initial condition.
+RESTART_FROM_SAVED_STATE = True
+RESTART_REQUIRE_FILES = False
+RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 
 # G-equation wall-distance parameters.
 WALL_DISTANCE_SIGMA_W = 0.1
@@ -175,6 +186,9 @@ steady_sa_solver_parameters = {
     "FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER": FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER,
     "SA_TRANSPORT_LINEAR_SOLVER": SA_TRANSPORT_LINEAR_SOLVER,
     "SA_TRANSPORT_LINEAR_PRECONDITIONER": SA_TRANSPORT_LINEAR_PRECONDITIONER,
+    "RESTART_FROM_SAVED_STATE": RESTART_FROM_SAVED_STATE,
+    "RESTART_REQUIRE_FILES": RESTART_REQUIRE_FILES,
+    "RESTART_H5_DIRECTORY": RESTART_H5_DIRECTORY,
 }
 
 saving_directory = {

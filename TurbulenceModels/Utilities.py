@@ -59,6 +59,13 @@ def save_h5_file(f, directory):
     fFile.write(f,"/f")
     fFile.close()
 
+def load_h5_file(f, directory, dataset="/f"):
+    '''Loads function f from a .h5 file written by save_h5_file'''
+    fFile = HDF5File(MPI.COMM_WORLD, directory, "r")
+    fFile.read(f, dataset)
+    fFile.close()
+    return f
+
 def save_list(dataset, directory):
     '''Saves python list as .txt file'''
     os.makedirs(os.path.dirname(directory), exist_ok=True)
