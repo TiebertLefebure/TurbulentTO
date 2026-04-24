@@ -235,6 +235,53 @@ def build_region_function_from_config(builder_name, default_value=1.0):
     region_function.vector().apply("insert")
     return region_function
 
+
+def _as_scalar_dirichlet_value(value):
+    """Convert scalar component BC values to Constant when appropriate."""
+    if np.isscalar(value):
+        return Constant(float(value))
+    return value
+
+
+def _normalize_velocity_component_bc_specs(raw_specs, marker_lookup):
+    """Expand optional component-wise velocity BC specs from the config."""
+    if raw_specs is None:
+        return []
+
+    normalized_specs = []
+    for spec in as_list(raw_specs):
+        if not isinstance(spec, dict):
+            raise TypeError("Velocity component BC specs must be dictionaries.")
+
+        if "component" not in spec:
+            raise ValueError("Velocity component BC specs must define 'component'.")
+
+        component = int(spec["component"])
+        if component not in (0, 1):
+            raise ValueError("Velocity component BC 'component' must be 0 or 1.")
+
+        marker_spec = spec.get("marker", "outlet")
+        if isinstance(marker_spec, str):
+            if marker_spec not in marker_lookup:
+                raise ValueError(
+                    "Unknown marker name '{}' in velocity component BC.".format(marker_spec)
+                )
+            marker_values = as_list(marker_lookup[marker_spec])
+        else:
+            marker_values = as_list(marker_spec)
+
+        value = _as_scalar_dirichlet_value(spec.get("value", 0.0))
+        for marker_value in marker_values:
+            normalized_specs.append(
+                {
+                    "marker": int(marker_value),
+                    "component": component,
+                    "value": value,
+                }
+            )
+
+    return normalized_specs
+
 mark = MARK
 boundaries = globals()["mark_boundaries"](mesh)
 wall_markers = as_list(mark["walls"])
@@ -294,6 +341,24 @@ if use_outlet_pressure_bc:
 else:
     root_print("Outlet BC type: velocity")
 
+pressure_outlet_component_bcs = _normalize_velocity_component_bc_specs(
+    globals().get("PRESSURE_OUTLET_COMPONENT_BCS"),
+    mark,
+)
+if pressure_outlet_component_bcs and not use_outlet_pressure_bc:
+    raise ValueError("PRESSURE_OUTLET_COMPONENT_BCS require OUTLET_BC_TYPE = 'pressure'.")
+if pressure_outlet_component_bcs:
+    root_print(
+        "Pressure-outlet velocity component BCs: {}".format(
+            ", ".join(
+                "marker {} -> u[{}] = {}".format(
+                    spec["marker"], spec["component"], spec["value"]
+                )
+                for spec in pressure_outlet_component_bcs
+            )
+        )
+    )
+
 bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
 # Velocity outlet mode: prescribe u on the outlet marker.
@@ -301,12 +366,21 @@ bcu_outlet = (
     [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
     if use_outlet_velocity_bc else []
 )
+bcu_pressure_outlet_components = [
+    DirichletBC(
+        FlowSpace.sub(0).sub(spec["component"]),
+        spec["value"],
+        boundaries,
+        spec["marker"],
+    )
+    for spec in pressure_outlet_component_bcs
+]
 # Pressure outlet mode: prescribe p on the outlet marker instead of an outlet velocity profile.
 bcp_outlet = (
     [DirichletBC(FlowSpace.sub(1), outlet_pressure_value, boundaries, m) for m in outlet_markers]
     if use_outlet_pressure_bc else []
 )
-bc_NS = bcu_walls + bcu_inlet + bcu_outlet + bcp_outlet
+bc_NS = bcu_walls + bcu_inlet + bcu_outlet + bcu_pressure_outlet_components + bcp_outlet
 if use_pressure_pin:
     bc_NS.append(DirichletBC(
         FlowSpace.sub(1), Constant(0.0),
@@ -327,6 +401,15 @@ else:
     )
     if use_outlet_velocity_bc:
         bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in outlet_markers]
+    bc_NS_adj += [
+        DirichletBC(
+            FlowSpaceAdj.sub(0).sub(spec["component"]),
+            Constant(0.0),
+            boundaries,
+            spec["marker"],
+        )
+        for spec in pressure_outlet_component_bcs
+    ]
 if use_outlet_pressure_bc:
     bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(1), outlet_pressure_value, boundaries, m) for m in outlet_markers]
 if use_pressure_pin:
@@ -627,7 +710,9 @@ p_pc_new  = Function(PressureSpace)
 bcu_pc  = ([DirichletBC(VelocitySpace, u_noslip, boundaries, m) for m in wall_markers]
          + [DirichletBC(VelocitySpace, prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
          + ([DirichletBC(VelocitySpace, prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
-            if use_outlet_velocity_bc else []))
+            if use_outlet_velocity_bc else [])
+         + [DirichletBC(VelocitySpace.sub(spec["component"]), spec["value"], boundaries, spec["marker"])
+            for spec in pressure_outlet_component_bcs])
 bcp_pc  = (
     ([DirichletBC(PressureSpace, outlet_pressure_value, boundaries, m) for m in outlet_markers]
      if use_outlet_pressure_bc else [])

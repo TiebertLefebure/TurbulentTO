@@ -109,19 +109,19 @@ TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
 FORWARD_IPCS_DT                 = 3.13e-6
-FORWARD_IPCS_MAX_ITERS          = 250
+FORWARD_IPCS_MAX_ITERS          = 400
 FORWARD_IPCS_VELOCITY_RTOL      = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL      = 2.0e-3
 FORWARD_IPCS_LOG_EVERY          = 50
-FORWARD_IPCS_VEL_RELAXATION     = 0.05
-FORWARD_IPCS_P_RELAXATION       = 0.08
+FORWARD_IPCS_VEL_RELAXATION     = 0.07
+FORWARD_IPCS_P_RELAXATION       = 0.12
 FORWARD_IPCS_MAX_RESTARTS       = 2
 FORWARD_IPCS_VEL_SOLVER         = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER           = "cg"
 FORWARD_IPCS_P_PRECONDITIONER   = "ilu"
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
-FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
+FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.85
 # Keep the Picard-3 comparison on the same strict IPCS residual targets. The
 # extra adaptive backoff usually resolves near misses without loosening du/dp.
 FORWARD_IPCS_ACCEPT_BEST_SCORE  = 1.00
@@ -267,6 +267,15 @@ def build_density_bounds(mesh, density_space):
 
 
 def build_volume_region(mesh, density_space):
+    return Expression(
+        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
+    )
+
+
+def build_objective_region(mesh, density_space):
     return Expression(
         "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
         degree=0,

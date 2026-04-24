@@ -6,7 +6,7 @@ import gmsh
 L_X = 1.5
 L_Y = 1.0
 
-# Port layout (must match Config_DoublePipeBorrvall_LaminarTO.py)
+# Port layout (must match Config_DoublePipeBorrvall_Laminar.py)
 PORT_WIDTH         = 1.0 / 6.0
 PORT_TOP_MARGIN    = 1.0 / 4.0
 PORT_BOTTOM_MARGIN = 1.0 / 4.0

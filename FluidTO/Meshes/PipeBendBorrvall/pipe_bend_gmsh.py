@@ -6,7 +6,7 @@ import gmsh
 L_X = 1.0
 L_Y = 1.0
 
-# Port layout (must match Config_PipeBendBorrvall_LaminarTO.py)
+# Port layout (must match Config_PipeBendBorrvall_Laminar.py)
 INLET_WIDTH      = 0.2
 INLET_TOP_OFFSET = 0.2   # distance from top
 OUTLET_WIDTH      = 0.2

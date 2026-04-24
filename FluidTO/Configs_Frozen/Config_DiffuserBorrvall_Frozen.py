@@ -89,7 +89,7 @@ MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
 # Frozen flow/turbulence coupling and IPCS solve parameters.
 LINEAR_SOLVER = "mumps"
-PICARD_STEPS = 1
+PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.05
 
 # IPCS forward solver parameters:
@@ -180,6 +180,15 @@ def build_density_bounds(mesh, density_space):
 
 
 def build_volume_region(mesh, density_space):
+    return Expression(
+        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
+        degree=0,
+        x_min=DESIGN_X_MIN,
+        x_max=DESIGN_X_MAX,
+    )
+
+
+def build_objective_region(mesh, density_space):
     return Expression(
         "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
         degree=0,
