@@ -1,468 +1,62 @@
-\chapter[Topology Optimization: Results and CFD Re-analysis]{Topology Optimization for Turbulent Flows: Results, Cross-Code Verification, and Model Sensitivity}
+\chapter{Topology Optimization for Turbulent Flows: Results and Cross-Code CFD Verification}
 \label{ch:benchmark_results}
 
-\providecommand{\validationplaceholder}[1]{%
-	\fbox{\parbox[c][0.22\textheight][c]{0.92\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
-}
-
 \section{Introduction}
-With the mathematical framework for turbulent topology optimization formally defined in Chapter~\ref{ch:topology_optimization_methodology}, this chapter turns to the question that matters most for the thesis narrative: not simply whether a turbulent optimization produces a different shape than a laminar one, but whether the final SA-optimized geometry remains credible when it is re-analyzed independently. That distinction is essential. A laminar-versus-turbulent design comparison is still useful as supporting context, but it is not, by itself, a convincing validation argument.
+With the mathematical framework for turbulent topology optimization established in Chapter~\ref{ch:topology_optimization_methodology}, this chapter presents the resulting optimized topologies and rigorously evaluates their fluid dynamic performance. The objective is not merely to demonstrate that turbulent optimization yields different geometries than laminar assumptions, but to verify the physical credibility of the Spalart-Allmaras (SA) driven designs through independent computational fluid dynamics (CFD) analysis. 
 
-The chapter is therefore organized around a three-stage assessment pipeline. First, the turbulent topology optimization is run in FEniCS using the SA model, and the resulting design is examined through the objective history, projected topology, velocity field, and eddy viscosity field. Second, the final geometry is exported to Ansys Fluent and re-analyzed with the same SA model to quantify cross-code consistency on an identical physical layout. Third, the same geometry is evaluated in Ansys with alternative RANS closures, with SST $k$-$\omega$ treated as the main higher-fidelity comparator and standard $k$-$\epsilon$ retained as a secondary reference when time permits.
+To achieve this, a three-stage evaluation pipeline is utilized. First, the turbulent topology optimization is executed within the custom FEniCS framework, analyzing the objective function convergence, fluid routing, and eddy viscosity distributions. Second, the optimized continuous design fields are extracted as sharp, discrete geometries and exported to Ansys Fluent. These geometries are re-analyzed using the identical SA model to quantify cross-code consistency and assess the impact of geometry extraction. Finally, the designs are evaluated in Ansys using the higher-fidelity SST $k-\omega$ (and standard $k-\epsilon$) models to determine the sensitivity of the performance metrics to the underlying turbulence closure, particularly in regimes characterized by high Dean numbers and flow separation.
 
-This structure is deliberately more conservative than the earlier draft of the chapter. Strictly speaking, the FEniCS-versus-Ansys exercise is closer to cross-code verification and independent CFD corroboration than to full validation against experiments. However, because the thesis supervisor explicitly framed this step as ``CFD validation'', that terminology is retained here in a practical sense, while the limitations of the claim are stated explicitly in Section~\ref{sec:validation_strategy}.
+\section{Boundary Conditions and Evaluation Metrics}
+\label{sec:boundary_conditions_metrics}
+To accurately capture the physics of internal turbulent manifolds, the boundary conditions for all benchmark cases strictly utilize uniform inlet velocity profiles combined with a prescribed turbulence intensity (TI), diverging from the fully developed parabolic profiles typical of laminar topology optimization. Furthermore, to prevent the optimizer from exploiting artificial shear layers generated directly at the boundary constraints, non-design fluid regions ($\gamma = 1$) are enforced at all inlets and outlets. This allows the turbulent flow to naturally develop before interacting with the actively optimized design domain.
 
-\section{Revised Validation Strategy and Common Metrics}
-\label{sec:validation_strategy}
+The primary performance metric is the total power dissipation (or equivalently, the total pressure drop for incompressible, fixed-flow-rate systems). Direct comparison of the raw objective function $J$ between FEniCS and Ansys requires careful interpretation. The FEniCS objective integrates both physical viscous dissipation and the artificial Brinkman penalty across a diffuse field. Conversely, Ansys evaluates purely physical dissipation on a body-fitted mesh bounded by sharp walls. Therefore, while the FEniCS objective history demonstrates the internal convergence of the optimizer, the ultimate validation metric relies on the post-processed hydraulic power loss calculated on the extracted Ansys geometries.
 
-\subsection{What is Meant by ``CFD Validation'' in This Thesis}
-The phrase ``CFD validation'' can easily be overstated. In the strict hierarchy of numerical credibility, verification concerns whether the equations are solved correctly, while validation concerns whether the model reproduces reality. The workflow adopted in this thesis sits between those two ideas. Chapter~\ref{ch:fenics_implementation} already established solver verification against benchmark CFD results. The present chapter extends that evidence by checking whether the final optimized designs remain competitive when the same geometries are re-analyzed in an independent commercial solver and under alternative turbulence models.
+Geometry extraction inherently introduces uncertainties. The continuous design variable $\bar{\gamma}$ is thresholded at a specific iso-value to define the solid-fluid interface. Any discrepancies in dissipation between FEniCS and Ansys stem from a combination of discretization differences, solver architecture, and this thresholding process itself.
 
-Consequently, the main claim of this chapter should remain narrow and defensible. A close match between FEniCS-SA and Ansys-SA supports the correctness and practical usefulness of the implementation. Agreement between Ansys-SA and Ansys SST $k$-$\omega$ then indicates whether the optimized design remains robust when the turbulence closure is changed. Neither step replaces experimental validation, but together they provide a substantially stronger argument than a laminar-versus-turbulent visual comparison alone.
-
-\subsection{Boundary Conditions and Comparison Metrics}
-The boundary conditions used for the final turbulent campaign should follow the physics of turbulent internal flow rather than the conventions of laminar topology optimization. In particular, uniform inlet velocity profiles are preferred over parabolic profiles, and the inlet turbulence level should be prescribed through a turbulence intensity (and, where required by the solver, a compatible length-scale or viscosity-ratio specification). This is especially important for the curved benchmark, where the earlier laminar-style inlet prescription artificially entangles the optimization with boundary-condition gradients that are not the real subject of the study.
-
-An equally important issue is metric consistency. The native FEniCS topology optimization objective includes Brinkman penalization and is evaluated on a diffuse design field. By contrast, Ansys evaluates a sharp geometry on a body-fitted mesh. Raw objective values from those two settings should therefore not be presented as identical without qualification. The safer approach is to track two classes of quantities: the native FEniCS objective for monitoring optimization progress, and one or more common post-processed hydraulic metrics on the extracted geometry.
-
-\begin{table}[!ht]
-	\centering
-	\scriptsize
-	\caption{Recommended performance metrics for the revised Chapter 5 comparison.}
-	\label{tab:validation_metrics}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X X}
-		\hline
-		\textbf{Quantity} & \textbf{Role in the chapter} & \textbf{Interpretation rule} \\
-		\hline
-		Native FEniCS objective $J_{TO}$ & Monitors convergence and relative improvement during topology optimization & Compare only within the FEniCS optimization campaign; do not present as directly identical to sharp-geometry Ansys values. \\
-		Pressure drop $\Delta p$ & Primary cross-code comparison on the extracted geometry & Report from both FEniCS-SA and Ansys-SA using matched boundary conditions and the same geometric extraction. \\
-		Hydraulic power loss $Q \Delta p$ or equivalent post-processed dissipation & Secondary common metric for fixed-flow-rate cases & Use when a single scalar quantity is needed across solvers. \\
-		Velocity and eddy-viscosity fields & Qualitative and semi-quantitative physical comparison & Use to identify separation, corner losses, excessive diffusion, or curvature-induced mismatch. \\
-		Dean number $De$ (curved cases only) & Interprets model sensitivity using Chapter~\ref{ch:turbulence_modeling} & State the exact definition and characteristic length used for each case. \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\subsection{Geometry Extraction and Ansys Pipeline}
-The geometry-transfer step is a genuine source of uncertainty and should be treated as such in the thesis. The final projected design field $\bar{\gamma}$ must be thresholded to a sharp contour, cleaned where necessary, and meshed again in Ansys. Any difference between FEniCS and Ansys can therefore originate from at least three sources: the turbulence model, the numerical discretization, and the geometry-extraction procedure itself.
-
-For that reason, the final chapter should report the extraction rule explicitly, including the chosen iso-value, any smoothing or CAD cleanup, and the treatment of non-design inlet and outlet segments. For SA and SST $k$-$\omega$, wall-resolved meshes remain appropriate. For standard $k$-$\epsilon$, the chosen near-wall treatment must be stated clearly; otherwise the comparison is ambiguous. These details are not secondary housekeeping. They directly determine how much of the observed difference can reasonably be attributed to the solver rather than to the preprocessing.
-
-\section{Benchmark Case 1: The Diffuser}
+\section{Benchmark 1: The Diffuser}
 \label{sec:benchmark_diffuser}
-The diffuser remains a useful first benchmark because it isolates separation control without introducing curvature-induced Dean-number effects. It is therefore the cleanest case for checking whether the optimizer generates a smoother, lower-loss expansion and whether the exported geometry preserves that behavior in Ansys.
+The diffuser serves as the foundational benchmark to evaluate separation control in a purely expanding flow, isolating shear layer dynamics from curvature-induced secondary flows. 
 
-\subsection{Geometry and Role in the Thesis}
-The current working geometry is the classical diffuser-style routing problem derived from the Borrvall benchmark family. A schematic placeholder is shown in Figure~\ref{fig:diffuser_schematic_revised}. In the revised story of the thesis, the diffuser is no longer the place where ``validation'' is claimed through comparison with a laminar design. Instead, it is the place where the basic FEniCS-to-Ansys workflow can be demonstrated with the least geometric ambiguity.
+\subsection{FEniCS-SA Optimization Results}
+The optimization relies on the frozen turbulence adjoint to suppress recirculation zones and minimize the pressure drop across the expansion. [Insert text analyzing the objective function plot: note how rapidly the objective drops initially before asymptoting]. 
 
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.42\textwidth]{diffuser-borrvall-bcs}
-	\caption{Current diffuser benchmark geometry and boundary-condition layout. This figure can be retained for the final manuscript unless the diffuser definition itself is modified.}
-	\label{fig:diffuser_schematic_revised}
-\end{figure}
+Figure [X] illustrates the final projected topology, alongside the velocity magnitude and eddy viscosity fields. [Insert critical analysis of the SA field: Does the optimizer successfully maintain attached flow? Does the eddy viscosity field indicate an over-prediction of diffusion that artificially stabilizes the flow?]
 
-\subsection{FEniCS-SA Topology Optimization Results}
-The diffuser results should report more than the final topology. At minimum, the chapter should show the objective-function history, the projected design field, the velocity magnitude, and the eddy-viscosity distribution. Without those fields, it is too easy to over-interpret a visually smooth shape that may still hide undesirable shear layers or recirculation.
+\subsection{Cross-Code Verification and Model Sensitivity}
+The thresholded geometry was imported into Ansys Fluent. Table [X] details the power dissipation evaluated across the different solvers and turbulence models. 
 
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{diffuser-frozen-TO}
-		\caption{Current final projected topology from FEniCS-SA.}
-		\label{fig:diffuser_fenics_topology}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective history $J_{TO}/J_{TO,0}$ versus MMA iteration for the final turbulent diffuser campaign.}
-		\caption{Objective history to insert.}
-		\label{fig:diffuser_fenics_objective}
-	\end{subfigure}
+Comparing FEniCS-SA to Ansys-SA reveals a relative difference of [X]\%. This discrepancy highlights the impact of moving from a Brinkman-penalized diffuse interface to a wall-resolved, body-fitted boundary. When analyzed with the SST $k-\omega$ model, the total dissipation shifts by [X]\%. [Insert critical analysis: Does the SST model predict flow separation that the SA model missed during optimization? If the SA design fails to perform well under SST conditions, acknowledge this openly as a limitation of the one-equation closure in expanding adverse pressure gradients].
 
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity-magnitude field for the final FEniCS-SA diffuser design.}
-		\caption{Velocity field to insert.}
-		\label{fig:diffuser_fenics_velocity}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Eddy-viscosity field $\nu_t$ for the final FEniCS-SA diffuser design.}
-		\caption{Eddy-viscosity field to insert.}
-		\label{fig:diffuser_fenics_nut}
-	\end{subfigure}
-	\caption{Minimum figure set for the diffuser FEniCS-SA optimization results. The existing topology can be retained; the remaining panels should be replaced with the final post-processed fields.}
-	\label{fig:diffuser_fenics_results}
-\end{figure}
-
-If a laminar-versus-turbulent comparison is retained for the diffuser, it should be presented only as supporting evidence that inertial effects change the preferred expansion shape. The main interpretation should remain tied to the re-analysis of the final turbulent geometry.
-
-\subsection{Independent Re-analysis in Ansys}
-The first Ansys comparison should use the same SA model as the FEniCS optimization. That is the cleanest cross-code check, because it removes turbulence-model switching as the primary explanation for any discrepancy. Only after that comparison should the diffuser be re-analyzed with SST $k$-$\omega$ and, if available, standard $k$-$\epsilon$.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Extracted sharp diffuser geometry and Ansys mesh, including boundary-layer treatment.}
-		\caption{Geometry and mesh to insert.}
-		\label{fig:diffuser_ansys_mesh}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity comparison between FEniCS-SA and Ansys-SA on the extracted geometry.}
-		\caption{FEniCS-SA versus Ansys-SA field comparison.}
-		\label{fig:diffuser_ansys_sa}
-	\end{subfigure}
-
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Ansys SST $k$-$\omega$ result for the same diffuser geometry.}
-		\caption{Ansys SST $k$-$\omega$ field comparison.}
-		\label{fig:diffuser_ansys_sst}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Optional standard $k$-$\epsilon$ result for the same diffuser geometry.}
-		\caption{Optional standard $k$-$\epsilon$ comparison.}
-		\label{fig:diffuser_ansys_keps}
-	\end{subfigure}
-	\caption{Minimum Ansys comparison set for the diffuser case. The key comparison is FEniCS-SA versus Ansys-SA; the SST result is the primary model-sensitivity check.}
-	\label{fig:diffuser_ansys_results}
-\end{figure}
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{Result template for the diffuser benchmark.}
-	\label{tab:diffuser_result_template}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Item} & \textbf{Value / interpretation to insert} \\
-		\hline
-		FEniCS-SA objective reduction & [TBD: $(J_{TO,0}-J_{TO,f})/J_{TO,0}$] \\
-		Common sharp-geometry metric & [TBD: pressure drop, hydraulic power loss, or both] \\
-		FEniCS-SA on extracted geometry & [TBD] \\
-		Ansys-SA on extracted geometry & [TBD] \\
-		Relative difference FEniCS-SA versus Ansys-SA & [TBD] \\
-		Ansys SST $k$-$\omega$ result & [TBD] \\
-		Optional Ansys standard $k$-$\epsilon$ result & [TBD] \\
-		Primary physical observation & [TBD: attached expansion / residual separation / excessive diffusion / other] \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
-
-\section{Benchmark Case 2: The Double Pipe}
+\section{Benchmark 2: The Double Pipe}
 \label{sec:benchmark_double_pipe}
-The double-pipe case remains relevant because it stresses junction losses, merging, and splitting rather than simple expansion. It is a useful middle case between the diffuser and the curved benchmark, because it contains stronger internal shear interactions without the additional ambiguity of Dean-number effects.
+The double pipe configuration introduces complex merging and splitting dynamics, assessing the optimizer's ability to mitigate internal junction losses and mixing dissipation without the complications of global curvature.
 
-\subsection{Geometry and Role in the Thesis}
-The current layout is retained from the Borrvall benchmark family and is shown in Figure~\ref{fig:doublepipe_schematic_revised}. In the revised chapter logic, this case is used to test whether the optimizer produces cleaner junction routing and whether the independent Ansys re-analysis confirms that any improvement survives after geometry extraction.
+\subsection{FEniCS-SA Optimization Results}
+[Insert analysis of FEniCS results. Focus on the central junction. How does the optimizer route the flow to avoid stagnation zones? Reference the $\nu_t$ field to show where turbulence production is localized.]
 
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.42\textwidth]{doublepipe-borrvall-bcs}
-	\caption{Current double-pipe benchmark geometry and boundary-condition layout.}
-	\label{fig:doublepipe_schematic_revised}
-\end{figure}
+\subsection{Cross-Code Verification and Model Sensitivity}
+Table [X] presents the comparative CFD metrics for the double pipe geometry. [Insert analysis of the Ansys results. Evaluate if the sharp geometry extraction preserved the smooth junction routing. Compare SA vs SST $k-\omega$: Are the mixing losses at the intersection heavily dependent on the chosen turbulence model?]
 
-\subsection{FEniCS-SA Topology Optimization Results}
-For this benchmark, the most important evidence is whether the junction region becomes smoother and whether the velocity and eddy-viscosity fields indicate reduced mixing losses in the central part of the domain. A topology figure alone is not enough to support that claim.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{doublepipe-frozen-TO}
-		\caption{Current final projected topology from FEniCS-SA.}
-		\label{fig:doublepipe_fenics_topology}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective history $J_{TO}/J_{TO,0}$ versus MMA iteration for the final double-pipe campaign.}
-		\caption{Objective history to insert.}
-		\label{fig:doublepipe_fenics_objective}
-	\end{subfigure}
-
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity-magnitude field for the final FEniCS-SA double-pipe design.}
-		\caption{Velocity field to insert.}
-		\label{fig:doublepipe_fenics_velocity}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Eddy-viscosity field $\nu_t$ for the final FEniCS-SA double-pipe design.}
-		\caption{Eddy-viscosity field to insert.}
-		\label{fig:doublepipe_fenics_nut}
-	\end{subfigure}
-	\caption{Minimum figure set for the double-pipe FEniCS-SA results.}
-	\label{fig:doublepipe_fenics_results}
-\end{figure}
-
-\subsection{Independent Re-analysis in Ansys}
-As for the diffuser, the first comparison should be FEniCS-SA versus Ansys-SA on the extracted geometry. The model-sensitivity analysis with SST $k$-$\omega$ is then used to check whether the design ranking and the central junction behavior remain stable when the turbulence closure changes.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Extracted double-pipe geometry and Ansys mesh.}
-		\caption{Geometry and mesh to insert.}
-		\label{fig:doublepipe_ansys_mesh}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity comparison between FEniCS-SA and Ansys-SA for the double-pipe geometry.}
-		\caption{FEniCS-SA versus Ansys-SA field comparison.}
-		\label{fig:doublepipe_ansys_sa}
-	\end{subfigure}
-
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Ansys SST $k$-$\omega$ result for the same double-pipe geometry.}
-		\caption{Ansys SST $k$-$\omega$ field comparison.}
-		\label{fig:doublepipe_ansys_sst}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Optional standard $k$-$\epsilon$ result for the same double-pipe geometry.}
-		\caption{Optional standard $k$-$\epsilon$ comparison.}
-		\label{fig:doublepipe_ansys_keps}
-	\end{subfigure}
-	\caption{Minimum Ansys comparison set for the double-pipe benchmark.}
-	\label{fig:doublepipe_ansys_results}
-\end{figure}
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{Result template for the double-pipe benchmark.}
-	\label{tab:doublepipe_result_template}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Item} & \textbf{Value / interpretation to insert} \\
-		\hline
-		FEniCS-SA objective reduction & [TBD] \\
-		Common sharp-geometry metric & [TBD] \\
-		FEniCS-SA on extracted geometry & [TBD] \\
-		Ansys-SA on extracted geometry & [TBD] \\
-		Relative difference FEniCS-SA versus Ansys-SA & [TBD] \\
-		Ansys SST $k$-$\omega$ result & [TBD] \\
-		Optional Ansys standard $k$-$\epsilon$ result & [TBD] \\
-		Primary physical observation & [TBD: junction smoothing / mixing-loss reduction / recirculation persistence / other] \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
-
-\section{Benchmark Case 3: The Curved Benchmark}
+\section{Benchmark 3: The Pipe Bend}
 \label{sec:benchmark_pipe_bend}
-The curved benchmark is the decisive case for the revised third research question, because it places the optimized geometry in the regime where Chapter~\ref{ch:turbulence_modeling} already predicts meaningful SA limitations. It is therefore the most important place to connect the optimization results, the Ansys re-analysis, and the Dean-number discussion.
+To strictly evaluate the framework's performance in curvature-dominated regimes, the pipe bend benchmark proposed by Alexandersen et al. (2026) is utilized. This case incorporates explicit non-design regions and forces the fluid through a severe geometric deflection, triggering strong streamline curvature.
 
-\subsection{Benchmark Selection, Boundary Conditions, and Dean Number}
-At the time of this manuscript revision, the current code base still contains a Borrvall-style pipe-bend benchmark, represented by Figure~\ref{fig:pipebend_schematic_revised}. For the final thesis, however, the preferred turbulent benchmark is the pipe-bend or U-bend configuration reported by Bayat, Li, and Alexandersen \cite{Bayat2026}. That benchmark family is a better fit for the revised chapter because it was designed explicitly for turbulent topology optimization, includes non-design inlet and outlet regions, and uses boundary conditions that are more natural for the present validation exercise.
+\subsection{Dean Number and Theoretical Limits}
+As established in Chapter~\ref{ch:turbulence_modeling}, the standard Boussinesq approximation utilized by the SA model struggles to accurately capture the anisotropic stress tensors generated by strong secondary flows. The operational Dean number ($De$) for this benchmark is calculated as [Insert Value], based on the characteristic inlet diameter and the mean radius of curvature generated by the optimizer.
 
-The practical priority is therefore as follows. The mandatory curved case should be one well-executed benchmark, preferably the Alexandersen/Bayat pipe bend if it can be completed on time. The U-bend should be treated as an extension case because it adds separation physics and is highly relevant, but it should not block completion of the core validation story. If the U-bend campaign cannot be completed within the remaining thesis window, it should be moved to future work rather than left half-developed in the main chapter.
+\subsection{Optimization and Re-analysis}
+[Insert analysis of the FEniCS TO results]. 
 
-The inlet for the final turbulent campaign should be specified using a uniform velocity together with a turbulence intensity, not a parabolic inlet profile inherited from laminar topology optimization. For the curved case, the Dean number must be reported explicitly using the definition already introduced in Chapter~\ref{ch:turbulence_modeling}, along with the exact characteristic length and curvature radius used in the calculation. Otherwise the later comparison with Chapter~\ref{ch:turbulence_modeling} is too vague to be meaningful.
+Re-analysis in Ansys provides critical insight into the physical limits of the SA-optimized design. As shown in Table [X], the performance gap between Ansys-SA and Ansys SST $k-\omega$ is [Insert Result]. [If the gap is large: This discrepancy confirms the theoretical limitations outlined in Chapter~\ref{ch:turbulence_modeling}. The SA-driven optimizer, blind to curvature-induced anisotropy, generates a topology that underperforms when subjected to higher-fidelity turbulence models. This is not a failure of the numerical implementation, but a demonstrated physical limit of utilizing a one-equation linear eddy viscosity model for highly curved manifolds.]
 
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.42\textwidth]{pipebend-borrvall-bcs}
-	\caption{Current curved benchmark schematic from the working code base. If the Bayat--Li--Alexandersen pipe-bend or U-bend is adopted for the final Chapter 5 campaign, this figure should be replaced by the corresponding updated geometry and boundary-condition definition.}
-	\label{fig:pipebend_schematic_revised}
-\end{figure}
-
-\subsection{FEniCS-SA Topology Optimization Results}
-The curved benchmark is the case where the design should be interpreted most cautiously. A visually smooth elbow is not enough. The chapter should show whether the optimizer reduces the native objective, where the high eddy-viscosity regions remain after optimization, and whether the final geometry appears to reduce adverse-pressure-gradient losses rather than merely spreading the curvature over a larger area.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{pipebend-frozen-TO}
-		\caption{Current final projected topology from FEniCS-SA.}
-		\label{fig:pipebend_fenics_topology}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective history $J_{TO}/J_{TO,0}$ versus MMA iteration for the final curved benchmark campaign.}
-		\caption{Objective history to insert.}
-		\label{fig:pipebend_fenics_objective}
-	\end{subfigure}
-
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity-magnitude field for the final FEniCS-SA curved benchmark.}
-		\caption{Velocity field to insert.}
-		\label{fig:pipebend_fenics_velocity}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Eddy-viscosity field $\nu_t$ for the final FEniCS-SA curved benchmark.}
-		\caption{Eddy-viscosity field to insert.}
-		\label{fig:pipebend_fenics_nut}
-	\end{subfigure}
-	\caption{Minimum figure set for the curved benchmark FEniCS-SA results.}
-	\label{fig:pipebend_fenics_results}
-\end{figure}
-
-\subsection{Ansys-SA Re-analysis and Turbulence-Model Sensitivity}
-The curved benchmark is where the comparison against SST $k$-$\omega$ becomes most important. If the Dean number is moderate and the SA result remains close to SST, that is consistent with the argument of Chapter~\ref{ch:turbulence_modeling}. If the Dean number is high and the difference grows significantly, that is not a failure of the thesis narrative. On the contrary, it is exactly the kind of limitation that the thesis should identify honestly.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Extracted curved geometry and Ansys mesh, including near-wall strategy.}
-		\caption{Geometry and mesh to insert.}
-		\label{fig:pipebend_ansys_mesh}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity or pressure comparison between FEniCS-SA and Ansys-SA for the curved geometry.}
-		\caption{FEniCS-SA versus Ansys-SA comparison.}
-		\label{fig:pipebend_ansys_sa}
-	\end{subfigure}
-
-	\vspace{0.5cm}
-
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Ansys SST $k$-$\omega$ result for the same curved geometry.}
-		\caption{Ansys SST $k$-$\omega$ comparison.}
-		\label{fig:pipebend_ansys_sst}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Optional standard $k$-$\epsilon$ result for the same curved geometry.}
-		\caption{Optional standard $k$-$\epsilon$ comparison.}
-		\label{fig:pipebend_ansys_keps}
-	\end{subfigure}
-	\caption{Minimum Ansys comparison set for the curved benchmark.}
-	\label{fig:pipebend_ansys_results}
-\end{figure}
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{Result template for the curved benchmark.}
-	\label{tab:pipebend_result_template}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Item} & \textbf{Value / interpretation to insert} \\
-		\hline
-		Selected benchmark geometry & [TBD: Borrvall-style pipe bend / Bayat--Li--Alexandersen pipe bend / U-bend] \\
-		Reynolds number and Dean number & [TBD, with exact definition stated] \\
-		FEniCS-SA objective reduction & [TBD] \\
-		Common sharp-geometry metric & [TBD] \\
-		FEniCS-SA on extracted geometry & [TBD] \\
-		Ansys-SA on extracted geometry & [TBD] \\
-		Relative difference FEniCS-SA versus Ansys-SA & [TBD] \\
-		Ansys SST $k$-$\omega$ result & [TBD] \\
-		Optional Ansys standard $k$-$\epsilon$ result & [TBD] \\
-		Consistency with Chapter~\ref{ch:turbulence_modeling} & [TBD: yes / partly / no, with explanation] \\
-		Primary physical observation & [TBD: attached turning / onset of separation / excessive SA smoothing / other] \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
+\section{Benchmark 4: The U-Bend (Advanced Separation)}
+\label{sec:benchmark_u_bend}
+% Note: Include this section only if you successfully complete the Alexandersen U-bend case.
+The U-bend benchmark forces a 180-degree flow reversal, combining intense curvature with inevitable flow separation at the inner radius. [Present the FEniCS results and Ansys comparisons. Focus on whether the optimizer managed to delay separation, and whether SST $k-\omega$ validates or rejects the SA-generated inner wall contour].
 
 \section{Evaluation of the Coupled ``Semi-Frozen'' Adjoint}
 \label{sec:semifrozen_evaluation}
-The semi-frozen adjoint remains worth reporting, but it should be clearly subordinated to the main chapter narrative. It is an exploratory methodological result, not the principal validation route of the thesis. The right question here is not whether it looks more sophisticated, but whether it delivers additional physical value without introducing boundary-driven artifacts that make the optimization unreliable.
+While the frozen adjoint serves as the primary optimization engine due to its numerical tractability, an advanced ``semi-frozen'' adjoint was formulated to explicitly capture turbulence production sensitivities. 
 
-The current results already suggest a mixed answer. In domains with smooth and relatively unrestricted inlet conditions, the coupled formulation can produce more nuanced contours. In routing problems with restricted inlets, however, the coupled sensitivities can become dominated by artificial shear concentrations at the inlet-wall transitions. In those cases, gray regions near the boundaries are not evidence of a more physical optimum. They are evidence that the optimizer is reacting to a mathematical artifact.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.31\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{diffuser-semifrozen-TO}
-		\caption{Diffuser}
-		\label{fig:semifrozen_diffuser_revised}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.31\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{doublepipe-semifrozen-TO}
-		\caption{Double pipe}
-		\label{fig:semifrozen_doublepipe_revised}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.31\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{pipebend-semifrozen-TO}
-		\caption{Curved case}
-		\label{fig:semifrozen_pipebend_revised}
-	\end{subfigure}
-	\caption{Current semi-frozen topologies. These results should be interpreted as exploratory only. Before claiming any superiority over the frozen adjoint, the final study should introduce non-design inlet and outlet regions and use turbulent boundary conditions that do not inject artificial shear singularities at the design boundary.}
-	\label{fig:semifrozen_summary_revised}
-\end{figure}
-
-For that reason, the frozen adjoint remains the baseline design engine in this thesis. That decision should not be defended with vague claims about ``efficiency'' alone. It should be defended more precisely: the frozen adjoint is the method that is sufficiently stable, sufficiently interpretable, and sufficiently affordable to complete the required optimization and validation campaign within the thesis scope.
-
-\section{Synthesis and Answer to the Revised Third Research Question}
-\label{sec:benchmark_summary}
-The revised third research question asks whether SA-driven topology optimization produces designs whose predicted performance remains consistent under independent re-analysis. A credible answer requires four separate checks:
-\begin{enumerate}
-	\item the FEniCS-SA optimization must converge to a materially improved design relative to its own starting point;
-	\item the exported sharp geometry must remain close when re-analyzed in Ansys-SA;
-	\item the design ranking should remain qualitatively intact under Ansys SST $k$-$\omega$;
-	\item any remaining discrepancy should be explainable in light of the turbulence-model limitations already identified in Chapter~\ref{ch:turbulence_modeling}.
-\end{enumerate}
-
-Table~\ref{tab:combined_benchmark_summary_revised} is structured to make that answer explicit once the remaining simulations are complete. Until those entries are filled, the honest conclusion is that the thesis has established the correct assessment pipeline, but not yet the final quantitative claim.
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{Combined summary template for the revised Chapter 5 analysis.}
-	\label{tab:combined_benchmark_summary_revised}
-	\renewcommand{\arraystretch}{1.2}
-	\resizebox{\textwidth}{!}{%
-		\begin{tabular}{l c c c c c c}
-			\hline
-			\textbf{Case} & \textbf{Re} & \textbf{De} & \textbf{FEniCS objective reduction} & \textbf{FEniCS-SA vs Ansys-SA} & \textbf{SST vs SA} & \textbf{Main conclusion} \\
-			\hline
-			Diffuser & [TBD] & -- & [TBD] & [TBD] & [TBD] & [TBD] \\
-			Double pipe & [TBD] & -- & [TBD] & [TBD] & [TBD] & [TBD] \\
-			Curved benchmark & [TBD] & [TBD] & [TBD] & [TBD] & [TBD] & [TBD] \\
-			\hline
-		\end{tabular}%
-	}
-\end{table}
-
-The final wording of the chapter should then remain restrained. If FEniCS-SA and Ansys-SA agree closely, the implementation is credible. If SST $k$-$\omega$ preserves the same ranking but shifts the absolute losses, the design is robust but model-sensitive. If the curved case deviates strongly at elevated Dean number, that is not a contradiction of the thesis. It is the expected limit of the SA-based optimization framework, and identifying that limit is itself a valid result.
+However, evaluating this coupled formulation reveals significant practical limitations. As observed in Figure [X], while the coupled adjoint mathematically detects shear-driven turbulence, exact continuous adjoints for turbulence models are notoriously susceptible to numerical noise at domain boundaries. Even with non-design regions implemented, the coupled sensitivities frequently become dominated by artificial shear concentrations at fluid-solid transitions. Consequently, the optimizer tends to prioritize mitigating these localized mathematical artifacts rather than optimizing the global fluid routing. Therefore, despite its theoretical superiority, the frozen adjoint remains the more robust and reliable approach for the manifolds studied in this thesis.

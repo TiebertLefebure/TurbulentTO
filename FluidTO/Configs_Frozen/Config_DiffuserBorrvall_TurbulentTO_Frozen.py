@@ -57,8 +57,8 @@ U_MAX_OUTLET = 3.0
 # Sensitivity check: keep SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.07 fixed and
 # sweep SA_TURBULENCE_INTENSITY = 0.03, 0.05, 0.10. If the topology changes
 # qualitatively, report the result as inlet-turbulence-condition dependent.
-SA_TURBULENCE_INTENSITY = 0.075
-SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.10
+SA_TURBULENCE_INTENSITY = 0.05
+SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.07
 SA_REFERENCE_VELOCITY = U_MAX_INLET
 SA_REFERENCE_LENGTH = L
 SA_SMOOTH_ABS_EPS = 1.0e-12
@@ -83,25 +83,25 @@ OBJECTIVE_STREAK_TO_STOP = 5
 # raise q and beta once the topology is formed so the projected field does not
 # stall with broad intermediate densities.
 Q_PENAL_SCHEDULE = [0.1, 0.1, 0.2, 0.4, 0.8, 1.5, 3.0, 3.0]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005]
+MOVE_LIMIT_SCHEDULE = [0.03, 0.02, 0.015, 0.01, 0.01, 0.0075, 0.005, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
 # Frozen flow/turbulence coupling and IPCS solve parameters.
 LINEAR_SOLVER = "mumps"
 PICARD_STEPS = 1
-TURBULENCE_RELAXATION = 0.5
+TURBULENCE_RELAXATION = 0.05
 
 # IPCS forward solver parameters:
 #   These match the shared defaults in TurbulentTO_Frozen.py and are written here
 #   explicitly so the case configuration is self-contained.
-FORWARD_IPCS_DT = 5.0e-5
-FORWARD_IPCS_MAX_ITERS = 100
+FORWARD_IPCS_DT = 2.5e-5
+FORWARD_IPCS_MAX_ITERS = 400
 FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_VEL_RELAXATION = 0.35
+FORWARD_IPCS_VEL_RELAXATION = 0.25
 FORWARD_IPCS_P_RELAXATION = 0.07
-FORWARD_IPCS_MAX_RESTARTS = 3
+FORWARD_IPCS_MAX_RESTARTS = 5
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
 FORWARD_IPCS_VEL_SOLVER = "bicgstab" # Tentative velocity solve & velocity correction solver
@@ -109,6 +109,8 @@ FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER = "cg" # Pressure correction solve
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
+
+FORWARD_IPCS_ACCEPT_BEST_SCORE = 1.20
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]

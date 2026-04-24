@@ -3,5 +3,15 @@ __pycache__/
 .DS_Store
 .git.backup/
 
+# LaTeX build artifacts
+*.aux
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.synctex(busy)
+
 # Generated simulation result output
 FluidTO/Results_*/
