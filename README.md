@@ -4,7 +4,7 @@
 
 ## Repository Structure
 
-* **`TurbulenceModels/`**: The standalone SA fluid dynamics engine. Includes the IPCS fractional-step solver, SUPG stabilization, and a PDE-based relaxed Eikonal wall-distance solver.
+* **`TurbulenceModels/`**: The standalone SA fluid dynamics engine. Includes the IPCS fractional-step solver, Picard iterations, and a PDE-based relaxed Eikonal wall-distance solver.
 * **`FluidTO/`**: The core topology optimization architecture. Contains the continuous adjoint solvers, Brinkman penalization, density filtering, and MMA execution loops.
 
 *(Note: Both directories contain dedicated `Meshes/` folders with the `Gmsh` Python scripts required to generate the boundary-layer-resolved grids for the solvers).*
