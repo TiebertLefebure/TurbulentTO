@@ -10,8 +10,7 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 #
 # One inlet on the left wall and one outlet on the bottom wall.
 # This config targets the Full adjoint: the reciprocal wall-distance G enters
-# the monolithic primal state and the adjoint system together with
-# (u, p, nu_tilde).
+# the monolithic primal state and adjoint system as (u, p, nu_tilde, G).
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,7 +86,7 @@ BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [120, 120, 120, 120, 120, 120, 100, 100, 100]
 
 
-# Full primal-state solve parameters.
+# Full primal-state (u, p, nu_tilde, G) solve parameters.
 LINEAR_SOLVER = "mumps"
 STATE_SOLVE_METHOD = "newtontr"
 STATE_RTOL = 1.0e-6
@@ -297,3 +296,7 @@ def build_volume_region(mesh, density_space):
         y_min=DESIGN_Y_MIN,
         y_max=DESIGN_Y_MAX,
     )
+
+
+def build_objective_region(mesh, density_space):
+    return build_volume_region(mesh, density_space)

@@ -11,6 +11,8 @@ import numpy as np
 WALL_TAG = 1
 INLET_TAG = 2
 OUTLET_TAG = 3
+DOUBLE_PIPE_INLET_TAGS = (2, 3)   # top, bottom
+DOUBLE_PIPE_OUTLET_TAGS = (4, 5)  # top, bottom
 
 DESIGN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
@@ -44,7 +46,7 @@ def classify_surfaces(case_name: str, surface_tags: list[int]) -> tuple[list[int
             else:
                 design_surfaces.append(tag)
         elif case_name == "pipe_bend":
-            if x_c < 0.0 or x_c > L:
+            if x_c < 0.0 or y_c < 0.0 or x_c > L or y_c > L:
                 non_design_surfaces.append(tag)
             else:
                 design_surfaces.append(tag)
@@ -104,6 +106,40 @@ def classify_boundary_curves(case_name: str, curve_tags: list[int]) -> tuple[lis
             raise ValueError(f"Unknown case name: {case_name}")
 
     return wall_curves, inlet_curves, outlet_curves
+
+
+def _sort_curves_top_to_bottom(curve_tags: list[int]) -> list[int]:
+    return sorted(
+        curve_tags,
+        key=lambda tag: gmsh.model.occ.getCenterOfMass(1, tag)[1],
+        reverse=True,
+    )
+
+
+def add_boundary_physical_groups(case_name: str, wall_curves: list[int], inlet_curves: list[int], outlet_curves: list[int]) -> None:
+    gmsh.model.addPhysicalGroup(1, wall_curves, WALL_TAG)
+    gmsh.model.setPhysicalName(1, WALL_TAG, "walls")
+
+    if case_name == "double_pipe":
+        inlet_curves_sorted = _sort_curves_top_to_bottom(inlet_curves)
+        outlet_curves_sorted = _sort_curves_top_to_bottom(outlet_curves)
+        if len(inlet_curves_sorted) != len(DOUBLE_PIPE_INLET_TAGS):
+            raise ValueError(f"Expected two double-pipe inlet curves, got {len(inlet_curves_sorted)}.")
+        if len(outlet_curves_sorted) != len(DOUBLE_PIPE_OUTLET_TAGS):
+            raise ValueError(f"Expected two double-pipe outlet curves, got {len(outlet_curves_sorted)}.")
+
+        for marker, curve, name in zip(DOUBLE_PIPE_INLET_TAGS, inlet_curves_sorted, ("inlet_top", "inlet_bottom")):
+            gmsh.model.addPhysicalGroup(1, [curve], marker)
+            gmsh.model.setPhysicalName(1, marker, name)
+        for marker, curve, name in zip(DOUBLE_PIPE_OUTLET_TAGS, outlet_curves_sorted, ("outlet_top", "outlet_bottom")):
+            gmsh.model.addPhysicalGroup(1, [curve], marker)
+            gmsh.model.setPhysicalName(1, marker, name)
+        return
+
+    gmsh.model.addPhysicalGroup(1, inlet_curves, INLET_TAG)
+    gmsh.model.setPhysicalName(1, INLET_TAG, "inlet")
+    gmsh.model.addPhysicalGroup(1, outlet_curves, OUTLET_TAG)
+    gmsh.model.setPhysicalName(1, OUTLET_TAG, "outlet")
 
 
 def meshio_write_blocks(
@@ -199,12 +235,7 @@ def generate_case(case_name: str, out_dir: Path) -> None:
     gmsh.model.addPhysicalGroup(2, non_design_surfaces, NON_DESIGN_FLUID_TAG)
     gmsh.model.setPhysicalName(2, NON_DESIGN_FLUID_TAG, "non_design_fluid")
 
-    gmsh.model.addPhysicalGroup(1, wall_curves, WALL_TAG)
-    gmsh.model.setPhysicalName(1, WALL_TAG, "walls")
-    gmsh.model.addPhysicalGroup(1, inlet_curves, INLET_TAG)
-    gmsh.model.setPhysicalName(1, INLET_TAG, "inlet")
-    gmsh.model.addPhysicalGroup(1, outlet_curves, OUTLET_TAG)
-    gmsh.model.setPhysicalName(1, OUTLET_TAG, "outlet")
+    add_boundary_physical_groups(case_name, wall_curves, inlet_curves, outlet_curves)
 
     gmsh.option.setNumber("Mesh.MeshSizeMin", LC)
     gmsh.option.setNumber("Mesh.MeshSizeMax", LC)

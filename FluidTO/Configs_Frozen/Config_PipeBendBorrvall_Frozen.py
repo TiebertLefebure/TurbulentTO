@@ -1,7 +1,7 @@
 import os
 from math import pi
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
-from Utilities_SharedTO import load_mesh_from_xdmf
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
 # ===================================================================
@@ -16,11 +16,22 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendBorrvall/mesh_guided.xdmf'),
+    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendBorrvall/cell_guided.xdmf'),
 }
+
+DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
+
+
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files["CELL_DIRECTORY"],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
 
 
 # Geometry and reference meshing parameters.
@@ -104,7 +115,7 @@ FORWARD_IPCS_VEL_RELAXATION = 0.21
 FORWARD_IPCS_P_RELAXATION = 0.07
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER = "cg"
+FORWARD_IPCS_P_SOLVER = "bicgstab"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_MAX_RESTARTS = 3
@@ -264,26 +275,3 @@ def build_velocity_profile_sets():
         u_max=U_MAX_OUTLET,
     )
     return [u_inlet], [u_outlet]
-
-
-def build_density_bounds(mesh, density_space):
-    non_design_fluid_lower = Expression(
-        "(x[0] < x_min || x[1] < y_min || x[0] > x_max || x[1] > y_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-        y_min=DESIGN_Y_MIN,
-        y_max=DESIGN_Y_MAX,
-    )
-    return non_design_fluid_lower, 1.0
-
-
-def build_volume_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max && x[1] >= y_min && x[1] <= y_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-        y_min=DESIGN_Y_MIN,
-        y_max=DESIGN_Y_MAX,
-    )

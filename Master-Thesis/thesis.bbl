@@ -6,6 +6,12 @@ J.~Alexandersen.
   fluid flow problems with implementation in matlab.
 \newblock {\em Structural and Multidisciplinary Optimization}, 66(1):12, 2023.
 
+\bibitem{Alexandersen2014}
+J.~Alexandersen, N.~Aage, C.~S. Andreasen, and O.~Sigmund.
+\newblock Topology optimisation for natural convection problems.
+\newblock {\em International Journal for Numerical Methods in Fluids},
+  76:699--721, 2014.
+
 \bibitem{Alexandersen2020}
 J.~Alexandersen and C.~S. Andreasen.
 \newblock A review of topology optimisation for fluid-based problems.
@@ -54,13 +60,12 @@ D.~N. Arnold, F.~Brezzi, B.~Cockburn, and L.~D. Marini.
   problems.
 \newblock {\em SIAM Journal on Numerical Analysis}, 39(5):1749--1779, 2002.
 
-\bibitem{Bayat2026}
-A.~Bayat, H.~Li, and J.~Alexandersen.
-\newblock Density-based topology optimization for turbulent fluid flow using
-  the standard k-epsilon rans model with wall-functions imposed through an
-  implicit wall penalty formulation.
-\newblock arXiv preprint arXiv:2601.02202, Jan. 2026.
-\newblock Published 5 January 2026.
+\bibitem{Barroca2023}
+B.~Barroca, M.~Blommaert, G.~Buckinx, M.~Schevenels, and M.~Baelmans.
+\newblock High-resolution topology optimization of heat sinks for
+  microelectronics and benchmark against conventional designs.
+\newblock In {\em 17th International Heat Transfer Conference, IHTC-17}, Cape
+  Town, 2023.
 
 \bibitem{Bendsoe1988}
 M.~P. Bends{\o}e and N.~Kikuchi.
@@ -122,6 +127,13 @@ J.~S. Hesthaven and T.~Warburton.
   Applications}.
 \newblock Springer Science \& Business Media, New York, NY, 2007.
 
+\bibitem{Andreasen2020}
+L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
+  Andreasen.
+\newblock Topology optimization of two fluid heat exchangers.
+\newblock {\em International Journal of Heat and Mass Transfer}, 163:120543,
+  2020.
+
 \bibitem{joove_keps}
 {joove123}.
 \newblock k-epsilon fenics implementation.
@@ -161,6 +173,12 @@ A.-S. Margetis, E.~Papoutsis-Kiachagias, and K.~Giannakoglou.
 \newblock The continuous adjoint to the incompressible (d) des spalart-allmaras
   turbulence models.
 \newblock {\em Computers \& Fluids}, 284:106439, 2024.
+
+\bibitem{Maute2023}
+L.~No\"{e}l and K.~Maute.
+\newblock Xfem level set-based topology optimization for turbulent conjugate
+  heat transfer problems.
+\newblock {\em Structural and Multidisciplinary Optimization}, 66(1), 2023.
 
 \bibitem{Othmer2014}
 C.~Othmer.
@@ -206,6 +224,12 @@ P.~Spalart and S.~Allmaras.
 P.~R. Spalart and S.~R. Allmaras.
 \newblock A one-equation turbulence model for aerodynamic flows.
 \newblock {\em La Recherche Aérospatiale}, 1:5--21, 1994.
+
+\bibitem{Sun2023}
+Y.~Sun, M.~Hao, and Z.~Wang.
+\newblock Topology optimization of turbulent flow cooling structures based on
+  the $k$--$\varepsilon$ model.
+\newblock {\em Entropy}, 25:1061, 2023.
 
 \bibitem{Svanberg1987}
 K.~Svanberg.
@@ -256,6 +280,13 @@ J.~Zhao, M.~Zhang, Y.~Zhu, R.~Cheng, and L.~Wang.
   a multi-layer thermofluid model.
 \newblock {\em Structural and Multidisciplinary Optimization},
   64(6):3835--3859, 2021.
+
+\bibitem{Zhao2018}
+X.~Zhao, M.~Zhou, O.~Sigmund, and C.~S. Andreasen.
+\newblock A ``poor man's approach'' to topology optimization of cooling
+  channels based on a darcy flow model.
+\newblock {\em International Journal of Heat and Mass Transfer},
+  116:1108--1123, 2018.
 
 \bibitem{Zhou2017}
 T.~Zhou, T.~Liu, Y.~Deng, L.~Chen, S.~Qian, and Z.~Liu.

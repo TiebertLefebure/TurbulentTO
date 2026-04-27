@@ -9,8 +9,7 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 #
 # Two symmetric ports on the left and right boundaries.
 # This config targets the Full adjoint: the reciprocal wall-distance G enters
-# the monolithic primal state and the adjoint system together with
-# (u, p, nu_tilde).
+# the monolithic primal state and adjoint system as (u, p, nu_tilde, G).
 # =======================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -100,23 +99,30 @@ Q_PENAL_SCHEDULE = [0.05, 0.1, 0.1, 0.2, 0.5, 1.0, 1.0, 1.0]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.02, 0.01, 0.005, 0.003, 0.002]
 BETA_PROJ_SCHEDULE = [0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
 
-# Full primal-state solve parameters.
+# Full primal-state (u, p, nu_tilde, G) solve parameters.
 LINEAR_SOLVER = "mumps"
-STATE_SOLVE_METHOD = "newtontr"
+STATE_SOLVE_METHOD = "newtonls"
+STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
 STATE_MAX_ITERS = 120
-STATE_INITIAL_SA_SWEEPS = 4
-# Ramp the turbulent-viscosity feedback into the momentum equations gradually
-# so the first monolithic solve does not jump straight from Stokes/SA startup
-# to a strongly coupled (u, p, nu_tilde, G) state.
+STATE_ERROR_ON_NONCONVERGENCE = False
+STATE_ACCEPTED_RESIDUAL_FACTOR = 1.0
+STATE_INITIAL_SA_SWEEPS = 8
+STATE_INITIAL_SA_RELAXATION = 0.35
+# Ramp both Navier-Stokes convection and turbulent-viscosity feedback into the
+# momentum equations. The first full double-pipe solve starts from a linear
+# Stokes-Brinkman field, so jumping directly to full convection at Re ~= 1600
+# can stall before the turbulence homotopy has a chance to help.
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
-    {"weight": 0.0, "max_iters": 220, "atol": 8.0e-4},
-    {"weight": 0.20, "max_iters": 180, "atol": 6.0e-4},
-    {"weight": 0.45, "max_iters": 180, "atol": 4.0e-4},
-    {"weight": 0.65, "max_iters": 200, "atol": 3.0e-4},
-    {"weight": 0.82, "max_iters": 220, "atol": 2.0e-4},
-    {"weight": 1.0, "max_iters": 250, "atol": 1.0e-4},
+    {"convection_weight": 0.00, "weight": 0.00, "max_iters": 160, "atol": 2.0e-4, "accept_norm": 1.0e-1},
+    {"convection_weight": 0.20, "weight": 0.00, "max_iters": 180, "atol": 2.0e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 0.45, "weight": 0.00, "max_iters": 200, "atol": 2.0e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 0.70, "weight": 0.20, "max_iters": 220, "atol": 2.0e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 0.90, "weight": 0.45, "max_iters": 240, "atol": 1.5e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 1.00, "weight": 0.70, "max_iters": 260, "atol": 1.2e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 1.00, "weight": 0.90, "max_iters": 280, "atol": 1.0e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 320, "atol": 1.0e-4},
 ]
 # Keep one alternate-globalization retry from the current iterate, then one
 # clean Stokes rebuild retry with the same safer line-search globalization.
@@ -302,3 +308,7 @@ def build_volume_region(mesh, density_space):
         x_min=DESIGN_X_MIN,
         x_max=DESIGN_X_MAX,
     )
+
+
+def build_objective_region(mesh, density_space):
+    return build_volume_region(mesh, density_space)

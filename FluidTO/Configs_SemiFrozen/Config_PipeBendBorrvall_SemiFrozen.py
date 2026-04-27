@@ -296,3 +296,7 @@ def build_volume_region(mesh, density_space):
         y_min=DESIGN_Y_MIN,
         y_max=DESIGN_Y_MAX,
     )
+
+
+def build_objective_region(mesh, density_space):
+    return build_volume_region(mesh, density_space)

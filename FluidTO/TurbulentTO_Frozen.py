@@ -1,6 +1,10 @@
+import os
+from Runtime_Setup import configure_writable_runtime_environment
+
+configure_writable_runtime_environment(base_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime"))
+
 from dolfin import *
 import numpy as np
-import os
 import time
 try:
     from ufl import tanh
@@ -58,6 +62,13 @@ SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
 FORWARD_IPCS_LOG_EVERY = max(1, int(globals().get("FORWARD_IPCS_LOG_EVERY", 25)))
 LINEAR_SOLVER_NAME = str(globals().get("LINEAR_SOLVER", globals().get("SNES_LINEAR_SOLVER", "mumps")))
+FORWARD_FLOW_SOLVER = str(
+    globals().get("FORWARD_FLOW_SOLVER", globals().get("FORWARD_SOLVE_METHOD", "ipcs"))
+).strip().lower()
+if FORWARD_FLOW_SOLVER in {"newton", "newtonls", "snes"}:
+    FORWARD_FLOW_SOLVER = "snes"
+elif FORWARD_FLOW_SOLVER != "ipcs":
+    raise ValueError("FORWARD_FLOW_SOLVER must be either 'ipcs' or 'snes'.")
 
 if not SHOW_DOLFIN_SOLVER_LOGS:
     try:
@@ -340,6 +351,7 @@ if use_outlet_pressure_bc:
     root_print("Outlet BC type: pressure")
 else:
     root_print("Outlet BC type: velocity")
+root_print("Frozen forward flow solver: {}".format(FORWARD_FLOW_SOLVER.upper()))
 
 pressure_outlet_component_bcs = _normalize_velocity_component_bc_specs(
     globals().get("PRESSURE_OUTLET_COMPONENT_BCS"),
@@ -628,6 +640,10 @@ ObjFunctional = ObjectiveRegion * (
 ) * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx, nu_tilde_frozen)
+flow_test_u, flow_test_p = TestFunctions(FlowSpace)
+forward_flow_residual_form = build_state_form(
+    u, p, flow_test_u, flow_test_p, rho_effective, dx, nu_tilde_frozen,
+)
 lagrangian_form = ObjFunctional + state_form
 
 objective_adjoint_form = derivative(lagrangian_form, w_fwd, TestFunction(FlowSpaceAdj))
@@ -932,10 +948,92 @@ def initialize_forward_guess_with_stokes():
     sa_model.nu_tilde0.assign(nu_guess)
     sa_model.nu_tilde1.assign(nu_guess)
 
+
+def constrained_forward_residual_norm():
+    """Measure the frozen-flow residual with Dirichlet rows treated consistently."""
+    residual_vector = assemble(forward_flow_residual_form)
+    fallback_residual_values = None
+    current_state_values = None
+    for bc in bc_NS:
+        try:
+            bc.apply(residual_vector, w_fwd.vector())
+        except TypeError:
+            if fallback_residual_values is None:
+                fallback_residual_values = residual_vector.get_local()
+                current_state_values = w_fwd.vector().get_local()
+            for dof, value in bc.get_boundary_values().items():
+                fallback_residual_values[dof] = current_state_values[dof] - float(value)
+    if fallback_residual_values is not None:
+        residual_vector.set_local(fallback_residual_values)
+        residual_vector.apply("insert")
+    return float(residual_vector.norm("l2"))
+
+
+def solve_forward_snes(solve_label=None):
+    """Solve the frozen-viscosity Navier-Stokes system monolithically."""
+    solver_log("      [SNES] monolithic frozen-viscosity flow")
+    jac_forward = derivative(forward_flow_residual_form, w_fwd)
+    problem_forward = NonlinearVariationalProblem(
+        forward_flow_residual_form, w_fwd, bc_NS, jac_forward,
+    )
+    solver_forward = NonlinearVariationalSolver(problem_forward)
+    solver_forward.parameters["nonlinear_solver"] = "snes"
+    solver_forward.parameters["snes_solver"]["linear_solver"] = str(
+        globals().get("FORWARD_SNES_LINEAR_SOLVER", LINEAR_SOLVER_NAME)
+    )
+    method = str(globals().get("FORWARD_SNES_METHOD", "newtonls"))
+    solver_forward.parameters["snes_solver"]["method"] = method
+    if method == "newtonls":
+        solver_forward.parameters["snes_solver"]["line_search"] = str(
+            globals().get("FORWARD_SNES_LINE_SEARCH", "bt")
+        )
+
+    rtol = float(globals().get("FORWARD_SNES_RTOL", 1.0e-6))
+    atol = float(globals().get("FORWARD_SNES_ATOL", 1.0e-8))
+    max_iters = int(globals().get("FORWARD_SNES_MAX_ITERS", 80))
+    solver_forward.parameters["snes_solver"]["relative_tolerance"] = rtol
+    solver_forward.parameters["snes_solver"]["absolute_tolerance"] = atol
+    solver_forward.parameters["snes_solver"]["maximum_iterations"] = max_iters
+    solver_forward.parameters["snes_solver"]["error_on_nonconvergence"] = bool(
+        globals().get("FORWARD_SNES_ERROR_ON_NONCONVERGENCE", True)
+    )
+
+    initial_norm = constrained_forward_residual_norm()
+    solver_forward.solve()
+    residual_norm = constrained_forward_residual_norm()
+    accepted_norm = max(atol, rtol * max(initial_norm, 1.0e-16))
+    accepted_factor = max(1.0, float(globals().get("FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR", 2.0)))
+    if not np.isfinite(residual_norm):
+        raise RuntimeError("Accepted SNES forward iterate produced a non-finite residual norm.")
+    if residual_norm > accepted_factor * accepted_norm:
+        raise RuntimeError(
+            "Accepted SNES forward iterate has residual norm {:.4e}, exceeding {:.4e} "
+            "(base tolerance {:.4e}, factor {:.2f}).".format(
+                residual_norm,
+                accepted_factor * accepted_norm,
+                accepted_norm,
+                accepted_factor,
+            )
+        )
+    relative_residual = residual_norm / max(initial_norm, 1.0e-16)
+    solver_log(
+        "      [SNES] residual {:.2e} (relative {:.2e})".format(
+            residual_norm, relative_residual,
+        )
+    )
+    return float(relative_residual), float(residual_norm)
+
+
+def solve_forward(solve_label=None):
+    if FORWARD_FLOW_SOLVER == "snes":
+        return solve_forward_snes(solve_label)
+    return solve_forward_ipcs(solve_label)
+
+
 # ===============================================================
 # IPCS forward solve
 # ===============================================================
-def solve_forward(solve_label=None):
+def solve_forward_ipcs(solve_label=None):
     """Run IPCS to a steady state and store the result in w_fwd."""
     global ipcs_solve_counter
     global save_ipcs_residual_plots
@@ -1165,7 +1263,10 @@ p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
-save_ipcs_residual_plots = bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
+save_ipcs_residual_plots = (
+    bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
+    and FORWARD_FLOW_SOLVER == "ipcs"
+)
 save_ipcs_residual_svgs = bool(globals().get("SAVE_IPCS_RESIDUAL_SVGS", False))
 ipcs_solve_counter = 0
 
@@ -1186,7 +1287,7 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path, include_ipcs_residuals=True)
+initialize_optimization_log(log_path, include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"))
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -1382,8 +1483,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
-            du_ipcs=final_flow_du_ipcs,
-            dp_ipcs=final_flow_dp_ipcs,
+            du_ipcs=final_flow_du_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
+            dp_ipcs=final_flow_dp_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
         )
 
         constraint_status_text = ""

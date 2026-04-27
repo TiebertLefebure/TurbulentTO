@@ -1,6 +1,6 @@
 import os
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
-from Utilities_SharedTO import load_mesh_from_xdmf
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
 # ===================================================================
@@ -15,11 +15,22 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh_guided.xdmf'),
+    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/cell_guided.xdmf'),
 }
+
+DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
+
+
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files["CELL_DIRECTORY"],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
 
 
 # Geometry and reference meshing parameters.
@@ -52,8 +63,7 @@ U_MAX_OUTLET = 3.0
 # SA transport parameters for the frozen turbulence update.
 # Prefer physical inlet-turbulence inputs over the raw eddy-viscosity ratio:
 #   nu_t / nu_lam ~= 0.67 * I * Re * (ell / L_ref)
-# The values below give nu_t / nu_lam ~= 5 at Re = 1000, close to the former
-# SA_MUT_RATIO = 5.0 setting.
+# The values below give nu_t / nu_lam ~= 2.35 at Re = 1000.
 # Sensitivity check: keep SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.07 fixed and
 # sweep SA_TURBULENCE_INTENSITY = 0.03, 0.05, 0.10. If the topology changes
 # qualitatively, report the result as inlet-turbulence-condition dependent.
@@ -87,12 +97,20 @@ MOVE_LIMIT_SCHEDULE = [0.03, 0.02, 0.015, 0.01, 0.01, 0.0075, 0.005, 0.005]
 BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 
-# Frozen flow/turbulence coupling and IPCS solve parameters.
+# Frozen flow/turbulence coupling and forward solve parameters.
 LINEAR_SOLVER = "mumps"
+
+# FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs"
+FORWARD_FLOW_SOLVER = "snes"
+FORWARD_SNES_METHOD = "newtonls"
+FORWARD_SNES_LINE_SEARCH = "bt"
+FORWARD_SNES_RTOL = 1.0e-6
+FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_MAX_ITERS = 80
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.05
 
-# IPCS forward solver parameters:
+# IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs":
 #   These match the shared defaults in TurbulentTO_Frozen.py and are written here
 #   explicitly so the case configuration is self-contained.
 FORWARD_IPCS_DT = 2.5e-5
@@ -104,9 +122,9 @@ FORWARD_IPCS_P_RELAXATION = 0.07
 FORWARD_IPCS_MAX_RESTARTS = 5
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-FORWARD_IPCS_VEL_SOLVER = "bicgstab" # Tentative velocity solve & velocity correction solver
+FORWARD_IPCS_VEL_SOLVER = "bicgstab" # Tentative velocity solve (IPCS #1) & velocity correction solve (IPCS #3)
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER = "cg" # Pressure correction solve
+FORWARD_IPCS_P_SOLVER = "bicgstab" # Pressure correction solve (IPCS #2)
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 
@@ -167,34 +185,6 @@ def mark_boundaries(mesh):
     InletBoundary().mark(boundaries, MARK["inlet"])
     OutletBoundary().mark(boundaries, MARK["outlet"])
     return boundaries
-
-
-def build_density_bounds(mesh, density_space):
-    non_design_fluid_lower = Expression(
-        "(x[0] < x_min || x[0] > x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-    return non_design_fluid_lower, 1.0
-
-
-def build_volume_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-
-
-def build_objective_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
 
 
 def build_velocity_profile_sets():

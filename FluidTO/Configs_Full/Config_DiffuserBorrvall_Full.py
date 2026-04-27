@@ -8,8 +8,7 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 #
 # One inlet on the left wall and one outlet on the right wall.
 # This config targets the Full adjoint: the reciprocal wall-distance G enters
-# the monolithic primal state and the adjoint system together with
-# (u, p, nu_tilde).
+# the monolithic primal state and adjoint system as (u, p, nu_tilde, G).
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -84,36 +83,42 @@ MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03, 0.02, 0.015, 0.01, 0.005, 0.003, 
 BETA_PROJ_SCHEDULE = [0.1, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 160, 180, 220]
 
-# Full primal-state (u, p, nu_tilde) solve parameters.
+# Full primal-state (u, p, nu_tilde, G) solve parameters.
 LINEAR_SOLVER = "mumps"
-STATE_SOLVE_METHOD = "newtonls"
+STATE_SOLVE_METHOD = "newtontr"
 STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
-STATE_MAX_ITERS = 50
+STATE_MAX_ITERS = 120
 STATE_INITIAL_SA_SWEEPS = 4
-# The diffuser usually solves cleanly, so keep this continuation light. The
-# goal is only to soften occasional startup failures without importing the much
-# heavier double-pipe rescue schedule.
+# Treat the early state-coupling substeps as warm-start continuation work. The
+# diffuser can stall at a small residual after a design update, so later warm
+# substeps may accept modest residual growth from the previously accepted state;
+# the final fully coupled state solve remains strict.
+STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
-    {"weight": 0.0, "max_iters": 120, "atol": 8.0e-4},
-    {"weight": 0.35, "max_iters": 100, "atol": 5.0e-4},
-    {"weight": 0.70, "max_iters": 100, "atol": 2.0e-4},
-    {"weight": 1.0},
+    {"convection_weight": 0.0, "weight": 0.0, "max_iters": 180, "atol": 8.0e-4, "accept_norm": 5.0e-2},
+    {"convection_weight": 0.35, "weight": 0.0, "max_iters": 180, "atol": 8.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 0.70, "weight": 0.0, "max_iters": 180, "atol": 6.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.0, "max_iters": 220, "atol": 6.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.20, "max_iters": 180, "atol": 5.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.45, "max_iters": 180, "atol": 4.0e-4, "accept_norm": 1.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.70, "max_iters": 200, "atol": 2.0e-4, "accept_norm": 5.0e-3, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 1.0, "max_iters": 260},
 ]
 STATE_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 120,
+        "max_iters": 220,
         "restart_with_stokes": False,
     },
     {
         "label": "Stokes rebuild line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 160,
+        "max_iters": 260,
         "restart_with_stokes": True,
     },
 ]
@@ -191,6 +196,10 @@ def build_volume_region(mesh, density_space):
         x_min=DESIGN_X_MIN,
         x_max=DESIGN_X_MAX,
     )
+
+
+def build_objective_region(mesh, density_space):
+    return build_volume_region(mesh, density_space)
 
 
 def build_velocity_profile_sets():

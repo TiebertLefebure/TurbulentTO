@@ -11,7 +11,8 @@ import numpy as np
 WALL_TAG = 1
 INLET_TAG = 2
 OUTLET_TAG = 3
-FLUID_TAG = 1
+DESIGN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 L = 1.0
 LEAD_LENGTH = 0.2 * L
@@ -41,6 +42,34 @@ def external_boundary_curves(surface_tags: list[int]) -> list[int]:
     )
     counts = Counter(boundary_pairs)
     return [tag for dim, tag in boundary_pairs if dim == 1 and counts[(dim, tag)] == 1]
+
+
+def classify_pipe_bend_surfaces(surface_tags: list[int]) -> tuple[list[int], list[int]]:
+    design_surfaces: list[int] = []
+    non_design_surfaces: list[int] = []
+
+    for tag in surface_tags:
+        x_c, y_c, _ = gmsh.model.occ.getCenterOfMass(2, tag)
+        if x_c < 0.0 or y_c < 0.0:
+            non_design_surfaces.append(tag)
+        else:
+            design_surfaces.append(tag)
+
+    return design_surfaces, non_design_surfaces
+
+
+def classify_u_bend_surfaces(surface_tags: list[int]) -> tuple[list[int], list[int]]:
+    design_surfaces: list[int] = []
+    non_design_surfaces: list[int] = []
+
+    for tag in surface_tags:
+        x_c, _y_c, _ = gmsh.model.occ.getCenterOfMass(2, tag)
+        if x_c < 0.0:
+            non_design_surfaces.append(tag)
+        else:
+            design_surfaces.append(tag)
+
+    return design_surfaces, non_design_surfaces
 
 
 def meshio_write_blocks(
@@ -129,8 +158,8 @@ def build_pipe_bend_geometry() -> list[int]:
     design = occ.addRectangle(0.0, 0.0, 0.0, L, L)
     inlet = occ.addRectangle(-LEAD_LENGTH, PIPE_BEND_INLET_Y_MIN, 0.0, LEAD_LENGTH, PORT_HEIGHT)
     outlet = occ.addRectangle(PIPE_BEND_OUTLET_X_MIN, -LEAD_LENGTH, 0.0, PORT_HEIGHT, LEAD_LENGTH)
-    fused, _ = occ.fuse([(2, design)], [(2, inlet), (2, outlet)])
-    return [tag for dim, tag in fused if dim == 2]
+    occ.fragment([(2, design)], [(2, inlet), (2, outlet)])
+    return [tag for dim, tag in occ.getEntities(2)]
 
 
 def build_u_bend_geometry() -> list[int]:
@@ -138,7 +167,7 @@ def build_u_bend_geometry() -> list[int]:
     design = occ.addRectangle(0.0, 0.0, 0.0, L, L)
     inlet = occ.addRectangle(-LEAD_LENGTH, U_BEND_TOP_PORT_Y_MIN, 0.0, LEAD_LENGTH, PORT_HEIGHT)
     outlet = occ.addRectangle(-LEAD_LENGTH, U_BEND_BOTTOM_PORT_Y_MIN, 0.0, LEAD_LENGTH, PORT_HEIGHT)
-    fluid, _ = occ.fuse([(2, design)], [(2, inlet), (2, outlet)])
+    fluid, _ = occ.fragment([(2, design)], [(2, inlet), (2, outlet)])
 
     bar_rect = occ.addRectangle(
         -LEAD_LENGTH,
@@ -157,6 +186,7 @@ def generate_case(
     case_name: str,
     out_dir: Path,
     geometry_builder,
+    surface_classifier,
     boundary_classifier,
     msh_name: str,
 ) -> None:
@@ -166,11 +196,14 @@ def generate_case(
     surface_tags = geometry_builder()
     gmsh.model.occ.synchronize()
 
+    design_surfaces, non_design_surfaces = surface_classifier(surface_tags)
     boundary_curves = external_boundary_curves(surface_tags)
     wall_curves, inlet_curves, outlet_curves = boundary_classifier(boundary_curves)
 
-    gmsh.model.addPhysicalGroup(2, surface_tags, FLUID_TAG)
-    gmsh.model.setPhysicalName(2, FLUID_TAG, "fluid")
+    gmsh.model.addPhysicalGroup(2, design_surfaces, DESIGN_TAG)
+    gmsh.model.setPhysicalName(2, DESIGN_TAG, "design_domain")
+    gmsh.model.addPhysicalGroup(2, non_design_surfaces, NON_DESIGN_FLUID_TAG)
+    gmsh.model.setPhysicalName(2, NON_DESIGN_FLUID_TAG, "non_design_fluid")
 
     gmsh.model.addPhysicalGroup(1, wall_curves, WALL_TAG)
     gmsh.model.setPhysicalName(1, WALL_TAG, "walls")
@@ -211,6 +244,7 @@ def main() -> None:
         "pipe_bend_alexandersen",
         repo_root / "Meshes" / "PipeBendAlexandersen",
         build_pipe_bend_geometry,
+        classify_pipe_bend_surfaces,
         classify_pipe_bend_boundary_curves,
         "pipe_bend_alexandersen_2d.msh",
     )
@@ -218,6 +252,7 @@ def main() -> None:
         "u_bend_alexandersen",
         repo_root / "Meshes" / "UBendAlexandersen",
         build_u_bend_geometry,
+        classify_u_bend_surfaces,
         classify_u_bend_boundary_curves,
         "u_bend_alexandersen_2d.msh",
     )

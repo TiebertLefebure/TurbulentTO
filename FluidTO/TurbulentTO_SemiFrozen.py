@@ -1,6 +1,10 @@
+import os
+from Runtime_Setup import configure_writable_runtime_environment
+
+configure_writable_runtime_environment(base_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime"))
+
 from dolfin import *
 import numpy as np
-import os
 import time
 try:
     from ufl import tanh
@@ -98,6 +102,9 @@ q_penal = Constant(0.1)
 state_turbulence_coupling_weight = Constant(
     float(get_state_option("STATE_TURBULENCE_COUPLING_WEIGHT", "FULL_STATE_TURBULENCE_COUPLING_WEIGHT", 1.0))
 )
+state_convection_coupling_weight = Constant(
+    float(get_state_option("STATE_CONVECTION_COUPLING_WEIGHT", "FULL_STATE_CONVECTION_COUPLING_WEIGHT", 1.0))
+)
 
 
 def projection(rho_design, eta_proj):
@@ -132,7 +139,7 @@ def effective_dynamic_viscosity(state_nu_tilde):
 def build_flow_residual(state_u, state_p, test_u, test_p, rho_eff, custom_dx, state_nu_tilde):
     mu_effective = effective_dynamic_viscosity(state_nu_tilde)
     return (
-        rho_fluid * inner(dot(state_u, nabla_grad(state_u)), test_u) * custom_dx
+        state_convection_coupling_weight * rho_fluid * inner(dot(state_u, nabla_grad(state_u)), test_u) * custom_dx
         + mu_effective * inner(grad(state_u), grad(test_u)) * custom_dx
         + inner(grad(state_p), test_u) * custom_dx
         + inner(div(state_u), test_p) * custom_dx
@@ -252,6 +259,51 @@ def build_region_function_from_config(builder_name, default_value=1.0):
     return region_function
 
 
+def _as_scalar_dirichlet_value(value):
+    if np.isscalar(value):
+        return Constant(float(value))
+    return value
+
+
+def _normalize_velocity_component_bc_specs(raw_specs, marker_lookup):
+    if raw_specs is None:
+        return []
+
+    normalized_specs = []
+    for spec in as_list(raw_specs):
+        if not isinstance(spec, dict):
+            raise TypeError("Velocity component BC specs must be dictionaries.")
+
+        if "component" not in spec:
+            raise ValueError("Velocity component BC specs must define 'component'.")
+
+        component = int(spec["component"])
+        if component not in (0, 1):
+            raise ValueError("Velocity component BC 'component' must be 0 or 1.")
+
+        marker_spec = spec.get("marker", "outlet")
+        if isinstance(marker_spec, str):
+            if marker_spec not in marker_lookup:
+                raise ValueError(
+                    "Unknown marker name '{}' in velocity component BC.".format(marker_spec)
+                )
+            marker_values = as_list(marker_lookup[marker_spec])
+        else:
+            marker_values = as_list(marker_spec)
+
+        value = _as_scalar_dirichlet_value(spec.get("value", 0.0))
+        for marker_value in marker_values:
+            normalized_specs.append(
+                {
+                    "marker": int(marker_value),
+                    "component": component,
+                    "value": value,
+                }
+            )
+
+    return normalized_specs
+
+
 mark = MARK
 boundaries = globals()["mark_boundaries"](mesh)
 wall_markers = as_list(mark["walls"])
@@ -260,8 +312,11 @@ outlet_markers = as_list(mark["outlet"])
 density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
-ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
+if callable(globals().get("build_objective_region")):
+    ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
+else:
+    ObjectiveRegion = VolumeRegion
 
 if "QUADRATURE_DEGREE" in globals():
     quadrature_degree = int(QUADRATURE_DEGREE)
@@ -310,12 +365,39 @@ if use_outlet_pressure_bc:
 else:
     root_print("Outlet BC type: velocity")
 
+pressure_outlet_component_bcs = _normalize_velocity_component_bc_specs(
+    globals().get("PRESSURE_OUTLET_COMPONENT_BCS"),
+    mark,
+)
+if pressure_outlet_component_bcs and not use_outlet_pressure_bc:
+    raise ValueError("PRESSURE_OUTLET_COMPONENT_BCS require OUTLET_BC_TYPE = 'pressure'.")
+if pressure_outlet_component_bcs:
+    root_print(
+        "Pressure-outlet velocity component BCs: {}".format(
+            ", ".join(
+                "marker {} -> u[{}] = {}".format(
+                    spec["marker"], spec["component"], spec["value"]
+                )
+                for spec in pressure_outlet_component_bcs
+            )
+        )
+    )
+
 bcu_walls = [DirichletBC(StateSpace.sub(STATE_VEL_IDX), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(StateSpace.sub(STATE_VEL_IDX), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
 bcu_outlet = (
     [DirichletBC(StateSpace.sub(STATE_VEL_IDX), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
     if use_outlet_velocity_bc else []
 )
+bcu_pressure_outlet_components = [
+    DirichletBC(
+        StateSpace.sub(STATE_VEL_IDX).sub(spec["component"]),
+        spec["value"],
+        boundaries,
+        spec["marker"],
+    )
+    for spec in pressure_outlet_component_bcs
+]
 bcp_outlet = (
     [DirichletBC(StateSpace.sub(STATE_P_IDX), outlet_pressure_value, boundaries, m) for m in outlet_markers]
     if use_outlet_pressure_bc else []
@@ -341,6 +423,15 @@ else:
     )
     if use_outlet_velocity_bc:
         bc_state_adj += [DirichletBC(StateSpaceAdj.sub(STATE_VEL_IDX), u_noslip, boundaries, m) for m in outlet_markers]
+    bc_state_adj += [
+        DirichletBC(
+            StateSpaceAdj.sub(STATE_VEL_IDX).sub(spec["component"]),
+            Constant(0.0),
+            boundaries,
+            spec["marker"],
+        )
+        for spec in pressure_outlet_component_bcs
+    ]
 if use_outlet_pressure_bc:
     bc_state_adj += [DirichletBC(StateSpaceAdj.sub(STATE_P_IDX), Constant(0.0), boundaries, m) for m in outlet_markers]
 if use_pressure_pin:
@@ -588,7 +679,16 @@ else:
         prefer_pseudo_time=sa_wall_prefer_pseudo_time,
     )
 
-bc_state = bcu_walls + bcu_inlet + bcu_outlet + bcp_outlet + bcp_pin + bcn_turbulence_state + bcg_state
+bc_state = (
+    bcu_walls
+    + bcu_inlet
+    + bcu_outlet
+    + bcu_pressure_outlet_components
+    + bcp_outlet
+    + bcp_pin
+    + bcn_turbulence_state
+    + bcg_state
+)
 bc_state_adj += bcn_turbulence_adj + bcg_adj
 
 
@@ -695,6 +795,15 @@ bcu_outlet_warm = (
     [DirichletBC(FlowWarmSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
     if use_outlet_velocity_bc else []
 )
+bcu_pressure_outlet_components_warm = [
+    DirichletBC(
+        FlowWarmSpace.sub(0).sub(spec["component"]),
+        spec["value"],
+        boundaries,
+        spec["marker"],
+    )
+    for spec in pressure_outlet_component_bcs
+]
 bcp_outlet_warm = (
     [DirichletBC(FlowWarmSpace.sub(1), outlet_pressure_value, boundaries, m) for m in outlet_markers]
     if use_outlet_pressure_bc else []
@@ -706,7 +815,14 @@ bcp_pin_warm = (
     )]
     if use_pressure_pin else []
 )
-bc_warm = bcu_walls_warm + bcu_inlet_warm + bcu_outlet_warm + bcp_outlet_warm + bcp_pin_warm
+bc_warm = (
+    bcu_walls_warm
+    + bcu_inlet_warm
+    + bcu_outlet_warm
+    + bcu_pressure_outlet_components_warm
+    + bcp_outlet_warm
+    + bcp_pin_warm
+)
 sa_warm_trial = TrialFunction(TurbulenceSpace)
 sa_warm_test = TestFunction(TurbulenceSpace)
 sa_warm_previous = Function(TurbulenceSpace)
@@ -822,6 +938,8 @@ def solve_state_once(
     rtol_override=None,
     atol_override=None,
     accept_function_norm_override=None,
+    accept_nonconverged_override=None,
+    accept_residual_growth_override=None,
 ):
     def constrained_state_residual_norm(state_function):
         residual_vector = assemble(state_residual_form)
@@ -875,11 +993,7 @@ def solve_state_once(
         if max_iters_override is None
         else max_iters_override
     )
-    solver_state.parameters["snes_solver"]["error_on_nonconvergence"] = True
     initial_residual_norm = constrained_state_residual_norm(w_state)
-    solver_state.solve()
-
-    residual_norm = constrained_state_residual_norm(w_state)
     accepted_function_norm = (
         max(current_atol, current_rtol * max(initial_residual_norm, 1.0e-16))
         if accept_function_norm_override is None
@@ -890,6 +1004,33 @@ def solve_state_once(
         float(get_state_option("STATE_ACCEPTED_RESIDUAL_FACTOR", "FULL_STATE_ACCEPTED_RESIDUAL_FACTOR", 2.0)),
     )
     accepted_function_norm_limit = accepted_function_norm * accepted_function_norm_factor
+    if accept_residual_growth_override is not None:
+        accepted_function_norm_limit = max(
+            accepted_function_norm_limit,
+            float(accept_residual_growth_override) * initial_residual_norm,
+        )
+    accept_nonconverged = bool(
+        get_state_option(
+            "STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM",
+            "FULL_STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM",
+            True,
+        )
+        if accept_nonconverged_override is None
+        else accept_nonconverged_override
+    )
+    error_on_nonconvergence = bool(
+        get_state_option("STATE_ERROR_ON_NONCONVERGENCE", "FULL_STATE_ERROR_ON_NONCONVERGENCE", True)
+    )
+    if accept_function_norm_override is not None and accept_nonconverged:
+        error_on_nonconvergence = False
+    solver_state.parameters["snes_solver"]["error_on_nonconvergence"] = error_on_nonconvergence
+
+    solve_result = solver_state.solve()
+    solver_converged = True
+    if isinstance(solve_result, tuple) and len(solve_result) >= 2:
+        solver_converged = bool(solve_result[1])
+
+    residual_norm = constrained_state_residual_norm(w_state)
     if not np.isfinite(residual_norm):
         raise RuntimeError("Accepted SNES iterate produced a non-finite state residual norm.")
     if residual_norm > accepted_function_norm_limit:
@@ -900,6 +1041,13 @@ def solve_state_once(
                 accepted_function_norm_limit,
                 accepted_function_norm,
                 accepted_function_norm_factor,
+            )
+        )
+    if not solver_converged:
+        solver_log(
+            "    [SNES] accepted nonconverged continuation iterate with residual {:.2e} <= {:.2e}".format(
+                residual_norm,
+                accepted_function_norm_limit,
             )
         )
     return residual_norm
@@ -965,12 +1113,15 @@ def describe_state_snes_attempt(attempt):
 def build_state_turbulence_coupling_schedule():
     configured_schedule = get_state_option("STATE_TURBULENCE_COUPLING_SCHEDULE", "FULL_STATE_TURBULENCE_COUPLING_SCHEDULE", None)
     if configured_schedule is None:
-        return [{"weight": 1.0}]
+        return [{"weight": 1.0, "convection_weight": 1.0}]
 
     if isinstance(configured_schedule, np.ndarray):
         configured_schedule = configured_schedule.tolist()
     elif not isinstance(configured_schedule, (list, tuple)):
         configured_schedule = [configured_schedule]
+
+    def unit_interval(value):
+        return min(max(float(value), 0.0), 1.0)
 
     schedule = []
     for step_idx, raw_step in enumerate(configured_schedule, start=1):
@@ -985,7 +1136,13 @@ def build_state_turbulence_coupling_schedule():
                         step_idx
                     )
                 )
-            step = {"weight": min(max(float(raw_weight), 0.0), 1.0)}
+            step = {"weight": unit_interval(raw_weight), "convection_weight": 1.0}
+            if "convection_weight" in raw_step:
+                step["convection_weight"] = unit_interval(raw_step["convection_weight"])
+            elif "convective_weight" in raw_step:
+                step["convection_weight"] = unit_interval(raw_step["convective_weight"])
+            elif "inertia_weight" in raw_step:
+                step["convection_weight"] = unit_interval(raw_step["inertia_weight"])
             for key in ("method", "line_search"):
                 if key in raw_step:
                     step[key] = str(raw_step[key])
@@ -996,16 +1153,29 @@ def build_state_turbulence_coupling_schedule():
                 step["max_iters"] = int(raw_step["max_iters"])
             if "accept_norm" in raw_step:
                 step["accept_norm"] = float(raw_step["accept_norm"])
+            if "accept_growth" in raw_step:
+                step["accept_growth"] = max(1.0, float(raw_step["accept_growth"]))
+            elif "accept_residual_growth" in raw_step:
+                step["accept_growth"] = max(1.0, float(raw_step["accept_residual_growth"]))
+            if "accept_nonconverged" in raw_step:
+                step["accept_nonconverged"] = bool(raw_step["accept_nonconverged"])
         else:
-            step = {"weight": min(max(float(raw_step), 0.0), 1.0)}
+            step = {"weight": unit_interval(raw_step), "convection_weight": 1.0}
 
-        if not schedule or abs(step["weight"] - schedule[-1]["weight"]) > 1.0e-12:
+        if (
+            not schedule
+            or abs(step["weight"] - schedule[-1]["weight"]) > 1.0e-12
+            or abs(step["convection_weight"] - schedule[-1]["convection_weight"]) > 1.0e-12
+        ):
             schedule.append(step)
 
     if not schedule:
-        schedule = [{"weight": 1.0}]
-    if abs(schedule[-1]["weight"] - 1.0) > 1.0e-12:
-        schedule.append({"weight": 1.0})
+        schedule = [{"weight": 1.0, "convection_weight": 1.0}]
+    if (
+        abs(schedule[-1]["weight"] - 1.0) > 1.0e-12
+        or abs(schedule[-1]["convection_weight"] - 1.0) > 1.0e-12
+    ):
+        schedule.append({"weight": 1.0, "convection_weight": 1.0})
     return schedule
 
 
@@ -1013,7 +1183,9 @@ def solve_state_attempt(attempt, coupling_schedule):
     total_coupling_steps = len(coupling_schedule)
     for coupling_idx, coupling_step in enumerate(coupling_schedule, start=1):
         coupling_weight = coupling_step["weight"]
+        convection_weight = coupling_step["convection_weight"]
         state_turbulence_coupling_weight.assign(float(coupling_weight))
+        state_convection_coupling_weight.assign(float(convection_weight))
         step_attempt = dict(attempt)
         for key in ("method", "line_search", "rtol", "atol", "max_iters"):
             if key in coupling_step:
@@ -1026,12 +1198,15 @@ def solve_state_attempt(attempt, coupling_schedule):
                 step_details.append("atol={:.1e}".format(step_attempt["atol"]))
             if "accept_norm" in coupling_step:
                 step_details.append("accept={:.1e}".format(coupling_step["accept_norm"]))
+            if "accept_growth" in coupling_step:
+                step_details.append("growth<={:.2f}".format(coupling_step["accept_growth"]))
             if "rtol" in coupling_step:
                 step_details.append("rtol={:.1e}".format(step_attempt["rtol"]))
             root_print(
-                "    State turbulence coupling step {}/{}: gamma = {:.2f}{}".format(
+                "    State continuation step {}/{}: convection = {:.2f}, turbulence = {:.2f}{}".format(
                     coupling_idx,
                     total_coupling_steps,
+                    convection_weight,
                     coupling_weight,
                     "" if not step_details else " ({})".format(", ".join(step_details)),
                 )
@@ -1043,6 +1218,8 @@ def solve_state_attempt(attempt, coupling_schedule):
             rtol_override=step_attempt["rtol"],
             atol_override=step_attempt["atol"],
             accept_function_norm_override=coupling_step.get("accept_norm"),
+            accept_nonconverged_override=coupling_step.get("accept_nonconverged"),
+            accept_residual_growth_override=coupling_step.get("accept_growth"),
         )
 
 
@@ -1081,12 +1258,14 @@ def solve_state_with_recovery():
             try:
                 solve_state_attempt(attempt, coupling_schedule)
                 state_turbulence_coupling_weight.assign(1.0)
+                state_convection_coupling_weight.assign(1.0)
                 return
             except RuntimeError:
                 if attempt_idx == len(recovery_attempts) - 1:
                     raise
     finally:
         state_turbulence_coupling_weight.assign(1.0)
+        state_convection_coupling_weight.assign(1.0)
 
 
 # ===============================================================
@@ -1224,12 +1403,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             )
         )
 
-        # --- Filtering and wall distance ---
+        # --- Filtering and external wall-distance update ---
         solver_log("  [Filter] design density")
         rho_f = pde_filter(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-        solver_log("  [Wall distance] update")
-        update_wall_distance_field()
+        if not FULL_STATE_INCLUDE_G:
+            solver_log("  [Wall distance] update")
+            update_wall_distance_field()
 
         rho_out << rho
         rhop_out << rho_proj_plot

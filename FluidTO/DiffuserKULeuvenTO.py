@@ -1,6 +1,10 @@
+import os
+from Runtime_Setup import configure_writable_runtime_environment
+
+configure_writable_runtime_environment(base_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime"))
+
 from dolfin import *
 import numpy as np
-import os
 import shutil
 from time import strftime, localtime
 try:

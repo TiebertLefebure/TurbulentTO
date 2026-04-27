@@ -2,7 +2,7 @@ import os
 
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 
-from Utilities_SharedTO import load_mesh_from_xdmf
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
 # ===================================================================
@@ -17,11 +17,22 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
     "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_guided.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_guided.xdmf"),
 }
+
+DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
+
+
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files["CELL_DIRECTORY"],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
 
 
 L = 1.0
@@ -57,6 +68,10 @@ REYNOLDS_NUMBER = 5000.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
+
+# ==============================================================================================
+# Reynolds number: Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
+# ==============================================================================================
 
 SA_TURBULENCE_INTENSITY = 0.075
 SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.05
@@ -95,7 +110,7 @@ FORWARD_IPCS_VEL_RELAXATION = 0.12
 FORWARD_IPCS_P_RELAXATION = 0.04
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER = "cg"
+FORWARD_IPCS_P_SOLVER = "bicgstab"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_MAX_RESTARTS = 5
@@ -153,30 +168,6 @@ def mark_boundaries(mesh):
     InletBoundary().mark(boundaries, MARK["inlet"])
     OutletBoundary().mark(boundaries, MARK["outlet"])
     return boundaries
-
-
-def build_density_bounds(mesh, density_space):
-    non_design_fluid_lower = Expression(
-        "(x[0] < x_min) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-    )
-    return non_design_fluid_lower, 1.0
-
-
-def build_volume_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max && x[1] >= y_min && x[1] <= y_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-        y_min=DESIGN_Y_MIN,
-        y_max=DESIGN_Y_MAX,
-    )
-
-
-def build_objective_region(mesh, density_space):
-    return build_volume_region(mesh, density_space)
 
 
 def build_velocity_profile_sets():

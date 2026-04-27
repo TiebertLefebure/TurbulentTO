@@ -193,6 +193,10 @@ def build_volume_region(mesh, density_space):
     )
 
 
+def build_objective_region(mesh, density_space):
+    return build_volume_region(mesh, density_space)
+
+
 def build_velocity_profile_sets():
     u_inlet = Expression(
         ("u_max", "0.0"),

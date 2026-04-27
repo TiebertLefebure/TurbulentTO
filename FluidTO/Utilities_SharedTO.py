@@ -9,7 +9,7 @@ import sys
 import tempfile
 from time import localtime, strftime
 
-from dolfin import File, MPI, Mesh, XDMFFile
+from dolfin import File, Function, MPI, Mesh, MeshValueCollection, XDMFFile, cells, cpp
 
 
 def _resolve_config_path_candidates(raw_config_arg):
@@ -139,7 +139,8 @@ def eddy_viscosity_ratio_from_turbulence_intensity(
     which gives:
         nu_t / nu = C_mu^(1/4) * sqrt(3/2) * I * U * ell / nu
 
-    If reynolds_number is supplied, length_scale_ratio is interpreted as ell/L.
+    If reynolds_number is supplied, length_scale_ratio is interpreted as ell/L_ref,
+    where ell is the inlet turbulence length scale.
     Otherwise reference_velocity and length_scale are used directly.
     """
     intensity = float(intensity)
@@ -290,10 +291,14 @@ def build_sa_inlet_nu_tilde_targets(config_values, inlet_count, nu_lam, nu_tilde
 
         nu_tilde_targets = [nu_tilde_from_ratio(ratio, nu_lam) for ratio in ratio_targets]
         if length_scales is not None:
-            length_text = "ell = {}".format(_format_numeric_values(length_scales))
+            length_text = "turbulence length scale ell = {}".format(
+                _format_numeric_values(length_scales)
+            )
         else:
-            length_text = "ell/L = {}".format(_format_numeric_values(length_scale_ratios))
-        description = "I = {}, {}, inferred nu_t/nu_lam = {}".format(
+            length_text = "turbulence length scale ratio ell/L_ref = {} (ell = inlet turbulence length scale)".format(
+                _format_numeric_values(length_scale_ratios)
+            )
+        description = "turbulence intensity I = {}, {}, inferred eddy-viscosity ratio nu_t/nu_lam = {}".format(
             _format_numeric_values(intensities),
             length_text,
             _format_numeric_values(ratio_targets),
@@ -324,6 +329,30 @@ def create_design_mesh_from_config(config_values):
     )
 
 
+def _copy_xdmf_with_hdf_sidecars_to_temp(xdmf_path):
+    """Copy an XDMF file and its HDF5 sidecars to a local temp directory."""
+    tmp_dir = tempfile.mkdtemp(prefix="fenics_xdmf_", dir=tempfile.gettempdir())
+    tmp_xdmf_path = os.path.join(tmp_dir, os.path.basename(xdmf_path))
+
+    xdmf_dir = os.path.dirname(xdmf_path)
+    shutil.copy2(xdmf_path, tmp_xdmf_path)
+
+    with open(tmp_xdmf_path, "r", encoding="utf-8") as handle:
+        xdmf_text = handle.read()
+
+    h5_refs = sorted(set(re.findall(r">([^<>]+\\.h5):/", xdmf_text)))
+    if not h5_refs:
+        h5_refs = sorted(
+            fname for fname in os.listdir(xdmf_dir)
+            if fname.endswith(".h5")
+        )
+
+    for h5_name in h5_refs:
+        shutil.copy2(os.path.join(xdmf_dir, h5_name), os.path.join(tmp_dir, h5_name))
+
+    return tmp_xdmf_path
+
+
 def load_mesh_from_xdmf(mesh_xdmf_path, comm=MPI.comm_world):
     mesh = Mesh()
     try:
@@ -333,37 +362,158 @@ def load_mesh_from_xdmf(mesh_xdmf_path, comm=MPI.comm_world):
     except Exception as err:
         if MPI.rank(comm) == 0:
             print(
-                "Warning: direct XDMF/HDF5 mesh read failed for {}. Retrying from /tmp.".format(
+                "Warning: direct XDMF/HDF5 mesh read failed for {}. Retrying from the local temp directory.".format(
                     mesh_xdmf_path
                 )
             )
             print("  Original read error: {}".format(err))
 
-        tmp_dir = tempfile.mkdtemp(prefix="fenics_xdmf_", dir="/tmp")
-        tmp_xdmf_path = os.path.join(tmp_dir, os.path.basename(mesh_xdmf_path))
-
-        xdmf_dir = os.path.dirname(mesh_xdmf_path)
-        shutil.copy2(mesh_xdmf_path, tmp_xdmf_path)
-
-        # Read the local tmp copy, not the mounted source file, to discover HDF
-        # sidecars without re-triggering shared-folder IO issues.
-        with open(tmp_xdmf_path, "r", encoding="utf-8") as handle:
-            xdmf_text = handle.read()
-
-        h5_refs = sorted(set(re.findall(r">([^<>]+\\.h5):/", xdmf_text)))
-        if not h5_refs:
-            h5_refs = sorted(
-                fname for fname in os.listdir(xdmf_dir)
-                if fname.endswith(".h5")
-            )
-
-        for h5_name in h5_refs:
-            shutil.copy2(os.path.join(xdmf_dir, h5_name), os.path.join(tmp_dir, h5_name))
-
+        tmp_xdmf_path = _copy_xdmf_with_hdf_sidecars_to_temp(mesh_xdmf_path)
         mesh_retry = Mesh()
         with XDMFFile(comm, tmp_xdmf_path) as xf:
             xf.read(mesh_retry)
         return mesh_retry
+
+
+def load_cell_markers_from_xdmf(
+    cell_xdmf_path,
+    mesh,
+    comm=MPI.comm_world,
+    attribute_names=("name_to_read", "cell_tags"),
+):
+    """Read cell-wise integer markers from XDMF into a MeshFunction."""
+
+    def _read_marker_function(xdmf_path):
+        read_errors = []
+        for attribute_name in as_list(attribute_names):
+            mvc = MeshValueCollection("size_t", mesh, mesh.topology().dim())
+            try:
+                with XDMFFile(comm, xdmf_path) as xf:
+                    xf.read(mvc, attribute_name)
+                return cpp.mesh.MeshFunctionSizet(mesh, mvc)
+            except Exception as err:
+                read_errors.append("{}: {}".format(attribute_name, err))
+        raise RuntimeError(
+            "Unable to read cell markers from {} using attributes [{}]. Errors: {}".format(
+                xdmf_path,
+                ", ".join(str(name) for name in as_list(attribute_names)),
+                "; ".join(read_errors),
+            )
+        )
+
+    try:
+        return _read_marker_function(cell_xdmf_path)
+    except Exception as err:
+        if MPI.rank(comm) == 0:
+            print(
+                "Warning: direct XDMF/HDF5 cell-marker read failed for {}. "
+                "Retrying from the local temp directory.".format(cell_xdmf_path)
+            )
+            print("  Original read error: {}".format(err))
+
+        tmp_xdmf_path = _copy_xdmf_with_hdf_sidecars_to_temp(cell_xdmf_path)
+        return _read_marker_function(tmp_xdmf_path)
+
+
+def build_cell_tag_restriction_functions(
+    cell_xdmf_path,
+    design_tags,
+    non_design_fluid_tags=(),
+    non_design_solid_tags=(),
+    attribute_names=("name_to_read", "cell_tags"),
+):
+    """Return config callbacks that derive DG0 bounds and regions from cell tags."""
+    design_tag_set = {int(tag) for tag in as_list(design_tags)}
+    non_design_fluid_tag_set = {int(tag) for tag in as_list(non_design_fluid_tags)}
+    non_design_solid_tag_set = {int(tag) for tag in as_list(non_design_solid_tags)}
+
+    overlaps = (
+        design_tag_set & non_design_fluid_tag_set
+        or design_tag_set & non_design_solid_tag_set
+        or non_design_fluid_tag_set & non_design_solid_tag_set
+    )
+    if overlaps:
+        raise ValueError(
+            "Cell-tag restriction sets must be disjoint, got overlap {}.".format(
+                sorted(overlaps)
+            )
+        )
+
+    cache = {}
+
+    def _build_restrictions(mesh, density_space):
+        cache_key = (id(mesh), id(density_space))
+        if cache_key in cache:
+            return cache[cache_key]
+
+        marker_function = load_cell_markers_from_xdmf(
+            cell_xdmf_path,
+            mesh,
+            comm=mesh.mpi_comm(),
+            attribute_names=attribute_names,
+        )
+        marker_values = marker_function.array()
+        dofmap = density_space.dofmap()
+
+        lower_bound = Function(density_space)
+        upper_bound = Function(density_space)
+        design_region = Function(density_space)
+
+        lower_values = [0.0] * density_space.dim()
+        upper_values = [1.0] * density_space.dim()
+        region_values = [0.0] * density_space.dim()
+
+        for cell in cells(mesh):
+            cell_dofs = dofmap.cell_dofs(cell.index())
+            if len(cell_dofs) != 1:
+                raise ValueError(
+                    "Cell-tag restrictions require one DG0 degree of freedom per cell."
+                )
+
+            dof = int(cell_dofs[0])
+            tag = int(marker_values[cell.index()])
+
+            if tag in design_tag_set:
+                region_values[dof] = 1.0
+            elif tag in non_design_fluid_tag_set:
+                lower_values[dof] = 1.0
+                upper_values[dof] = 1.0
+            elif tag in non_design_solid_tag_set:
+                lower_values[dof] = 0.0
+                upper_values[dof] = 0.0
+            else:
+                raise ValueError(
+                    "Encountered unexpected cell tag {} in {}. "
+                    "Update the config tag mapping before running the optimization.".format(
+                        tag, cell_xdmf_path
+                    )
+                )
+
+        lower_bound.vector().set_local(lower_values)
+        lower_bound.vector().apply("insert")
+        upper_bound.vector().set_local(upper_values)
+        upper_bound.vector().apply("insert")
+        design_region.vector().set_local(region_values)
+        design_region.vector().apply("insert")
+
+        cache[cache_key] = {
+            "lower_bound": lower_bound,
+            "upper_bound": upper_bound,
+            "design_region": design_region,
+        }
+        return cache[cache_key]
+
+    def _build_density_bounds(mesh, density_space):
+        restriction_data = _build_restrictions(mesh, density_space)
+        return restriction_data["lower_bound"], restriction_data["upper_bound"]
+
+    def _build_volume_region(mesh, density_space):
+        return _build_restrictions(mesh, density_space)["design_region"]
+
+    def _build_objective_region(mesh, density_space):
+        return _build_restrictions(mesh, density_space)["design_region"]
+
+    return _build_density_bounds, _build_volume_region, _build_objective_region
 
 
 def ensure_clean_dir(path, comm=MPI.comm_world):
@@ -399,16 +549,19 @@ def reset_vtk_series(output_path, comm=MPI.comm_world):
 
 
 class ResilientVTKFile:
-    """Try a shared-path VTK write first, then fall back to a local /tmp path."""
+    """Try a shared-path VTK write first, then fall back to a local temp path."""
 
     def __init__(self, output_path, comm=MPI.comm_world, scratch_root=None):
         self._comm = comm
         self._primary_path = reset_vtk_series(output_path, comm)
-        self._scratch_root = scratch_root or os.path.join("/tmp", "fenics_vtk_outputs")
+        self._scratch_root = scratch_root or os.path.join(
+            tempfile.gettempdir(), "fenics_vtk_outputs"
+        )
         self._active_path = self._primary_path
         self._file = File(self._active_path)
         self._using_fallback = False
         self._disabled = False
+        self._mirror_disabled = False
 
     def _build_fallback_path(self):
         relative_path = self._primary_path.lstrip(os.sep)
@@ -438,11 +591,49 @@ class ResilientVTKFile:
             )
             print("  Final VTK write error: {}".format(write_error))
 
+    def _mirror_fallback_to_primary(self):
+        if (not self._using_fallback) or self._mirror_disabled:
+            return
+
+        MPI.barrier(self._comm)
+        if MPI.rank(self._comm) != 0:
+            MPI.barrier(self._comm)
+            return
+
+        try:
+            primary_dir = os.path.dirname(self._primary_path)
+            if primary_dir:
+                os.makedirs(primary_dir, exist_ok=True)
+
+            active_base, extension = os.path.splitext(self._active_path)
+            files_to_copy = []
+            if os.path.exists(self._active_path):
+                files_to_copy.append(self._active_path)
+            if extension == ".pvd":
+                for pattern in (active_base + "*.vtu", active_base + "*.pvtu"):
+                    files_to_copy.extend(glob.glob(pattern))
+
+            for source_path in files_to_copy:
+                destination_path = os.path.join(primary_dir, os.path.basename(source_path))
+                shutil.copy2(source_path, destination_path)
+        except OSError as err:
+            self._mirror_disabled = True
+            print(
+                "Warning: fallback VTK output was written to {}, but mirroring it back to {} failed.".format(
+                    self._active_path,
+                    self._primary_path,
+                )
+            )
+            print("  Mirror error: {}".format(err))
+        finally:
+            MPI.barrier(self._comm)
+
     def __lshift__(self, other):
         if self._disabled:
             return self
         try:
             self._file << other
+            self._mirror_fallback_to_primary()
         except RuntimeError as err:
             if self._using_fallback:
                 self._disable_writes(err)
@@ -450,6 +641,7 @@ class ResilientVTKFile:
             self._switch_to_fallback(err)
             try:
                 self._file << other
+                self._mirror_fallback_to_primary()
             except RuntimeError as fallback_err:
                 self._disable_writes(fallback_err)
         return self

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from dolfin import DOLFIN_EPS, Expression, Function, MeshFunction, MPI, SubDomain, cells, near
-from Utilities_SharedTO import load_mesh_from_xdmf
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
 # ===================================================================
@@ -16,11 +16,22 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/mesh_guided.xdmf'),
+    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/cell_guided.xdmf'),
 }
+
+DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
+
+
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files["CELL_DIRECTORY"],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
 
 
 # Geometry and reference meshing parameters.
@@ -109,22 +120,23 @@ TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
 # IPCS forward solver parameters:
 FORWARD_IPCS_DT                 = 3.13e-6
-FORWARD_IPCS_MAX_ITERS          = 400
+FORWARD_IPCS_MAX_ITERS          = 600
 FORWARD_IPCS_VELOCITY_RTOL      = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL      = 2.0e-3
 FORWARD_IPCS_LOG_EVERY          = 50
 FORWARD_IPCS_VEL_RELAXATION     = 0.07
-FORWARD_IPCS_P_RELAXATION       = 0.12
-FORWARD_IPCS_MAX_RESTARTS       = 2
+FORWARD_IPCS_P_RELAXATION       = 0.07
+FORWARD_IPCS_MAX_RESTARTS       = 4
 FORWARD_IPCS_VEL_SOLVER         = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER           = "cg"
+FORWARD_IPCS_P_SOLVER           = "bicgstab"
 FORWARD_IPCS_P_PRECONDITIONER   = "ilu"
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
-FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.85
-# Keep the Picard-3 comparison on the same strict IPCS residual targets. The
-# extra adaptive backoff usually resolves near misses without loosening du/dp.
-FORWARD_IPCS_ACCEPT_BEST_SCORE  = 1.00
+FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
+# The double-pipe startup often lands in a near-steady IPCS state on stage 1
+# before pressure fully meets the strict target; accept that best iterate and
+# let later Picard/continuation updates settle the field instead of aborting.
+FORWARD_IPCS_ACCEPT_BEST_SCORE  = 2.5
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]  # initial projection sharpness (updated per stage)
@@ -254,31 +266,3 @@ def build_velocity_profile_sets():
         for u_max in U_MAX_OUTLETS
     ]
     return inlet_profiles, outlet_profiles
-
-
-def build_density_bounds(mesh, density_space):
-    non_design_fluid_lower = Expression(
-        "(x[0] < x_min || x[0] > x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-    return non_design_fluid_lower, 1.0
-
-
-def build_volume_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-
-
-def build_objective_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )

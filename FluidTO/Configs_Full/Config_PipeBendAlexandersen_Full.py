@@ -6,11 +6,11 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 
 
 # ===================================================================
-# Configuration: Alexandersen 2026 Pipe-Bend - Turbulent Frozen (SA)
+# Configuration: Alexandersen 2026 Pipe-Bend - Turbulent Full (SA)
 #
 # Geometry, mesh size, and boundary conditions follow Figure 10 and
 # Table 3 of Bayat, Li, and Alexandersen (2026), while the turbulence
-# closure remains the in-house frozen Spalart-Allmaras implementation.
+# closure remains the in-house Full Spalart-Allmaras implementation.
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -86,32 +86,47 @@ BETA_PROJ_SCHEDULE = [0.10, 0.25, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 70, 80, 90, 90, 90, 100, 100, 100]
 
 LINEAR_SOLVER = "mumps"
-PICARD_STEPS = 3
-TURBULENCE_RELAXATION = 0.30
-
-FORWARD_IPCS_DT = 1.0e-5
-FORWARD_IPCS_MAX_ITERS = 250
-FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
-FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_VEL_RELAXATION = 0.15
-FORWARD_IPCS_P_RELAXATION = 0.05
-FORWARD_IPCS_VEL_SOLVER = "bicgstab"
-FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
-FORWARD_IPCS_P_SOLVER = "bicgstab"
-FORWARD_IPCS_P_PRECONDITIONER = "ilu"
-FORWARD_IPCS_LOG_EVERY = 50
-FORWARD_IPCS_MAX_RESTARTS = 4
-FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
-FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-# The Alexandersen pipe bend can reach a near-steady IPCS state in the early
-# pressure-outlet Picard solves before the relative pressure update meets the
-# strict target. Accept that best iterate so the frozen SA outer loop can keep
-# settling the field instead of aborting the optimization.
-FORWARD_IPCS_ACCEPT_BEST_SCORE = 6.0
+STATE_SOLVE_METHOD = "newtonls"
+STATE_LINE_SEARCH = "bt"
+STATE_RTOL = 1.0e-6
+STATE_ATOL = 1.0e-8
+STATE_MAX_ITERS = 180
+STATE_ERROR_ON_NONCONVERGENCE = False
+STATE_ACCEPTED_RESIDUAL_FACTOR = 1.0
+STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+STATE_INITIAL_SA_SWEEPS = 8
+STATE_INITIAL_SA_RELAXATION = 0.35
+STATE_TURBULENCE_COUPLING_SCHEDULE = [
+    {"convection_weight": 0.00, "weight": 0.00, "max_iters": 180, "atol": 3.0e-4, "accept_norm": 1.0e-1},
+    {"convection_weight": 0.20, "weight": 0.00, "max_iters": 200, "atol": 2.5e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 0.45, "weight": 0.00, "max_iters": 220, "atol": 2.0e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 0.70, "weight": 0.20, "max_iters": 240, "atol": 2.0e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 0.90, "weight": 0.45, "max_iters": 260, "atol": 1.5e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 1.00, "weight": 0.70, "max_iters": 280, "atol": 1.2e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 1.00, "weight": 0.90, "max_iters": 300, "atol": 1.0e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 340, "atol": 1.0e-4},
+]
+STATE_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 260,
+        "restart_with_stokes": False,
+    },
+    {
+        "label": "Stokes rebuild line-search retry",
+        "method": "newtonls",
+        "line_search": "bt",
+        "max_iters": 320,
+        "restart_with_stokes": True,
+    },
+]
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
+FILTER_BASE_LENGTH = H_MAX
 FILTER_RADIUS_IN_CELLS = 3.0
 
 OUTLET_BC_TYPE = "pressure"
@@ -121,7 +136,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendAlexandersen_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME = "Results_Full/Results_PipeBendAlexandersen_TurbulentTO_Full"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 
