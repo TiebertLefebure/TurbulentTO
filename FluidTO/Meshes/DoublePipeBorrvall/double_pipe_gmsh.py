@@ -8,13 +8,13 @@ L_Y = 1.0
 
 # Port layout (must match Config_DoublePipeBorrvall_Laminar.py)
 PORT_WIDTH         = 1.0 / 6.0
-PORT_TOP_MARGIN    = 1.0 / 4.0
-PORT_BOTTOM_MARGIN = 1.0 / 4.0
+PORT_TOP_MARGIN    = 1.0 / 6.0
+PORT_BOTTOM_MARGIN = 1.0 / 6.0
 
-TOP_PORT_Y_MAX    = L_Y - PORT_TOP_MARGIN            # 0.75
-TOP_PORT_Y_MIN    = TOP_PORT_Y_MAX - PORT_WIDTH       # 7/12
-BOTTOM_PORT_Y_MIN = PORT_BOTTOM_MARGIN                # 0.25
-BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_WIDTH    # 5/12
+TOP_PORT_Y_MAX    = L_Y - PORT_TOP_MARGIN            # 5/6
+TOP_PORT_Y_MIN    = TOP_PORT_Y_MAX - PORT_WIDTH       # 4/6
+BOTTOM_PORT_Y_MIN = PORT_BOTTOM_MARGIN                # 1/6
+BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_WIDTH    # 2/6
 
 # Uniform mesh size matched to NX=150, NY=100 in the config
 LC = min(L_X / 150.0, L_Y / 100.0) # LC = 0.01 m

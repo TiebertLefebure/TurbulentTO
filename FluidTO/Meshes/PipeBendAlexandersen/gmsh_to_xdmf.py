@@ -1,15 +1,12 @@
-import meshio
 import argparse
 import sys
-import numpy as np
 from pathlib import Path
+
+import meshio
+import numpy as np
 
 
 def convert_msh_to_xdmf(msh_file, output_prefix=""):
-    """
-    Converts a 2D Gmsh .msh file (v2.2) with 'triangle' and 'line' cells
-    into separate XDMF files for the volume mesh and facet tags.
-    """
     try:
         msh = meshio.read(msh_file)
     except FileNotFoundError:
@@ -34,7 +31,6 @@ def convert_msh_to_xdmf(msh_file, output_prefix=""):
 
     triangles = cells_dict["triangle"]
     triangle_tags = physical_tags["triangle"]
-
     volume_mesh = meshio.Mesh(
         points=points,
         cells=[("triangle", triangles)],
@@ -51,7 +47,6 @@ def convert_msh_to_xdmf(msh_file, output_prefix=""):
 
     lines = cells_dict["line"]
     line_tags = physical_tags["line"]
-
     facet_mesh = meshio.Mesh(
         points=points,
         cells=[("line", lines)],
@@ -71,7 +66,7 @@ if __name__ == "__main__":
         "msh_file",
         nargs="?",
         default="pipe_bend_2d.msh",
-        help="Path to the input .msh file (default: pipe_bend_2d.msh)"
+        help="Path to the input .msh file (default: pipe_bend_2d.msh)",
     )
     args = parser.parse_args()
     convert_msh_to_xdmf(args.msh_file)

@@ -72,7 +72,7 @@ ETA_I = 0.50
 
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "Results_DiffuserBorrvall_LaminarTO"
+RESULTS_ROOT_NAME = "Results_Laminar/Results_DiffuserBorrvall_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

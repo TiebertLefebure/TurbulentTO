@@ -5,15 +5,15 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 
 
 # ----------------------------------------------------------
-# Configuration file for Borrvall Pipe Bend case (Laminar)
+# Configuration file for Alexandersen Pipe Bend case (Laminar)
 # ----------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh files
-# Generate via: cd Meshes/PipeBendBorrvall && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
+# Generate via: cd Meshes/PipeBendAlexandersen && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendBorrvall/mesh.xdmf'),
+    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendAlexandersen/mesh.xdmf'),
 }
 
 
@@ -30,9 +30,9 @@ TOL = DOLFIN_EPS
 
 # Geometry parameters
 INLET_WIDTH = 0.2
-INLET_TOP_OFFSET = 0.2
+INLET_TOP_OFFSET = 0.1
 OUTLET_WIDTH = 0.2
-OUTLET_RIGHT_OFFSET = 0.2
+OUTLET_RIGHT_OFFSET = 0.1
 
 # Flow settings
 MU_FLUID_VALUE = 0.2
@@ -47,7 +47,7 @@ U_MAX_OUTLET = 1.0
 
 
 # Topology optimization settings
-VOL_FRAC = 0.08 * pi  # Borrvall pipe-bend benchmark volume fraction
+VOL_FRAC = 0.08 * pi  # Existing laminar benchmark volume fraction
 MAX_INNER_ITERATIONS = 80
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
@@ -71,7 +71,7 @@ ETA_I = 0.50
 
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (0.0, 0.0)
-RESULTS_ROOT_NAME = "Results_PipeBendBorrvall_LaminarTO"
+RESULTS_ROOT_NAME = "Results_Laminar/Results_PipeBendAlexandersen_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

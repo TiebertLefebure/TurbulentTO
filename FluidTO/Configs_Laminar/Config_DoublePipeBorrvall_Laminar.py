@@ -31,8 +31,8 @@ TOL = DOLFIN_EPS
 
 # Port layout on left/right boundaries
 PORT_WIDTH = 1.0 / 6.0
-PORT_TOP_MARGIN = 1.0 / 4.0
-PORT_BOTTOM_MARGIN = 1.0 / 4.0
+PORT_TOP_MARGIN = 1.0 / 6.0
+PORT_BOTTOM_MARGIN = 1.0 / 6.0
 
 TOP_PORT_Y_MAX = DOMAIN_Y_MAX - PORT_TOP_MARGIN
 TOP_PORT_Y_MIN = TOP_PORT_Y_MAX - PORT_WIDTH
@@ -85,7 +85,7 @@ ETA_I = 0.50
 
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
-RESULTS_ROOT_NAME = "Results_DoublePipeBorrvall_LaminarTO"
+RESULTS_ROOT_NAME = "Results_Laminar/Results_DoublePipeBorrvall_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 
