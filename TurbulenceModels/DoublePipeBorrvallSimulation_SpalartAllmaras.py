@@ -13,6 +13,7 @@ from Utilities import (
     save_h5_file,
     save_list,
     save_pvd_file,
+    setup_simulation_log,
     visualize_convergence,
     visualize_functions,
 )
@@ -162,6 +163,10 @@ def main():
     args = _build_parser().parse_args()
     config, config_path = _load_config_module(args.config)
     _apply_overrides(config, args)
+    setup_simulation_log(
+        {key: _resolve_path(path) for key, path in config.saving_directory.items()},
+        __file__,
+    )
     print("Using config: {}".format(config_path))
 
     if hasattr(config, "create_mesh_and_boundaries"):

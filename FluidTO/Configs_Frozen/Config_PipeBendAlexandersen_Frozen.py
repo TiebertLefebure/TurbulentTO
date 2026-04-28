@@ -67,6 +67,7 @@ SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
+SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -75,6 +76,9 @@ SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
+SA_WALL_NEWTON_RELAXATION = 0.35
+SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.35, 0.20, 0.10, 0.05, 0.02, 0.01]
+SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
 
 VOL_FRAC = 0.25
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
@@ -86,8 +90,74 @@ BETA_PROJ_SCHEDULE = [0.10, 0.25, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 70, 80, 90, 90, 90, 100, 100, 100]
 
 LINEAR_SOLVER = "mumps"
-PICARD_STEPS = 3
-TURBULENCE_RELAXATION = 0.30
+
+# FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
+# The Alexandersen pipe bend is a high-Re pressure-outlet case, so the SNES
+# solve is guarded by convection continuation and several recovery attempts.
+FORWARD_FLOW_SOLVER = "snes"
+FORWARD_SNES_METHOD = "newtonls"
+FORWARD_SNES_LINE_SEARCH = "bt"
+FORWARD_SNES_LINEAR_SOLVER = "mumps"
+FORWARD_SNES_RTOL = 1.0e-6
+FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_MAX_ITERS = 220
+FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
+FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
+FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-2
+
+FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 180, "atol": 2.0e-7, "accept_norm": 5.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.15, "max_iters": 200, "atol": 1.5e-7, "accept_norm": 4.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.35, "max_iters": 220, "atol": 1.0e-7, "accept_norm": 3.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.60, "max_iters": 240, "atol": 8.0e-8, "accept_norm": 2.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.85, "max_iters": 260, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 300, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+]
+FORWARD_SNES_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 120, "atol": 1.0e-7, "accept_norm": 2.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.30, "max_iters": 160, "atol": 8.0e-8, "accept_norm": 1.5e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.60, "max_iters": 200, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.85, "max_iters": 240, "atol": 2.5e-8, "accept_norm": 7.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 280, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+]
+FORWARD_SNES_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate l2 line-search retry",
+        "line_search": "l2",
+        "max_iters": 300,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "current-iterate trust-region retry",
+        "method": "newtontr",
+        "max_iters": 320,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "Stokes rebuild backtracking retry",
+        "line_search": "bt",
+        "max_iters": 340,
+        "restart_with_stokes": True,
+        "accept_norm": 5.0e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "Stokes rebuild l2 line-search retry",
+        "line_search": "l2",
+        "max_iters": 360,
+        "restart_with_stokes": True,
+        "accept_norm": 5.0e-4,
+        "accept_nonconverged": True,
+    },
+]
+
+PICARD_STEPS = 4
+TURBULENCE_RELAXATION = 0.20
 
 FORWARD_IPCS_DT = 1.0e-5
 FORWARD_IPCS_MAX_ITERS = 250

@@ -30,15 +30,15 @@ from Utilities_SharedTO import (
 )
 from Utilities_TurbulentTO_Frozen import (
     build_penalized_wall_distance_solver,
-    enforce_scalar_floor,
     nu_tilde_from_viscosity_ratio,
     positive_part,
 )
 
 # ====================================================================================
 # Turbulent topology optimization with a frozen-turbulence adjoint.
-# The flow is advanced with IPCS pressure correction, the SA model is updated in
-# an outer Picard loop, and the adjoint is solved only for the flow variables (u, p).
+# The flow is advanced with IPCS pressure correction or monolithic SNES, the SA
+# model is updated in an outer Picard loop, and the adjoint is solved only for
+# the flow variables (u, p).
 # The continuation schedule gradually sharpens the design while reducing MMA moves.
 # ====================================================================================
 
@@ -95,6 +95,7 @@ brinkman_solid_length = float(globals().get("BRINKMAN_SOLID_LENGTH", 0.01))
 alpha_fluid = Constant(float(globals().get("ALPHA_FLUID", 2.5 * MU_FLUID_VALUE / brinkman_fluid_length**2.0)))
 alpha_solid = Constant(float(globals().get("ALPHA_SOLID", 2.5 * MU_FLUID_VALUE / brinkman_solid_length**2.0)))
 q_penal = Constant(0.1)  # updated each continuation stage
+forward_convection_coupling_weight = Constant(float(globals().get("FORWARD_SNES_CONVECTION_WEIGHT", 1.0)))
 
 
 def projection(rho_design, eta_proj):
@@ -139,7 +140,7 @@ def build_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx, frozen_
     """Build the flow weak form using the frozen turbulent viscosity."""
     mu_effective = effective_dynamic_viscosity(frozen_nu_tilde)
     return (
-        rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u) * custom_dx
+        forward_convection_coupling_weight * rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u) * custom_dx
         + mu_effective * inner(grad(state_u), grad(adj_u)) * custom_dx
         + inner(grad(state_p), adj_u) * custom_dx
         + inner(div(state_u), adj_p) * custom_dx
@@ -303,6 +304,22 @@ density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
 ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
+AreaOfInterest = VolumeRegion
+
+area_of_interest_values = AreaOfInterest.vector().get_local()
+active_design_mask = (
+    (area_of_interest_values > 0.5)
+    & ((density_upper_values - density_lower_values) > 1.0e-12)
+)
+ActiveDV = np.flatnonzero(active_design_mask).astype(np.int64)
+PassiveDV = np.flatnonzero(~active_design_mask).astype(np.int64)
+if ActiveDV.size == 0:
+    raise ValueError("Active design space is empty. Check the design-region cell tags.")
+root_print(
+    "Active design space: {} active DG0 cells, {} passive/non-design cells.".format(
+        int(ActiveDV.size), int(PassiveDV.size),
+    )
+)
 
 if "QUADRATURE_DEGREE" in globals():
     quadrature_degree = int(QUADRATURE_DEGREE)
@@ -551,6 +568,17 @@ def enforce_density_bounds_inplace(density_field):
     density_field.vector().apply("insert")
     return density_field
 
+
+def enforce_scalar_bounds_inplace(scalar_field, floor_value=None, ceiling_value=None):
+    values = scalar_field.vector().get_local()
+    if floor_value is not None:
+        values = np.maximum(values, float(floor_value))
+    if ceiling_value is not None:
+        values = np.minimum(values, float(ceiling_value))
+    scalar_field.vector().set_local(values)
+    scalar_field.vector().apply("insert")
+    return scalar_field
+
 # ---------------------------------------------------------------
 # SA model setup.
 # ---------------------------------------------------------------
@@ -608,6 +636,19 @@ else:
 )
 # Initial SA field.
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", _sa_nu_tilde_initial_default))
+sa_nu_tilde_floor = float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12))
+sa_nu_tilde_ceiling = globals().get("SA_NU_TILDE_CEILING", None)
+if "SA_EDDY_VISCOSITY_RATIO_CEILING" in globals():
+    sa_nu_tilde_ceiling = (
+        float(globals()["SA_EDDY_VISCOSITY_RATIO_CEILING"])
+        * float(MU_FLUID_VALUE)
+        / float(RHO_FLUID_VALUE)
+    )
+if sa_nu_tilde_ceiling is not None:
+    sa_nu_tilde_ceiling = float(sa_nu_tilde_ceiling)
+    if sa_nu_tilde_ceiling <= sa_nu_tilde_floor:
+        raise ValueError("SA_NU_TILDE_CEILING must be larger than SA_NU_TILDE_FLOOR.")
+    root_print("SA nu_tilde ceiling: {:.4e}".format(sa_nu_tilde_ceiling))
 
 nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
 sa_nu_tilde_penalty_reaction = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))) * (
@@ -699,7 +740,7 @@ if mass_flow_target_fractions:
 u_lin, p_lin = TrialFunctions(FlowSpace)
 v_lin, q_lin = TestFunctions(FlowSpace)
 a_stokes = (
-    mu_fluid * inner(grad(u_lin), grad(v_lin))
+    mu_effective * inner(grad(u_lin), grad(v_lin))
     + inner(grad(p_lin), v_lin)
     + inner(div(u_lin), q_lin)
     + alpha(rho_effective) * inner(u_lin, v_lin)
@@ -931,22 +972,24 @@ def write_ipcs_residual_outputs(
         handle.write("\n".join(svg_lines) + "\n")
 
 # Stokes initialization.
-def initialize_forward_guess_with_stokes():
-    """Build the initial flow and SA guesses from a Stokes-Brinkman solve."""
+def initialize_forward_guess_with_stokes(reset_turbulence=True):
+    """Build a Stokes-Brinkman flow guess with the current frozen viscosity."""
+    if reset_turbulence:
+        wall_dist_scale = max(float(globals().get("SA_INIT_WALL_DIST_SCALE", 0.05 * float(globals().get("L", 1.0)))), 1.0e-12)
+        nu_guess = project(
+            Constant(sa_nu_tilde_init) * wall_distance / (wall_distance + Constant(wall_dist_scale)),
+            TurbulenceSpace,
+        )
+        nu_tilde_frozen.assign(nu_guess)
+        enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
+        sa_model.nu_tilde0.assign(nu_tilde_frozen)
+        sa_model.nu_tilde1.assign(nu_tilde_frozen)
+
     A = assemble(a_stokes)
     b = assemble(l_stokes)
     for bc in bc_NS:
         bc.apply(A, b)
     solve(A, w_fwd.vector(), b, LINEAR_SOLVER_NAME)
-
-    wall_dist_scale = max(float(globals().get("SA_INIT_WALL_DIST_SCALE", 0.05 * float(globals().get("L", 1.0)))), 1.0e-12)
-    nu_guess = project(
-        Constant(sa_nu_tilde_init) * wall_distance / (wall_distance + Constant(wall_dist_scale)),
-        TurbulenceSpace,
-    )
-    nu_tilde_frozen.assign(nu_guess)
-    sa_model.nu_tilde0.assign(nu_guess)
-    sa_model.nu_tilde1.assign(nu_guess)
 
 
 def constrained_forward_residual_norm():
@@ -969,8 +1012,150 @@ def constrained_forward_residual_norm():
     return float(residual_vector.norm("l2"))
 
 
-def solve_forward_snes(solve_label=None):
-    """Solve the frozen-viscosity Navier-Stokes system monolithically."""
+def _unit_interval(value):
+    return min(max(float(value), 0.0), 1.0)
+
+
+def _coerce_forward_snes_convection_schedule(raw_schedule):
+    if raw_schedule is None:
+        return [{"convection_weight": 1.0}]
+    if isinstance(raw_schedule, np.ndarray):
+        raw_schedule = raw_schedule.tolist()
+    elif not isinstance(raw_schedule, (list, tuple)):
+        raw_schedule = [raw_schedule]
+
+    schedule = []
+    for step_idx, raw_step in enumerate(raw_schedule, start=1):
+        if isinstance(raw_step, dict):
+            if "convection_weight" in raw_step:
+                raw_weight = raw_step["convection_weight"]
+            elif "convective_weight" in raw_step:
+                raw_weight = raw_step["convective_weight"]
+            elif "inertia_weight" in raw_step:
+                raw_weight = raw_step["inertia_weight"]
+            elif "weight" in raw_step:
+                raw_weight = raw_step["weight"]
+            else:
+                raise ValueError(
+                    "FORWARD_SNES_CONVECTION_SCHEDULE step {} must define "
+                    "'convection_weight' or 'weight'.".format(step_idx)
+                )
+            step = {"convection_weight": _unit_interval(raw_weight)}
+            for key in ("method", "line_search"):
+                if key in raw_step:
+                    step[key] = str(raw_step[key])
+            for key in ("rtol", "atol", "accept_norm"):
+                if key in raw_step:
+                    step[key] = float(raw_step[key])
+            if "accept_growth" in raw_step:
+                step["accept_growth"] = max(1.0, float(raw_step["accept_growth"]))
+            elif "accept_residual_growth" in raw_step:
+                step["accept_growth"] = max(1.0, float(raw_step["accept_residual_growth"]))
+            if "max_iters" in raw_step:
+                step["max_iters"] = int(raw_step["max_iters"])
+            if "accept_nonconverged" in raw_step:
+                step["accept_nonconverged"] = bool(raw_step["accept_nonconverged"])
+        else:
+            step = {"convection_weight": _unit_interval(raw_step)}
+        schedule.append(step)
+
+    if not schedule:
+        schedule = [{"convection_weight": 1.0}]
+    if abs(schedule[-1]["convection_weight"] - 1.0) > 1.0e-12:
+        schedule.append({"convection_weight": 1.0})
+    return schedule
+
+
+def build_forward_snes_convection_schedule():
+    configured_schedule = globals().get("FORWARD_SNES_CONVECTION_SCHEDULE", None)
+    startup_schedule = globals().get("FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE", None)
+    if int(globals().get("iter_count", 0)) == 0 and startup_schedule is not None:
+        configured_schedule = startup_schedule
+    return _coerce_forward_snes_convection_schedule(configured_schedule)
+
+
+def build_forward_snes_recovery_attempts():
+    base_attempt = {
+        "label": "primary solve",
+        "method": str(globals().get("FORWARD_SNES_METHOD", "newtonls")),
+        "line_search": str(globals().get("FORWARD_SNES_LINE_SEARCH", "bt")),
+        "rtol": float(globals().get("FORWARD_SNES_RTOL", 1.0e-6)),
+        "atol": float(globals().get("FORWARD_SNES_ATOL", 1.0e-8)),
+        "max_iters": int(globals().get("FORWARD_SNES_MAX_ITERS", 80)),
+        "restart_with_stokes": False,
+        "accept_norm": None,
+        "accept_growth": None,
+        "accept_nonconverged": None,
+    }
+    configured_attempts = globals().get("FORWARD_SNES_RECOVERY_ATTEMPTS", None)
+    if configured_attempts is None:
+        fallback_line_search = globals().get("FORWARD_SNES_FALLBACK_LINE_SEARCH", None)
+        if fallback_line_search is None:
+            return [base_attempt]
+        fallback_attempt = dict(base_attempt)
+        fallback_attempt.update(
+            {
+                "label": "fallback retry",
+                "line_search": str(fallback_line_search),
+                "max_iters": int(globals().get("FORWARD_SNES_FALLBACK_MAX_ITERS", base_attempt["max_iters"])),
+                "restart_with_stokes": bool(globals().get("FORWARD_SNES_RESTART_WITH_STOKES", True)),
+            }
+        )
+        return [base_attempt, fallback_attempt]
+
+    if isinstance(configured_attempts, np.ndarray):
+        configured_attempts = configured_attempts.tolist()
+    elif isinstance(configured_attempts, dict):
+        configured_attempts = [configured_attempts]
+
+    attempts = [base_attempt]
+    for attempt_idx, attempt_spec in enumerate(configured_attempts, start=1):
+        if not isinstance(attempt_spec, dict):
+            raise TypeError("FORWARD_SNES_RECOVERY_ATTEMPTS entries must be dictionaries.")
+        attempt = dict(base_attempt)
+        attempt.update(attempt_spec)
+        attempt["label"] = str(attempt.get("label", "recovery attempt {}".format(attempt_idx)))
+        attempt["method"] = str(attempt.get("method", base_attempt["method"]))
+        attempt["line_search"] = str(attempt.get("line_search", base_attempt["line_search"]))
+        attempt["rtol"] = float(attempt.get("rtol", base_attempt["rtol"]))
+        attempt["atol"] = float(attempt.get("atol", base_attempt["atol"]))
+        attempt["max_iters"] = int(attempt.get("max_iters", base_attempt["max_iters"]))
+        attempt["restart_with_stokes"] = bool(attempt.get("restart_with_stokes", False))
+        if attempt.get("accept_norm") is not None:
+            attempt["accept_norm"] = float(attempt["accept_norm"])
+        if attempt.get("accept_growth") is not None:
+            attempt["accept_growth"] = max(1.0, float(attempt["accept_growth"]))
+        elif attempt.get("accept_residual_growth") is not None:
+            attempt["accept_growth"] = max(1.0, float(attempt["accept_residual_growth"]))
+        if attempt.get("accept_nonconverged") is not None:
+            attempt["accept_nonconverged"] = bool(attempt["accept_nonconverged"])
+        attempts.append(attempt)
+    return attempts
+
+
+def describe_forward_snes_attempt(attempt):
+    description = [
+        "method={}".format(attempt["method"]),
+        "max_it={}".format(attempt["max_iters"]),
+        "rtol={:.1e}".format(attempt["rtol"]),
+        "atol={:.1e}".format(attempt["atol"]),
+    ]
+    if attempt["method"] == "newtonls":
+        description.append("line_search={}".format(attempt["line_search"]))
+    return ", ".join(description)
+
+
+def solve_forward_snes_once(
+    method_override=None,
+    line_search_override=None,
+    max_iters_override=None,
+    rtol_override=None,
+    atol_override=None,
+    accept_function_norm_override=None,
+    accept_nonconverged_override=None,
+    accept_residual_growth_override=None,
+):
+    """Solve the frozen-viscosity Navier-Stokes system once."""
     solver_log("      [SNES] monolithic frozen-viscosity flow")
     jac_forward = derivative(forward_flow_residual_form, w_fwd)
     problem_forward = NonlinearVariationalProblem(
@@ -981,38 +1166,101 @@ def solve_forward_snes(solve_label=None):
     solver_forward.parameters["snes_solver"]["linear_solver"] = str(
         globals().get("FORWARD_SNES_LINEAR_SOLVER", LINEAR_SOLVER_NAME)
     )
-    method = str(globals().get("FORWARD_SNES_METHOD", "newtonls"))
+    method = method_override or str(globals().get("FORWARD_SNES_METHOD", "newtonls"))
     solver_forward.parameters["snes_solver"]["method"] = method
     if method == "newtonls":
         solver_forward.parameters["snes_solver"]["line_search"] = str(
             globals().get("FORWARD_SNES_LINE_SEARCH", "bt")
+            if line_search_override is None else line_search_override
         )
 
-    rtol = float(globals().get("FORWARD_SNES_RTOL", 1.0e-6))
-    atol = float(globals().get("FORWARD_SNES_ATOL", 1.0e-8))
-    max_iters = int(globals().get("FORWARD_SNES_MAX_ITERS", 80))
+    rtol = float(globals().get("FORWARD_SNES_RTOL", 1.0e-6) if rtol_override is None else rtol_override)
+    atol = float(globals().get("FORWARD_SNES_ATOL", 1.0e-8) if atol_override is None else atol_override)
+    max_iters = int(globals().get("FORWARD_SNES_MAX_ITERS", 80) if max_iters_override is None else max_iters_override)
     solver_forward.parameters["snes_solver"]["relative_tolerance"] = rtol
     solver_forward.parameters["snes_solver"]["absolute_tolerance"] = atol
     solver_forward.parameters["snes_solver"]["maximum_iterations"] = max_iters
-    solver_forward.parameters["snes_solver"]["error_on_nonconvergence"] = bool(
-        globals().get("FORWARD_SNES_ERROR_ON_NONCONVERGENCE", True)
+    accept_nonconverged = bool(
+        globals().get("FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM", False)
+        if accept_nonconverged_override is None else accept_nonconverged_override
     )
+    error_on_nonconvergence = bool(globals().get("FORWARD_SNES_ERROR_ON_NONCONVERGENCE", True))
+    if accept_nonconverged and (
+        accept_function_norm_override is not None or accept_residual_growth_override is not None
+    ):
+        error_on_nonconvergence = False
+    solver_forward.parameters["snes_solver"]["error_on_nonconvergence"] = error_on_nonconvergence
 
     initial_norm = constrained_forward_residual_norm()
-    solver_forward.solve()
-    residual_norm = constrained_forward_residual_norm()
-    accepted_norm = max(atol, rtol * max(initial_norm, 1.0e-16))
+    accepted_norm = (
+        max(atol, rtol * max(initial_norm, 1.0e-16))
+        if accept_function_norm_override is None
+        else float(accept_function_norm_override)
+    )
     accepted_factor = max(1.0, float(globals().get("FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR", 2.0)))
+    accepted_limit = accepted_factor * accepted_norm
+    if accept_residual_growth_override is not None:
+        accepted_limit = max(accepted_limit, float(accept_residual_growth_override) * initial_norm)
+    max_absolute_residual = globals().get("FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL", None)
+
+    if (
+        accept_nonconverged
+        and bool(globals().get("FORWARD_SNES_STOP_AT_ACCEPT_NORM", False))
+        and (accept_function_norm_override is not None or accept_residual_growth_override is not None)
+    ):
+        solve_stop_factor = max(0.0, float(globals().get("FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR", 1.0)))
+        solve_atol = solve_stop_factor * accepted_limit
+        if max_absolute_residual is not None:
+            solve_atol = min(solve_atol, float(max_absolute_residual))
+        if solve_atol > atol:
+            solver_forward.parameters["snes_solver"]["absolute_tolerance"] = solve_atol
+            solver_log(
+                "      [SNES] solve atol {:.2e} from accept limit {:.2e}".format(
+                    solve_atol, accepted_limit,
+                )
+            )
+
+    previous_state_values = w_fwd.vector().get_local()
+    try:
+        solve_result = solver_forward.solve()
+    except RuntimeError:
+        w_fwd.vector().set_local(previous_state_values)
+        w_fwd.vector().apply("insert")
+        raise
+    solver_converged = True
+    if isinstance(solve_result, tuple) and len(solve_result) >= 2:
+        solver_converged = bool(solve_result[1])
+    residual_norm = constrained_forward_residual_norm()
     if not np.isfinite(residual_norm):
+        w_fwd.vector().set_local(previous_state_values)
+        w_fwd.vector().apply("insert")
         raise RuntimeError("Accepted SNES forward iterate produced a non-finite residual norm.")
-    if residual_norm > accepted_factor * accepted_norm:
+    if max_absolute_residual is not None and residual_norm > float(max_absolute_residual):
+        w_fwd.vector().set_local(previous_state_values)
+        w_fwd.vector().apply("insert")
+        raise RuntimeError(
+            "Accepted SNES forward iterate has residual norm {:.4e}, exceeding the "
+            "absolute acceptance limit {:.4e}.".format(
+                residual_norm,
+                float(max_absolute_residual),
+            )
+        )
+    if residual_norm > accepted_limit:
+        w_fwd.vector().set_local(previous_state_values)
+        w_fwd.vector().apply("insert")
         raise RuntimeError(
             "Accepted SNES forward iterate has residual norm {:.4e}, exceeding {:.4e} "
             "(base tolerance {:.4e}, factor {:.2f}).".format(
                 residual_norm,
-                accepted_factor * accepted_norm,
+                accepted_limit,
                 accepted_norm,
                 accepted_factor,
+            )
+        )
+    if not solver_converged:
+        solver_log(
+            "      [SNES] accepted nonconverged continuation iterate with residual {:.2e} <= {:.2e}".format(
+                residual_norm, accepted_limit,
             )
         )
     relative_residual = residual_norm / max(initial_norm, 1.0e-16)
@@ -1022,6 +1270,123 @@ def solve_forward_snes(solve_label=None):
         )
     )
     return float(relative_residual), float(residual_norm)
+
+
+def solve_forward_snes_attempt(attempt, convection_schedule):
+    result = (np.inf, np.inf)
+    pending_steps = [dict(step) for step in convection_schedule]
+    adaptive_convection = bool(globals().get("FORWARD_SNES_ADAPTIVE_CONVECTION", False))
+    min_convection_step = max(0.0, float(globals().get("FORWARD_SNES_MIN_CONVECTION_STEP", 0.01)))
+    max_insertions = max(0, int(globals().get("FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS", 16)))
+    accepted_convection_weight = None
+    inserted_steps = 0
+    step_idx = 0
+    while step_idx < len(pending_steps):
+        step = pending_steps[step_idx]
+        convection_weight = float(step["convection_weight"])
+        forward_convection_coupling_weight.assign(convection_weight)
+        step_attempt = dict(attempt)
+        for key in ("method", "line_search", "rtol", "atol", "max_iters", "accept_norm", "accept_growth", "accept_nonconverged"):
+            if key in step:
+                step_attempt[key] = step[key]
+        if len(pending_steps) > 1:
+            details = []
+            if "max_iters" in step:
+                details.append("max_it={}".format(step_attempt["max_iters"]))
+            if "atol" in step:
+                details.append("atol={:.1e}".format(step_attempt["atol"]))
+            if "accept_norm" in step:
+                details.append("accept={:.1e}".format(step_attempt["accept_norm"]))
+            if "accept_growth" in step:
+                details.append("growth<={:.2f}".format(step_attempt["accept_growth"]))
+            if "rtol" in step:
+                details.append("rtol={:.1e}".format(step_attempt["rtol"]))
+            solver_log(
+                "      [SNES continuation] step {}/{}: convection = {:.2f}{}".format(
+                    step_idx + 1,
+                    len(pending_steps),
+                    convection_weight,
+                    "" if not details else " ({})".format(", ".join(details)),
+                )
+            )
+        try:
+            result = solve_forward_snes_once(
+                method_override=step_attempt["method"],
+                line_search_override=step_attempt["line_search"],
+                max_iters_override=step_attempt["max_iters"],
+                rtol_override=step_attempt["rtol"],
+                atol_override=step_attempt["atol"],
+                accept_function_norm_override=step_attempt.get("accept_norm"),
+                accept_nonconverged_override=step_attempt.get("accept_nonconverged"),
+                accept_residual_growth_override=step_attempt.get("accept_growth"),
+            )
+        except RuntimeError:
+            if (
+                adaptive_convection
+                and accepted_convection_weight is not None
+                and inserted_steps < max_insertions
+                and abs(convection_weight - accepted_convection_weight) > min_convection_step
+            ):
+                midpoint_weight = 0.5 * (accepted_convection_weight + convection_weight)
+                midpoint_step = dict(step)
+                midpoint_step["convection_weight"] = midpoint_weight
+                pending_steps.insert(step_idx, midpoint_step)
+                inserted_steps += 1
+                solver_log(
+                    "      [SNES continuation] splitting failed convection step {:.2f}->{:.2f}; "
+                    "retrying midpoint {:.2f}".format(
+                        accepted_convection_weight, convection_weight, midpoint_weight,
+                    )
+                )
+                continue
+            raise
+        accepted_convection_weight = convection_weight
+        step_idx += 1
+    return result
+
+
+def solve_forward_snes(solve_label=None):
+    """Solve the frozen-viscosity Navier-Stokes system with configured recovery."""
+    recovery_attempts = build_forward_snes_recovery_attempts()
+    convection_schedule = build_forward_snes_convection_schedule()
+    entry_state_values = w_fwd.vector().get_local()
+    num_retries = max(0, len(recovery_attempts) - 1)
+    try:
+        for attempt_idx, attempt in enumerate(recovery_attempts):
+            if attempt_idx > 0:
+                retry_idx = attempt_idx
+                if attempt["restart_with_stokes"]:
+                    root_print(
+                        "  Forward SNES diverged; rebuilding Stokes-Brinkman flow guess before retry {}/{} "
+                        "({}: {}).".format(
+                            retry_idx,
+                            num_retries,
+                            attempt["label"],
+                            describe_forward_snes_attempt(attempt),
+                        )
+                    )
+                    initialize_forward_guess_with_stokes(reset_turbulence=False)
+                else:
+                    root_print(
+                        "  Forward SNES diverged; retrying from the current iterate with retry {}/{} "
+                        "({}: {}).".format(
+                            retry_idx,
+                            num_retries,
+                            attempt["label"],
+                            describe_forward_snes_attempt(attempt),
+                        )
+                    )
+            try:
+                return solve_forward_snes_attempt(attempt, convection_schedule)
+            except RuntimeError:
+                if attempt_idx == len(recovery_attempts) - 1:
+                    raise
+    except RuntimeError:
+        w_fwd.vector().set_local(entry_state_values)
+        w_fwd.vector().apply("insert")
+        raise
+    finally:
+        forward_convection_coupling_weight.assign(1.0)
 
 
 def solve_forward(solve_label=None):
@@ -1299,9 +1664,11 @@ enforce_density_bounds_inplace(rho)
 iter_count = 0
 previous_objective = 0.0
 
-num_mma = mesh.num_cells()
+num_mma = int(ActiveDV.size)
+active_density_lower_values = density_lower_values[ActiveDV]
+active_density_upper_values = density_upper_values[ActiveDV]
 xval = np.zeros((num_mma, 1))
-xval[:, 0] = rho.vector()
+xval[:, 0] = rho.vector().get_local()[ActiveDV]
 xold1 = np.zeros((num_mma, 1))
 xold2 = np.zeros((num_mma, 1))
 low = np.zeros((num_mma, 1))
@@ -1313,8 +1680,8 @@ a = np.zeros((mmma, 1))
 c = 1.0e4 * np.ones((mmma, 1))
 d = np.ones((mmma, 1))
 
-xmin = np.zeros((num_mma, 1))
-xmax = np.ones((num_mma, 1))
+xmin = active_density_lower_values.reshape((num_mma, 1)).copy()
+xmax = active_density_upper_values.reshape((num_mma, 1)).copy()
 
 df0dx = np.zeros((num_mma, 1))
 fval = np.zeros((mmma, 1))
@@ -1373,7 +1740,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             solver_log("  [Warm start] Stokes-Brinkman and initial SA field")
             initialize_forward_guess_with_stokes()
 
-        # --- Forward solve: IPCS + frozen SA Picard updates ---
+        # --- Forward solve: configured flow solver + frozen SA Picard updates ---
         root_print("  [Forward solve]")
         picard_steps = max(1, int(globals().get("PICARD_STEPS", globals().get("FROZEN_PICARD_STEPS", 1))))
         for picard_idx in range(picard_steps):
@@ -1389,11 +1756,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 relaxation=float(globals().get("TURBULENCE_RELAXATION", globals().get("NUT_RELAXATION_FACTOR", 1.0)))
             )
             nu_tilde_frozen.assign(sa_model.nu_tilde0)
-            enforce_scalar_floor(nu_tilde_frozen, float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12)))
+            enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
             sa_model.nu_tilde0.assign(nu_tilde_frozen)
             sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
-        solver_log("    [Final flow] IPCS with updated turbulent viscosity")
+        solver_log("    [Final flow] {} with updated turbulent viscosity".format(FORWARD_FLOW_SOLVER.upper()))
         final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward("stage{:02d}_iter{:03d}_final".format(
             stage_idx + 1, inner_count,
         ))
@@ -1428,8 +1795,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
-        df0dx[:, 0] = filtered_gradient.vector()[:]
-        dfdx[0, :] = filtered_s_vol.vector()[:]
+        df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
+        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
 
         mass_flow_status = []
         mass_flow_status_markers = set()
@@ -1442,7 +1809,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             filtered_constraint_gradient = pde_filter(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
-            dfdx[constraint_idx, :] = filtered_constraint_gradient.vector()[:]
+            dfdx[constraint_idx, :] = filtered_constraint_gradient.vector().get_local()[ActiveDV]
 
             marker = constraint_spec["marker"]
             if marker not in mass_flow_status_markers:
@@ -1467,9 +1834,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         xold2 = xold1.copy()
         xold1 = xval.copy()
         xval = xmma.copy()
-        rho_values = np.clip(xmma[:, 0].copy(), density_lower_values, density_upper_values)
-        xval[:, 0] = rho_values
-        rho.vector()[:] = rho_values
+        active_rho_values = np.clip(
+            xmma[:, 0].copy(), active_density_lower_values, active_density_upper_values,
+        )
+        xval[:, 0] = active_rho_values
+        rho_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+        rho_values[ActiveDV] = active_rho_values
+        rho.vector().set_local(rho_values)
         rho.vector().apply("insert")
 
         append_optimization_log_entry(

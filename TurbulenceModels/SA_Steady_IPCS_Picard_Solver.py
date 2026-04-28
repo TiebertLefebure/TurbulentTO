@@ -132,6 +132,7 @@ def run_steady_sa_ipcs_picard(
         "FLOW_IPCS_MAX_STEPS",
         simulation_prm.get("FORWARD_IPCS_MAX_ITERS", simulation_prm.get("FLOW_MAX_ITERATIONS", min(max_picard, 500))),
     ))
+    final_flow_max_iters = int(simulation_prm.get("FLOW_IPCS_FINAL_MAX_STEPS", flow_max_iters))
     sa_sweeps = max(1, int(simulation_prm.get(
         "COUPLED_PICARD_SA_SWEEPS_PER_STEP",
         simulation_prm.get("STEADY_SA_SWEEPS", 1),
@@ -235,13 +236,14 @@ def run_steady_sa_ipcs_picard(
             p_average = assemble(p1 * dx) / domain_area
             p1.vector()[:] -= p_average
 
-    def solve_flow_to_steady(label):
+    def solve_flow_to_steady(label, max_iters=None):
         # Inner loop: keep SA viscosity fixed and advance the flow equations
         # with IPCS substeps until the velocity and pressure changes are small.
+        step_limit = flow_max_iters if max_iters is None else int(max_iters)
         converged = False
         du_rel = dp_rel = np.inf
 
-        for flow_iter in range(1, flow_max_iters + 1):
+        for flow_iter in range(1, step_limit + 1):
             # IPCS step 1: tentative velocity from momentum without pressure correction.
             A_1 = assemble(a_1)
             b_1 = assemble(l_1)
@@ -287,7 +289,7 @@ def run_steady_sa_ipcs_picard(
         if not converged:
             root_print(
                 "    [{} IPCS] reached {} steps without meeting flow tolerances: du={:.3e}, dp={:.3e}".format(
-                    label, flow_max_iters, du_rel, dp_rel
+                    label, step_limit, du_rel, dp_rel
                 ),
                 is_root=is_root,
             )
@@ -372,7 +374,10 @@ def run_steady_sa_ipcs_picard(
         )
 
     root_print("  [Final flow] IPCS with updated turbulent viscosity", is_root=is_root)
-    final_flow_du, final_flow_dp, _ = solve_flow_to_steady("Final flow")
+    final_flow_du, final_flow_dp, _ = solve_flow_to_steady(
+        "Final flow",
+        max_iters=final_flow_max_iters,
+    )
     residuals["flow_u"].append(float(final_flow_du))
     residuals["flow_p"].append(float(final_flow_dp))
 

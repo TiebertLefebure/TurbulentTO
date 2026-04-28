@@ -13,6 +13,8 @@ _cfg = _ilu.spec_from_file_location("ConfigChannel_KE", os.path.join(os.path.dir
 _cfg = _ilu.module_from_spec(_cfg); _cfg.__spec__.loader.exec_module(_cfg)
 globals().update({k: v for k, v in vars(_cfg).items() if not k.startswith('_')}); del _cfg, _ilu
 
+setup_simulation_log(saving_directory, __file__)
+
 # Load mesh
 [mesh, marked_facets] = load_mesh_from_file(mesh_files['MESH_DIRECTORY'], mesh_files['FACET_DIRECTORY'])
 

@@ -1,5 +1,13 @@
 \begin{thebibliography}{10}
 
+\bibitem{Abuhatira2021}
+A.~A. Abuhatira, S.~M. Salim, and J.~B. Vorstius.
+\newblock Numerical simulation of turbulent pipe flow with 90-degree elbow
+  using wall y+ approach.
+\newblock In {\em Volume 10: Fluids Engineering}, ASME 2021 International
+  Mechanical Engineering Congress and Exposition. American Society of
+  Mechanical Engineers, 11 2021.
+
 \bibitem{Alexandersen2023}
 J.~Alexandersen.
 \newblock A detailed introduction to density-based topology optimisation of
@@ -67,6 +75,12 @@ B.~Barroca, M.~Blommaert, G.~Buckinx, M.~Schevenels, and M.~Baelmans.
 \newblock In {\em 17th International Heat Transfer Conference, IHTC-17}, Cape
   Town, 2023.
 
+\bibitem{Bayat2026}
+A.~Bayat, H.~Li, and J.~Alexandersen.
+\newblock Density-based topology optimization for turbulent fluid flow using
+  the standard $k-\varepsilon$ {RANS} model with wall-functions imposed through
+  an implicit wall penalty formulation, Jan. 2026.
+
 \bibitem{Bendsoe1988}
 M.~P. Bends{\o}e and N.~Kikuchi.
 \newblock Generating optimal topologies in structural design using a
@@ -97,6 +111,13 @@ C.~B. Dilgen, S.~B. Dilgen, D.~R. Fuhrman, O.~Sigmund, and B.~S. Lazarov.
 \newblock Topology optimization of turbulent flows.
 \newblock {\em Computer Methods in Applied Mechanics and Engineering},
   331:363--393, 2018.
+
+\bibitem{Enayet1982}
+M.~M. Enayet, M.~M. Gibson, A.~M. K.~P. Taylor, and M.~Yianneskis.
+\newblock Laser-doppler measurements of laminar and turbulent flow in a pipe
+  bend.
+\newblock {\em International Journal of Heat and Fluid Flow}, 3(4):213--219,
+  1982.
 
 \bibitem{Fawaz2022}
 A.~Fawaz, Y.~Hua, S.~Le~Corre, Y.~Fan, and L.~Luo.
@@ -204,11 +225,6 @@ C.~L. Rumsey et~al.
   2023.
 \newblock Accessed: 2024-05-15.
 
-\bibitem{Rumsey2000}
-C.~L. Rumsey, T.~B. Gatski, and J.~H. Morrison.
-\newblock Turbulence model predictions of strongly curved flow in a {U-Duct}.
-\newblock {\em AIAA Journal}, 38(8):1394--1402, 2000.
-
 \bibitem{Schramm2018}
 M.~Schramm, B.~Stoevesandt, and J.~Peinke.
 \newblock Optimization of airfoils using the adjoint approach and the influence
@@ -237,6 +253,11 @@ K.~Svanberg.
   optimization.
 \newblock {\em International journal for numerical methods in engineering},
   24(2):359--373, 1987.
+
+\bibitem{Takamasa1995}
+T.~Takamasa and M.~Kondo.
+\newblock Measurement of gas-liquid two-phase flow in a c-shaped pipe.
+\newblock {\em Nuclear Engineering and Design}, 154(2):147--156, 1995.
 
 \bibitem{Temam1969}
 R.~Temam.

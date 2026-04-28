@@ -97,10 +97,15 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 # Inner pseudo-time flow solve used inside each outer Picard step.
 # The medium wall-resolved mesh can falsely look over-diffusive at the bend-exit
 # probe if the IPCS pressure solve is allowed to stop at O(1e-3) relative change.
-# Keep the inner flow solve stricter than before and give it enough iterations to
-# actually reach the target on the stiffer mesh.
+# Keep a moderate cap for routine runs because the U-bend pressure residual can
+# plateau before meeting the strict target. Raise this for final convergence
+# checks if needed.
 FLOW_IPCS_TIME_STEP = 1.0e-4
-FLOW_IPCS_MAX_STEPS = 600
+FLOW_IPCS_MAX_STEPS = 200
+# The final cleanup flow solve runs once, after SA Picard convergence, so keep a
+# larger cap there to avoid shortening the saved final state as much as the
+# repeated Picard updates.
+FLOW_IPCS_FINAL_MAX_STEPS = 600
 FLOW_IPCS_VELOCITY_TOLERANCE = 5.0e-5
 FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-4
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
@@ -170,6 +175,7 @@ steady_sa_solver_parameters = {
     "SA_NU_TILDE_FLOOR": SA_NU_TILDE_FLOOR,
     "FLOW_IPCS_TIME_STEP": FLOW_IPCS_TIME_STEP,
     "FLOW_IPCS_MAX_STEPS": FLOW_IPCS_MAX_STEPS,
+    "FLOW_IPCS_FINAL_MAX_STEPS": FLOW_IPCS_FINAL_MAX_STEPS,
     "FLOW_IPCS_VELOCITY_TOLERANCE": FLOW_IPCS_VELOCITY_TOLERANCE,
     "FLOW_IPCS_PRESSURE_TOLERANCE": FLOW_IPCS_PRESSURE_TOLERANCE,
     "FLOW_IPCS_VELOCITY_RELAXATION": FLOW_IPCS_VELOCITY_RELAXATION,

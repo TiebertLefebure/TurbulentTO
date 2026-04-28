@@ -1,10 +1,13 @@
 from dolfin import *
 from mpi4py import MPI
+import atexit as _atexit
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import shutil
+import sys as _sys
 import tempfile
+import time as _time
 import xml.etree.ElementTree as ET
 
 # ----------------------------------------- #
@@ -46,6 +49,153 @@ def are_close_all(fs1, fs0, tol):
     return  break_flag, errors
 
 # ---------------------- Saving utilities ----------------------- #
+
+_SIMULATION_LOG_HANDLE = None
+_SIMULATION_LOG_PATH = None
+_SIMULATION_LOG_ORIGINAL_STDOUT = None
+_SIMULATION_LOG_ORIGINAL_STDERR = None
+
+
+class _TeeStream:
+    def __init__(self, stream, log_handle):
+        self._stream = stream
+        self._log_handle = log_handle
+
+    def write(self, data):
+        if self._stream is not None:
+            self._stream.write(data)
+        if self._log_handle is not None and not self._log_handle.closed:
+            self._log_handle.write(data)
+        return len(data)
+
+    def flush(self):
+        if self._stream is not None:
+            self._stream.flush()
+        if self._log_handle is not None and not self._log_handle.closed:
+            self._log_handle.flush()
+
+    def isatty(self):
+        return bool(getattr(self._stream, "isatty", lambda: False)())
+
+    def fileno(self):
+        return self._stream.fileno()
+
+    @property
+    def encoding(self):
+        return getattr(self._stream, "encoding", None)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _simulation_log_rank():
+    try:
+        return MPI.COMM_WORLD.Get_rank()
+    except AttributeError:
+        try:
+            return MPI.rank(MPI.comm_world)
+        except Exception:
+            return 0
+
+
+def simulation_results_root(saving_directory):
+    """Infer the common results directory from the simulation output folders."""
+    if not isinstance(saving_directory, dict):
+        return os.getcwd()
+
+    output_roots = []
+    for key in ("PVD_FILES", "H5_FILES", "RESIDUALS"):
+        path_value = saving_directory.get(key)
+        if path_value:
+            output_roots.append(os.path.dirname(os.path.normpath(path_value)))
+
+    if not output_roots:
+        return os.getcwd()
+
+    try:
+        return os.path.commonpath(output_roots)
+    except ValueError:
+        return output_roots[0]
+
+
+def simulation_log_path(saving_directory, filename="SimulationLog.txt"):
+    """Return the path used for the per-run simulation log."""
+    configured_log_path = None
+    if isinstance(saving_directory, dict):
+        configured_log_path = (
+            saving_directory.get("SIMULATION_LOG")
+            or saving_directory.get("LOG_FILE")
+        )
+
+    if configured_log_path:
+        log_path = configured_log_path
+    else:
+        log_path = os.path.join(simulation_results_root(saving_directory), filename)
+
+    if os.path.isdir(log_path):
+        log_path = os.path.join(log_path, filename)
+    return log_path
+
+
+def _close_simulation_log():
+    global _SIMULATION_LOG_HANDLE
+    global _SIMULATION_LOG_ORIGINAL_STDOUT
+    global _SIMULATION_LOG_ORIGINAL_STDERR
+
+    if _SIMULATION_LOG_HANDLE is None:
+        return
+
+    if _SIMULATION_LOG_ORIGINAL_STDOUT is not None:
+        _sys.stdout = _SIMULATION_LOG_ORIGINAL_STDOUT
+    if _SIMULATION_LOG_ORIGINAL_STDERR is not None:
+        _sys.stderr = _SIMULATION_LOG_ORIGINAL_STDERR
+
+    try:
+        _SIMULATION_LOG_HANDLE.write(
+            "\nFinished: {}\n".format(_time.strftime("%a, %d %b %Y %H:%M:%S", _time.localtime()))
+        )
+        _SIMULATION_LOG_HANDLE.flush()
+    finally:
+        _SIMULATION_LOG_HANDLE.close()
+        _SIMULATION_LOG_HANDLE = None
+
+
+def setup_simulation_log(saving_directory, script_name=None, filename="SimulationLog.txt"):
+    """Copy Python stdout/stderr to SimulationLog.txt on the root MPI rank."""
+    global _SIMULATION_LOG_HANDLE
+    global _SIMULATION_LOG_PATH
+    global _SIMULATION_LOG_ORIGINAL_STDOUT
+    global _SIMULATION_LOG_ORIGINAL_STDERR
+
+    log_path = simulation_log_path(saving_directory, filename=filename)
+    if _SIMULATION_LOG_HANDLE is not None:
+        return _SIMULATION_LOG_PATH
+
+    if _simulation_log_rank() != 0:
+        return log_path
+
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    _SIMULATION_LOG_PATH = log_path
+    _SIMULATION_LOG_HANDLE = open(log_path, "w", buffering=1)
+    _SIMULATION_LOG_HANDLE.write("Simulation log\n")
+    if script_name:
+        _SIMULATION_LOG_HANDLE.write("Script: {}\n".format(os.path.basename(script_name)))
+    _SIMULATION_LOG_HANDLE.write("Command: {}\n".format(" ".join(_sys.argv)))
+    _SIMULATION_LOG_HANDLE.write("Working directory: {}\n".format(os.getcwd()))
+    _SIMULATION_LOG_HANDLE.write(
+        "Started: {}\n\n".format(_time.strftime("%a, %d %b %Y %H:%M:%S", _time.localtime()))
+    )
+
+    _SIMULATION_LOG_ORIGINAL_STDOUT = _sys.stdout
+    _SIMULATION_LOG_ORIGINAL_STDERR = _sys.stderr
+    _sys.stdout = _TeeStream(_SIMULATION_LOG_ORIGINAL_STDOUT, _SIMULATION_LOG_HANDLE)
+    _sys.stderr = _TeeStream(_SIMULATION_LOG_ORIGINAL_STDERR, _SIMULATION_LOG_HANDLE)
+    _atexit.register(_close_simulation_log)
+    print("Simulation log: {}".format(os.path.abspath(log_path)))
+    return log_path
 
 def save_pvd_file(f, directory):
     '''Saves function f as .pvd file (to inspect in ParaView)'''

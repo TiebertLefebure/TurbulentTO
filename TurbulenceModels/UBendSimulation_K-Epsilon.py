@@ -49,6 +49,7 @@ def _squared_l2_error(f1, f0, dx_measure):
     return assemble(dot(diff, diff) * dx_measure)
 
 saving_directory = _mesh_save_dirs(saving_directory, mesh_files['MESH_DIRECTORY'])
+setup_simulation_log(saving_directory, __file__)
 [mesh, marked_facets] = load_mesh_from_file(mesh_files['MESH_DIRECTORY'], mesh_files['FACET_DIRECTORY'])
 IS_ROOT = (MPI.COMM_WORLD.Get_rank() == 0)
 quadrature_degree = simulation_prm['QUADRATURE_DEGREE']

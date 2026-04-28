@@ -22,6 +22,8 @@ if 'simulation_prm_SA' in globals():
 if 'saving_directory_SA' in globals():
     saving_directory = saving_directory_SA
 
+setup_simulation_log(saving_directory, __file__)
+
 # Load mesh 
 [mesh, marked_facets] = load_mesh_from_file(mesh_files['MESH_DIRECTORY'], mesh_files['FACET_DIRECTORY'])
 IS_ROOT = (MPI.COMM_WORLD.Get_rank() == 0)

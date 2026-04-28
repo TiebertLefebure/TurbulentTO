@@ -8,12 +8,12 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 # Configuration file for Borrvall Pipe Bend case (Laminar)
 # ----------------------------------------------------------
 
-THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh files
 # Generate via: cd Meshes/PipeBendBorrvall && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(THIS_DIR, 'Meshes/PipeBendBorrvall/mesh.xdmf'),
+    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendBorrvall/mesh.xdmf'),
 }
 
 

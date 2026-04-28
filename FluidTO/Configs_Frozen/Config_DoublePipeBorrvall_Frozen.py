@@ -5,9 +5,9 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 
 
 # ===================================================================
-# Configuration: Borrvall Double Pipe - Turbulent Frozen (SA, Re = 1,660)
+# Configuration: Borrvall Double Pipe - Turbulent Frozen
 #
-# Two symmetric ports on left (inlets) and right (outlets).
+# Two symmetric ports on left (inlets) and right (outlets)
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -89,6 +89,7 @@ SA_REFERENCE_LENGTH = PORT_WIDTH
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * DOMAIN_Y_MAX
 SA_NU_TILDE_FLOOR = 1.0e-12
+SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -110,15 +111,86 @@ MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.025, 0.015, 0.008, 0.004, 0.002, 0.00
 BETA_PROJ_SCHEDULE  = [0.5,  1.0,  2.0,  4.0,  8.0,  12.0, 16.0, 24.0, 32.0, 64.0]
 MAX_INNER_ITERATIONS_SCHEDULE = [50, 80, 80, 80, 100, 120, 140, 160, 180, 200]
 
-# Linear solver for the Stokes warm-start and adjoint linear systems.
+# Frozen flow/turbulence coupling and forward solve parameters.
 LINEAR_SOLVER = "mumps"
+
+# FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
+# This case keeps the monolithic SNES solve, but starts the first global
+# forward solve with a convection ramp so Newton does not jump directly from a
+# Stokes guess to the full Re=1600 frozen-viscosity residual.
+FORWARD_FLOW_SOLVER = "snes"
+FORWARD_SNES_METHOD = "newtonls"
+FORWARD_SNES_LINE_SEARCH = "bt"
+FORWARD_SNES_RTOL = 1.0e-6
+FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_MAX_ITERS = 120
+FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
+FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 0.05
+FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 2.0e-3
+FORWARD_SNES_ADAPTIVE_CONVECTION = True
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.01
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 24
+FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 100, "atol": 1.0e-7, "accept_norm": 1.0e-6, "accept_nonconverged": True},
+    {"convection_weight": 0.10, "max_iters": 140, "atol": 8.0e-8, "accept_norm": 1.2e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.20, "max_iters": 160, "atol": 6.0e-8, "accept_norm": 1.2e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.35, "max_iters": 180, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 200, "atol": 4.0e-8, "accept_norm": 9.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.70, "max_iters": 220, "atol": 3.0e-8, "accept_norm": 8.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.85, "max_iters": 240, "atol": 2.0e-8, "accept_norm": 6.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 260, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+]
+FORWARD_SNES_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 80, "atol": 1.0e-7, "accept_norm": 1.0e-6, "accept_nonconverged": True},
+    {"convection_weight": 0.25, "max_iters": 140, "atol": 6.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 160, "atol": 4.0e-8, "accept_norm": 8.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.75, "max_iters": 180, "atol": 2.0e-8, "accept_norm": 6.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 220, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+]
+FORWARD_SNES_RECOVERY_ATTEMPTS = [
+    {
+        "label": "current-iterate l2 line-search retry",
+        "line_search": "l2",
+        "max_iters": 240,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "current-iterate trust-region retry",
+        "method": "newtontr",
+        "max_iters": 260,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "Stokes rebuild backtracking retry",
+        "line_search": "bt",
+        "max_iters": 280,
+        "restart_with_stokes": True,
+        "accept_norm": 5.0e-4,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "Stokes rebuild l2 line-search retry",
+        "line_search": "l2",
+        "max_iters": 300,
+        "restart_with_stokes": True,
+        "accept_norm": 5.0e-4,
+        "accept_nonconverged": True,
+    },
+]
 
 # Outer NS–SA coupling: solve NS → solve SA → repeat PICARD_STEPS times,
 # then one final NS solve with the converged nu_tilde_frozen.
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.35   # under-relaxation on the frozen SA update
 
-# IPCS forward solver parameters:
+# IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs":
 FORWARD_IPCS_DT                 = 3.13e-6
 FORWARD_IPCS_MAX_ITERS          = 600
 FORWARD_IPCS_VELOCITY_RTOL      = 1.0e-4

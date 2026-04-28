@@ -11,6 +11,7 @@ IS_ROOT = MPI.COMM_WORLD.Get_rank() == 0
 
 # Use steady SA-specific parameters from the config file.
 simulation_prm = steady_sa_solver_parameters
+setup_simulation_log(saving_directory, __file__)
 
 # Load mesh.
 mesh, marked_facets = load_mesh_from_file(mesh_files["MESH_DIRECTORY"], mesh_files["FACET_DIRECTORY"])
