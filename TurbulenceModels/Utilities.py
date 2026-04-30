@@ -88,6 +88,16 @@ class _TeeStream:
         return getattr(self._stream, name)
 
 
+def terminal_print(message="", is_root=True):
+    """Print a diagnostic to the terminal without copying it to SimulationLog.txt."""
+    if not is_root:
+        return
+
+    stream = _SIMULATION_LOG_ORIGINAL_STDOUT or _sys.stdout
+    print(message, file=stream)
+    stream.flush()
+
+
 def _simulation_log_rank():
     try:
         return MPI.COMM_WORLD.Get_rank()

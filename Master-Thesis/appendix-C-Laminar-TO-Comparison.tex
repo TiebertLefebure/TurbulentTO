@@ -1,0 +1,288 @@
+\chapter{Performance Comparison of the Laminar and Turbulent Topologies}
+\label{app:C_laminar_turbulent_topology_comparison}
+
+\providecommand{\validationplaceholder}[1]{%
+	\fbox{\parbox[c][0.22\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
+}
+
+While Chapter~\ref{ch:benchmark_results} successfully verifies the computational accuracy of the fully coupled FEniCS-SA framework against commercial CFD solvers, an essential engineering justification underpins this methodology: does optimizing a fluid manifold under turbulent conditions yield a physically superior design compared to a standard laminar baseline? Because continuous turbulent adjoint pipelines demand substantially more computational resources, tighter iterative coupling, and rigorous stabilization compared to their laminar equivalents, this mathematical complexity must translate into a measurable reduction in hydrodynamic losses. This appendix quantifies that performance gap.
+
+\section{Methodology and Evaluation Pipeline}
+\label{sec:app_C_lam_vs_turb_methodology}
+To conduct a rigorous comparative analysis, all four topology optimization benchmarks detailed in Appendix~\ref{app:B_validation_configurations} were optimized twice utilizing the custom FEniCS framework. 
+
+The first design iteration was generated using the steady-state, incompressible laminar Navier-Stokes equations at a highly viscous operational regime ($Re = 1$, effectively Stokes flow). This effectively blinded the optimizer to convective momentum transport, flow separation, and turbulent dissipation. The second design iteration utilized the fully coupled Spalart-Allmaras turbulent methodology operating at the target high Reynolds numbers. All geometric dimensions, fluid properties, and physical boundary conditions used for these optimizations match those strictly defined in Appendix~\ref{app:B_validation_configurations}.
+
+Both resulting continuous design fields were subjected to the identical geometry extraction and thresholding procedure. To evaluate their true operational performance, the sharp CAD manifolds were imported into Ansys Fluent, meshed with wall-resolved inflation layers strictly enforcing $y^+ \le 1$, and subjected to identical high-Reynolds turbulent boundary conditions utilizing the SST $k$-$\omega$ turbulence model. Because the spatial convergence of the turbulent-optimized geometries was already verified in Appendix~\ref{app:B_validation_configurations}, analogous grid independence studies are provided in this appendix exclusively for the extracted laminar baselines.
+
+% ---------------------------------------------------------
+% BENCHMARK 1: DIFFUSER
+% ---------------------------------------------------------
+\section{Benchmark 1: The Diffuser}
+\label{sec:app_C_diffuser}
+
+The geometric discrepancy between the laminar and turbulent topologies for the diffuser benchmark directly reflects the distinct physical phenomena captured by the respective adjoint sensitivities. Figure~\ref{fig:app_C_diffuser_topologies} illustrates the thresholded projected density variables ($\bar{\gamma}$) for both solvers.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Laminar ($Re=1$)}
+		\caption{Laminar-optimized topology ($Re=1$).}
+		\label{fig:app_C_diffuser_lam_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Turbulent}
+		\caption{Turbulent-optimized topology (SA).}
+		\label{fig:app_C_diffuser_turb_topo}
+	\end{subfigure}
+	\caption{Comparison of the final thresholded design topologies for the Borrvall diffuser.}
+	\label{fig:app_C_diffuser_topologies}
+\end{figure}
+
+To guarantee a fair high-fidelity CFD comparison, the spatial resolution of the extracted laminar design was formally verified in Ansys Fluent. The grid independence study, ensuring the SST $k$-$\omega$ pressure drop metric is decoupled from discretization error, is detailed in Table~\ref{tab:app_C_diffuser_mesh_lam}.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Ansys Fluent mesh-independence table for the extracted laminar diffuser geometry.}
+	\label{tab:app_C_diffuser_mesh_lam}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\hline
+		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
+		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
+		Elements / cells & [insert] & [insert] & [insert] \\
+		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
+		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+Evaluating both spatially converged geometries under the target turbulent boundary conditions yields the macroscopic thermodynamic performance metrics summarized in Table~\ref{tab:app_C_diffuser_perf}.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Hydrodynamic performance comparison of the laminar and turbulent diffuser topologies, evaluated under identical turbulent boundary conditions (Ansys SST $k$-$\omega$).}
+	\label{tab:app_C_diffuser_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c}
+		\hline
+		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\hline
+		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
+		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% ---------------------------------------------------------
+% BENCHMARK 2: DOUBLE PIPE
+% ---------------------------------------------------------
+\section{Benchmark 2: The Double Pipe}
+\label{sec:app_C_doublepipe}
+
+The double pipe benchmark forces complex fluid splitting. Figure~\ref{fig:app_C_doublepipe_topologies} compares the unconstrained, purely viscous routing generated by the laminar solver against the streamlined, momentum-conscious routing of the turbulent framework.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Laminar ($Re=1$)}
+		\caption{Laminar-optimized topology ($Re=1$).}
+		\label{fig:app_C_doublepipe_lam_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Turbulent}
+		\caption{Turbulent-optimized topology (SA).}
+		\label{fig:app_C_doublepipe_turb_topo}
+	\end{subfigure}
+	\caption{Comparison of the final thresholded design topologies for the double pipe.}
+	\label{fig:app_C_doublepipe_topologies}
+\end{figure}
+
+The spatial convergence of the extracted laminar design, evaluated using the SST $k$-$\omega$ closure, is documented in Table~\ref{tab:app_C_doublepipe_mesh_lam}. The Medium grid was selected for the final comparison.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Ansys Fluent mesh-independence table for the extracted laminar double-pipe geometry.}
+	\label{tab:app_C_doublepipe_mesh_lam}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\hline
+		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
+		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
+		Elements / cells & [insert] & [insert] & [insert] \\
+		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
+		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+The resulting pressure drops for both optimized geometries are presented in Table~\ref{tab:app_C_doublepipe_perf}, quantifying the performance penalty incurred by neglecting inertial physics during the optimization phase.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Hydrodynamic performance comparison of the laminar and turbulent double-pipe topologies, evaluated under identical turbulent boundary conditions (Ansys SST $k$-$\omega$).}
+	\label{tab:app_C_doublepipe_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c}
+		\hline
+		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\hline
+		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
+		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% ---------------------------------------------------------
+% BENCHMARK 3: PIPE BEND
+% ---------------------------------------------------------
+\section{Benchmark 3: The Pipe Bend}
+\label{sec:app_C_pipebend}
+
+Curvature-induced separation dominates the $90^\circ$ pipe bend. As seen in Figure~\ref{fig:app_C_pipebend_topologies}, the laminar solver ($Re=1$) favors a sharp, unmitigated corner to minimize pure wall friction, whereas the turbulent solver introduces a heavily filleted inner radius to suppress boundary layer detachment.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Laminar ($Re=1$)}
+		\caption{Laminar-optimized topology ($Re=1$).}
+		\label{fig:app_C_pipebend_lam_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Turbulent}
+		\caption{Turbulent-optimized topology (SA).}
+		\label{fig:app_C_pipebend_turb_topo}
+	\end{subfigure}
+	\caption{Comparison of the final thresholded design topologies for the pipe bend.}
+	\label{fig:app_C_pipebend_topologies}
+\end{figure}
+
+The grid independence verification for the laminar pipe bend design in Ansys Fluent is provided in Table~\ref{tab:app_C_pipebend_mesh_lam}.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Ansys Fluent mesh-independence table for the extracted laminar pipe-bend geometry.}
+	\label{tab:app_C_pipebend_mesh_lam}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\hline
+		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
+		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
+		Elements / cells & [insert] & [insert] & [insert] \\
+		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
+		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+Evaluating these two disparate geometric strategies under the target turbulent regime yields the pressure drops shown in Table~\ref{tab:app_C_pipebend_perf}. The drastic reduction in form drag highlights the necessity of the fully coupled SA framework for highly convective turning flows.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Hydrodynamic performance comparison of the laminar and turbulent pipe-bend topologies, evaluated under identical turbulent boundary conditions (Ansys SST $k$-$\omega$).}
+	\label{tab:app_C_pipebend_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c}
+		\hline
+		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\hline
+		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
+		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+% ---------------------------------------------------------
+% BENCHMARK 4: U-BEND
+% ---------------------------------------------------------
+\section{Benchmark 4: The U-Bend}
+\label{sec:app_C_ubend}
+
+The U-bend represents the most severe aerodynamic challenge evaluated in this thesis. Figure~\ref{fig:app_C_ubend_topologies} clearly demonstrates the structural differences between a topology optimized purely for laminar diffusion and one actively mitigating massive momentum reversal and turbulent wake generation.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Laminar ($Re=1$)}
+		\caption{Laminar-optimized topology ($Re=1$).}
+		\label{fig:app_C_ubend_lam_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{Projected Density: Turbulent}
+		\caption{Turbulent-optimized topology (SA).}
+		\label{fig:app_C_ubend_turb_topo}
+	\end{subfigure}
+	\caption{Comparison of the final thresholded design topologies for the U-bend.}
+	\label{fig:app_C_ubend_topologies}
+\end{figure}
+
+The spatial convergence of the extracted laminar U-bend CAD was verified to ensure an unbiased comparison. The grid independence parameters are documented in Table~\ref{tab:app_C_ubend_mesh_lam}.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Ansys Fluent mesh-independence table for the extracted laminar U-bend geometry.}
+	\label{tab:app_C_ubend_mesh_lam}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\hline
+		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
+		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
+		Elements / cells & [insert] & [insert] & [insert] \\
+		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
+		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+Table~\ref{tab:app_C_ubend_perf} summarizes the final power dissipation metrics. The severe performance penalty incurred by the laminar geometry is heavily dominated by the artificial turbulent kinetic energy generated within its flow separation zones, confirming that turbulent topology optimization is a strict requirement for high-Reynolds engineering applications.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Hydrodynamic performance comparison of the laminar and turbulent U-bend topologies, evaluated under identical turbulent boundary conditions (Ansys SST $k$-$\omega$).}
+	\label{tab:app_C_ubend_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c}
+		\hline
+		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\hline
+		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
+		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier

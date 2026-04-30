@@ -21,6 +21,7 @@ from Utilities_SharedTO import (
     ensure_clean_dir,
     initialize_optimization_log,
     load_config_module_from_cli,
+    pressure_drop_between_boundaries,
     reset_vtk_series,
 )
 
@@ -288,7 +289,7 @@ u_out = File(reset_vtk_series(os.path.join(u_dir, "plot_u.pvd"), COMM))
 p_out = File(reset_vtk_series(os.path.join(p_dir, "plot_p.pvd"), COMM))
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path)
+initialize_optimization_log(log_path, pressure_drop_columns=("dP_design",))
 
 
 # ------------------------------------------------------------
@@ -442,6 +443,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         p_out << w_fwd.sub(1)
 
         f0val = assemble(ObjFunctional)
+        pressure_drop_design_now = pressure_drop_between_boundaries(
+            w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
+        )
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
@@ -489,6 +493,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             inner_count,
             iter_count,
             f0val,
+            pressure_drop_design_now,
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
@@ -496,9 +501,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-            inner_count, iteration_elapsed, optimization_elapsed, f0val, obj_conv, vol_fraction_now,
+            inner_count, iteration_elapsed, optimization_elapsed, f0val, pressure_drop_design_now, obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
         ))
 

@@ -97,20 +97,24 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 # Inner pseudo-time flow solve used inside each outer Picard step.
 # The medium wall-resolved mesh can falsely look over-diffusive at the bend-exit
 # probe if the IPCS pressure solve is allowed to stop at O(1e-3) relative change.
-# Keep a moderate cap for routine runs because the U-bend pressure residual can
-# plateau before meeting the strict target. Raise this for final convergence
-# checks if needed.
+# Keep a larger cap here: if the inner flow solve exits early, the outer Picard
+# loop can fall into an odd/even pressure-velocity catch-up cycle.
 FLOW_IPCS_TIME_STEP = 1.0e-4
-FLOW_IPCS_MAX_STEPS = 200
+FLOW_IPCS_MAX_STEPS = 800
 # The final cleanup flow solve runs once, after SA Picard convergence, so keep a
 # larger cap there to avoid shortening the saved final state as much as the
 # repeated Picard updates.
-FLOW_IPCS_FINAL_MAX_STEPS = 600
+FLOW_IPCS_FINAL_MAX_STEPS = 1200
 FLOW_IPCS_VELOCITY_TOLERANCE = 5.0e-5
 FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-4
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
-FLOW_IPCS_PRESSURE_RELAXATION = 0.1
+# Incremental IPCS uses p0 in the tentative velocity, pressure increment, and
+# velocity correction steps. Keep pressure undamped first; lower this if the
+# pseudo-time pressure update still oscillates.
+FLOW_IPCS_PRESSURE_RELAXATION = 1.0
 FLOW_IPCS_LOG_EVERY = 10
+# Verbose IPCS diagnostics print to the terminal only; SimulationLog.txt stays compact.
+FLOW_IPCS_VERBOSE = True
 FLOW_IPCS_NORMALIZE_PRESSURE_MEAN = False
 
 # Fallback solver used by any IPCS block without an explicit block-specific setting.
@@ -128,8 +132,8 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 # Restart controls. Keep this enabled for the current medium-mesh recovery run so
 # the solver resumes from the previously saved HDF5 state instead of starting cold.
 # Set RESTART_FROM_SAVED_STATE = False for a clean run from the initial condition.
-RESTART_FROM_SAVED_STATE = True
-RESTART_REQUIRE_FILES = False
+RESTART_FROM_SAVED_STATE = False
+RESTART_REQUIRE_FILES = True
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 
 # G-equation wall-distance parameters.
@@ -152,6 +156,12 @@ mesh_files = {
 
 boundary_markers = BOUNDARY_MARKERS
 boundary_conditions = BOUNDARY_CONDITIONS
+
+pressure_drop_metric = {
+    "INLET_MARKERS": BOUNDARY_MARKERS["INFLOW"],
+    "OUTLET_MARKERS": BOUNDARY_MARKERS["OUTFLOW"],
+    "OUTLET_PRESSURE": BOUNDARY_CONDITIONS["OUTFLOW"]["P"],
+}
 
 initial_conditions = {
     "U": INITIAL_VELOCITY,
@@ -181,6 +191,7 @@ steady_sa_solver_parameters = {
     "FLOW_IPCS_VELOCITY_RELAXATION": FLOW_IPCS_VELOCITY_RELAXATION,
     "FLOW_IPCS_PRESSURE_RELAXATION": FLOW_IPCS_PRESSURE_RELAXATION,
     "FLOW_IPCS_LOG_EVERY": FLOW_IPCS_LOG_EVERY,
+    "FLOW_IPCS_VERBOSE": FLOW_IPCS_VERBOSE,
     "FLOW_IPCS_NORMALIZE_PRESSURE_MEAN": FLOW_IPCS_NORMALIZE_PRESSURE_MEAN,
     "FLOW_IPCS_LINEAR_SOLVER": FLOW_IPCS_LINEAR_SOLVER,
     "FLOW_IPCS_LINEAR_PRECONDITIONER": FLOW_IPCS_LINEAR_PRECONDITIONER,

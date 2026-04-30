@@ -19,6 +19,7 @@ from TurbulenceModel_SpalartAllmaras_TO_Frozen import (
 from Utilities_SharedTO import (
     append_optimization_log_entry,
     as_list,
+    build_design_pressure_drop_markers,
     build_sa_inlet_nu_tilde_targets,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
@@ -26,6 +27,8 @@ from Utilities_SharedTO import (
     ensure_clean_dir,
     initialize_optimization_log,
     load_config_module_from_cli,
+    pressure_drop_between_boundaries,
+    pressure_drop_between_internal_facets,
     ResilientVTKFile,
 )
 from Utilities_TurbulentTO_Frozen import (
@@ -329,9 +332,17 @@ if "QUADRATURE_DEGREE" in globals():
     ds = Measure("ds", domain=mesh, subdomain_data=boundaries, metadata=measure_metadata)
     dS = Measure("dS", domain=mesh, metadata=measure_metadata)
 else:
+    measure_metadata = {}
     dx = Measure("dx", domain=mesh)
     ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
     dS = Measure("dS", domain=mesh)
+design_pressure_drop_facets, design_pressure_drop_mark = build_design_pressure_drop_markers(mesh, globals())
+dS_design_pressure = Measure(
+    "dS",
+    domain=mesh,
+    subdomain_data=design_pressure_drop_facets,
+    metadata=measure_metadata,
+)
 n = FacetNormal(mesh)
 
 inlet_profiles, outlet_profiles = globals()["build_velocity_profile_sets"]()
@@ -1395,6 +1406,25 @@ def solve_forward(solve_label=None):
     return solve_forward_ipcs(solve_label)
 
 
+def ipcs_accept_best_score_for_label(solve_label, default_score):
+    """Return the near-steady IPCS acceptance score for this solve role."""
+    label_text = "" if solve_label is None else str(solve_label).lower()
+    if "final" in label_text:
+        return float(globals().get("FORWARD_IPCS_FINAL_ACCEPT_BEST_SCORE", default_score))
+    if "picard" in label_text:
+        return float(globals().get("FORWARD_IPCS_PICARD_ACCEPT_BEST_SCORE", default_score))
+    return float(default_score)
+
+
+def summarize_linear_solver_failure(exc):
+    """Extract the useful PETSc/DOLFIN reason from a failed linear solve."""
+    lines = [line.strip(" *") for line in str(exc).splitlines() if line.strip(" *")]
+    for line in lines:
+        if line.startswith("Reason:"):
+            return line
+    return lines[-1] if lines else exc.__class__.__name__
+
+
 # ===============================================================
 # IPCS forward solve
 # ===============================================================
@@ -1414,7 +1444,8 @@ def solve_forward_ipcs(solve_label=None):
     dt_reduction = float(globals().get("FORWARD_IPCS_DT_REDUCTION_FACTOR", 0.5))
     relax_reduction = float(globals().get("FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR", 0.7))
     error_on_nonconvergence = bool(globals().get("FORWARD_IPCS_ERROR_ON_NONCONVERGENCE", True))
-    accept_best_score = float(globals().get("FORWARD_IPCS_ACCEPT_BEST_SCORE", 1.0))
+    default_accept_best_score = float(globals().get("FORWARD_IPCS_ACCEPT_BEST_SCORE", 1.0))
+    accept_best_score = ipcs_accept_best_score_for_label(solve_label, default_accept_best_score)
     vel_solver_name = str(globals().get("FORWARD_IPCS_VEL_SOLVER", "bicgstab"))
     p_solver_name = str(globals().get("FORWARD_IPCS_P_SOLVER", "cg"))
     direct_solver_names = {"lu", "mumps", "umfpack", "superlu", "superlu_dist"}
@@ -1462,6 +1493,7 @@ def solve_forward_ipcs(solve_label=None):
         attempt_best_du = np.inf
         attempt_best_dp = np.inf
         attempt_best_step_idx = 0
+        attempt_failure = None
 
         solver_log(
             "      [IPCS] attempt {}/{}: dt={:.2e}, omega_u={:.2f}, omega_p={:.2f}".format(
@@ -1470,9 +1502,23 @@ def solve_forward_ipcs(solve_label=None):
         )
 
         for step_idx in range(1, max_it + 1):
-            solve(a_pc_u    == L_pc_u,    u_pc_star, bcu_pc, solver_parameters=ksp_u)
-            solve(a_pc_p    == L_pc_p,    p_pc_new,  bcp_pc, solver_parameters=ksp_p)
-            solve(a_pc_corr == L_pc_corr, u_pc_new,  bcu_pc, solver_parameters=ksp_u)
+            substep_name = "tentative velocity"
+            try:
+                solve(a_pc_u    == L_pc_u,    u_pc_star, bcu_pc, solver_parameters=ksp_u)
+                substep_name = "pressure correction"
+                solve(a_pc_p    == L_pc_p,    p_pc_new,  bcp_pc, solver_parameters=ksp_p)
+                substep_name = "velocity correction"
+                solve(a_pc_corr == L_pc_corr, u_pc_new,  bcu_pc, solver_parameters=ksp_u)
+            except RuntimeError as exc:
+                attempt_failure = "{} solve failed at step {:03d}: {}".format(
+                    substep_name, step_idx, summarize_linear_solver_failure(exc)
+                )
+                solver_log(
+                    "      [IPCS] attempt {}/{} {}".format(
+                        attempt_idx + 1, max_restarts + 1, attempt_failure,
+                    )
+                )
+                break
 
             du_rel = (np.linalg.norm(u_pc_new.vector()[:] - u_pc_old.vector()[:])
                       / max(np.linalg.norm(u_pc_new.vector()[:]), 1.0e-12))
@@ -1554,12 +1600,16 @@ def solve_forward_ipcs(solve_label=None):
                 else:
                     raise
 
-        attempt_summaries.append(
-            "attempt {}: dt={:.2e}, best@{:03d} du={:.2e} (target {:.2e}), dp={:.2e} (target {:.2e}); final du={:.2e}, dp={:.2e}".format(
-                attempt_idx + 1, current_dt, attempt_best_step_idx, attempt_best_du, rtol_u,
-                attempt_best_dp, rtol_p, du_rel, dp_rel,
-            )
+        summary = (
+            "attempt {}: dt={:.2e}, best@{:03d} du={:.2e} (target {:.2e}), "
+            "dp={:.2e} (target {:.2e}); final du={:.2e}, dp={:.2e}"
+        ).format(
+            attempt_idx + 1, current_dt, attempt_best_step_idx, attempt_best_du, rtol_u,
+            attempt_best_dp, rtol_p, du_rel, dp_rel,
         )
+        if attempt_failure is not None:
+            summary = "{}; {}".format(summary, attempt_failure)
+        attempt_summaries.append(summary)
         if converged:
             assign(w_fwd.sub(0), u_pc_old)
             assign(w_fwd.sub(1), p_pc_old)
@@ -1570,12 +1620,26 @@ def solve_forward_ipcs(solve_label=None):
         assign(u_start, attempt_best_u)
         assign(p_start, attempt_best_p)
 
-        solver_log(
-            "      [IPCS] attempt {}/{} reached the {}-step limit without meeting tolerances: "
-            "du={:.2e} (target {:.2e}), dp={:.2e} (target {:.2e})".format(
-                attempt_idx + 1, max_restarts + 1, max_it, du_rel, rtol_u, dp_rel, rtol_p,
+        if attempt_failure is None:
+            solver_log(
+                "      [IPCS] attempt {}/{} reached the {}-step limit without meeting tolerances: "
+                "du={:.2e} (target {:.2e}), dp={:.2e} (target {:.2e})".format(
+                    attempt_idx + 1, max_restarts + 1, max_it, du_rel, rtol_u, dp_rel, rtol_p,
+                )
             )
-        )
+        else:
+            if attempt_idx < max_restarts:
+                solver_log(
+                    "      [IPCS] attempt {}/{} will retry from the best stable iterate with reduced dt/relaxation".format(
+                        attempt_idx + 1, max_restarts + 1,
+                    )
+                )
+            else:
+                solver_log(
+                    "      [IPCS] attempt {}/{} ended after a linear solver failure; no retries remain".format(
+                        attempt_idx + 1, max_restarts + 1,
+                    )
+                )
 
     dt_pc.assign(base_dt)
     assign(w_fwd.sub(0), best_u)
@@ -1652,7 +1716,11 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path, include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"))
+initialize_optimization_log(
+    log_path,
+    include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"),
+    pressure_drop_columns=("dP_nondesign", "dP_design"),
+)
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -1774,6 +1842,15 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         nu_tilde_out << nu_tilde_frozen
 
         f0val = assemble(ObjFunctional)
+        pressure_drop_nondesign_now = pressure_drop_between_boundaries(
+            w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
+        )
+        pressure_drop_design_now = pressure_drop_between_internal_facets(
+            w_fwd.sub(1),
+            dS_design_pressure,
+            design_pressure_drop_mark["inlet"],
+            design_pressure_drop_mark["outlet"],
+        )
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
@@ -1851,9 +1928,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             inner_count,
             iter_count,
             f0val,
+            pressure_drop_nondesign_now,
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
+            pressure_drop_values=(pressure_drop_nondesign_now, pressure_drop_design_now),
             du_ipcs=final_flow_du_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
             dp_ipcs=final_flow_dp_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
         )
@@ -1864,9 +1943,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-            inner_count, iteration_elapsed, optimization_elapsed, f0val, obj_conv, vol_fraction_now,
+            inner_count, iteration_elapsed, optimization_elapsed, f0val,
+            pressure_drop_nondesign_now, pressure_drop_design_now, obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
             constraint_status_text,
         ))

@@ -18,7 +18,12 @@ mesh, marked_facets = load_mesh_from_file(mesh_files["MESH_DIRECTORY"], mesh_fil
 # Custom integration measures.
 quadrature_degree = simulation_prm["QUADRATURE_DEGREE"]
 dx = Measure("dx", domain=mesh, metadata={"quadrature_degree": quadrature_degree})
-ds = Measure("ds", domain=mesh, metadata={"quadrature_degree": quadrature_degree})
+ds = Measure(
+    "ds",
+    domain=mesh,
+    subdomain_data=marked_facets,
+    metadata={"quadrature_degree": quadrature_degree},
+)
 
 # Construct periodic boundary condition.
 mesh_width = mesh.coordinates()[:, 0].max() - mesh.coordinates()[:, 0].min()
@@ -101,15 +106,16 @@ turbulence_model = SpalartAllmaras(
 )
 turbulence_model.construct_forms(u0)
 
-# Pseudo-time IPCS flow forms, without momentum SUPG.
+# Pseudo-time incremental IPCS flow forms, without momentum SUPG.
 F1 = (
     dot((u - u0) / dt, v) * dx
     + dot(dot(u0, nabla_grad(u)), v) * dx
     + inner((nu + turbulence_model.nu_t) * grad(u), grad(v)) * dx
+    + dot(grad(p0), v) * dx
     - dot(force, v) * dx
 )
-F2 = dot(grad(p), grad(q)) * dx + dot(div(u1) / dt, q) * dx
-F3 = dot(u, v) * dx - dot(u1, v) * dx + dt * dot(grad(p1), v) * dx
+F2 = dot(grad(p - p0), grad(q)) * dx + dot(div(u1) / dt, q) * dx
+F3 = dot(u, v) * dx - dot(u1, v) * dx + dt * dot(grad(p1 - p0), v) * dx
 
 a_1, l_1 = lhs(F1), rhs(F1)
 a_2, l_2 = lhs(F2), rhs(F2)
@@ -138,6 +144,8 @@ solutions, residuals = run_steady_sa_ipcs_picard(
     turbulence_space=K,
     turbulence_model=turbulence_model,
     normalize_pressure_mean=bool(simulation_prm.get("FLOW_IPCS_NORMALIZE_PRESSURE_MEAN", True)),
+    ds=ds,
+    pressure_drop_metric=pressure_drop_metric,
     is_root=IS_ROOT,
 )
 

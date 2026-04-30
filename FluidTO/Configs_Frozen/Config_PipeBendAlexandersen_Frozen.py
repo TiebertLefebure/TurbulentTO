@@ -60,6 +60,10 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 
+# ==============================================================================================
+# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
+# ==============================================================================================
+
 SA_TURBULENCE_INTENSITY = 0.075
 SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.05
 SA_REFERENCE_LENGTH = INLET_HEIGHT
@@ -94,7 +98,7 @@ LINEAR_SOLVER = "mumps"
 # FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
 # The Alexandersen pipe bend is a high-Re pressure-outlet case, so the SNES
 # solve is guarded by convection continuation and several recovery attempts.
-FORWARD_FLOW_SOLVER = "snes"
+FORWARD_FLOW_SOLVER = "ipcs"
 FORWARD_SNES_METHOD = "newtonls"
 FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_LINEAR_SOLVER = "mumps"
@@ -156,7 +160,7 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
     },
 ]
 
-PICARD_STEPS = 4
+PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.20
 
 FORWARD_IPCS_DT = 1.0e-5
@@ -177,7 +181,9 @@ FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
 # pressure-outlet Picard solves before the relative pressure update meets the
 # strict target. Accept that best iterate so the frozen SA outer loop can keep
 # settling the field instead of aborting the optimization.
-FORWARD_IPCS_ACCEPT_BEST_SCORE = 6.0
+FORWARD_IPCS_ACCEPT_BEST_SCORE = 2.0
+FORWARD_IPCS_PICARD_ACCEPT_BEST_SCORE = 3.0
+FORWARD_IPCS_FINAL_ACCEPT_BEST_SCORE = 2.0
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50

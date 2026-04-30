@@ -9,7 +9,22 @@ import sys
 import tempfile
 from time import localtime, strftime
 
-from dolfin import File, Function, MPI, Mesh, MeshValueCollection, XDMFFile, cells, cpp
+from dolfin import (
+    Constant,
+    File,
+    Function,
+    MPI,
+    Mesh,
+    MeshFunction,
+    MeshValueCollection,
+    SubDomain,
+    XDMFFile,
+    assemble,
+    avg,
+    cells,
+    cpp,
+    near,
+)
 
 
 def _resolve_config_path_candidates(raw_config_arg):
@@ -677,7 +692,170 @@ def build_pressure_pin_expression_from_config(config_values):
     return "near(x[0], {:.16g}) && near(x[1], {:.16g})".format(float(pin_x), float(pin_y))
 
 
-def _optimization_log_columns(include_ipcs_residuals=False):
+def area_weighted_boundary_average(field, boundary_measure, markers, area_floor=1.0e-14):
+    marker_list = as_list(markers)
+    one = Constant(1.0)
+    weighted_integral = 0.0
+    boundary_area = 0.0
+    for marker in marker_list:
+        weighted_integral += assemble(field * boundary_measure(marker))
+        boundary_area += assemble(one * boundary_measure(marker))
+    boundary_area = float(boundary_area)
+    if boundary_area <= area_floor:
+        return float("nan")
+    return float(weighted_integral) / boundary_area
+
+
+def pressure_drop_between_boundaries(pressure, boundary_measure, inlet_markers, outlet_markers):
+    inlet_pressure = area_weighted_boundary_average(pressure, boundary_measure, inlet_markers)
+    outlet_pressure = area_weighted_boundary_average(pressure, boundary_measure, outlet_markers)
+    return inlet_pressure - outlet_pressure
+
+
+def area_weighted_internal_facet_average(field, facet_measure, markers, area_floor=1.0e-14):
+    marker_list = as_list(markers)
+    one = Constant(1.0)
+    weighted_integral = 0.0
+    boundary_area = 0.0
+    for marker in marker_list:
+        weighted_integral += assemble(avg(field) * facet_measure(marker))
+        boundary_area += assemble(avg(one) * facet_measure(marker))
+    boundary_area = float(boundary_area)
+    if boundary_area <= area_floor:
+        return float("nan")
+    return float(weighted_integral) / boundary_area
+
+
+def pressure_drop_between_internal_facets(pressure, facet_measure, inlet_markers, outlet_markers):
+    inlet_pressure = area_weighted_internal_facet_average(pressure, facet_measure, inlet_markers)
+    outlet_pressure = area_weighted_internal_facet_average(pressure, facet_measure, outlet_markers)
+    return inlet_pressure - outlet_pressure
+
+
+class _PlaneSegmentSubDomain(SubDomain):
+    def __init__(self, axis, location, range_axis, lower, upper, tol):
+        super().__init__()
+        self._axis = int(axis)
+        self._location = float(location)
+        self._range_axis = int(range_axis)
+        self._lower = float(lower)
+        self._upper = float(upper)
+        self._tol = float(tol)
+
+    def inside(self, x, on_boundary):
+        return near(x[self._axis], self._location, self._tol) and (
+            self._lower - self._tol <= x[self._range_axis] <= self._upper + self._tol
+        )
+
+
+def _plane_spec(axis, location, lower, upper):
+    axis = int(axis)
+    if axis not in (0, 1):
+        raise ValueError("Only 2D pressure-drop planes are supported.")
+    return {
+        "axis": axis,
+        "location": float(location),
+        "range_axis": 1 - axis,
+        "lower": float(lower),
+        "upper": float(upper),
+    }
+
+
+def _normalize_pressure_plane_specs(raw_specs):
+    normalized = []
+    for raw_spec in as_list(raw_specs):
+        if not isinstance(raw_spec, dict):
+            raise TypeError("Pressure-drop plane specifications must be dictionaries.")
+        axis = int(raw_spec["axis"])
+        range_axis = int(raw_spec.get("range_axis", 1 - axis))
+        lower, upper = raw_spec["range"]
+        normalized.append({
+            "axis": axis,
+            "location": float(raw_spec["location"]),
+            "range_axis": range_axis,
+            "lower": float(lower),
+            "upper": float(upper),
+        })
+    return normalized
+
+
+def _infer_design_pressure_drop_plane_specs(config_values):
+    if "DESIGN_PRESSURE_DROP_PLANES" in config_values:
+        planes = config_values["DESIGN_PRESSURE_DROP_PLANES"]
+        return (
+            _normalize_pressure_plane_specs(planes["inlet"]),
+            _normalize_pressure_plane_specs(planes["outlet"]),
+        )
+
+    design_x_min = float(config_values.get("DESIGN_X_MIN", config_values.get("DOMAIN_X_MIN", 0.0)))
+    design_x_max = float(config_values.get("DESIGN_X_MAX", config_values.get("DOMAIN_X_MAX", 1.0)))
+    design_y_min = float(config_values.get("DESIGN_Y_MIN", config_values.get("DOMAIN_Y_MIN", 0.0)))
+    domain_y_min = float(config_values.get("DOMAIN_Y_MIN", design_y_min))
+    domain_y_max = float(config_values.get("DOMAIN_Y_MAX", config_values.get("DESIGN_Y_MAX", 1.0)))
+
+    if "INLET_SEGMENTS" in config_values and "OUTLET_SEGMENTS" in config_values:
+        inlet_specs = [
+            _plane_spec(0, design_x_min, segment[0], segment[1])
+            for segment in as_list(config_values["INLET_SEGMENTS"])
+        ]
+        outlet_specs = [
+            _plane_spec(0, design_x_max, segment[0], segment[1])
+            for segment in as_list(config_values["OUTLET_SEGMENTS"])
+        ]
+        return inlet_specs, outlet_specs
+
+    if all(name in config_values for name in ("TOP_PORT_Y_MIN", "TOP_PORT_Y_MAX", "BOTTOM_PORT_Y_MIN", "BOTTOM_PORT_Y_MAX")):
+        return (
+            [_plane_spec(0, design_x_min, config_values["TOP_PORT_Y_MIN"], config_values["TOP_PORT_Y_MAX"])],
+            [_plane_spec(0, design_x_min, config_values["BOTTOM_PORT_Y_MIN"], config_values["BOTTOM_PORT_Y_MAX"])],
+        )
+
+    if all(name in config_values for name in ("INLET_Y_MIN", "INLET_Y_MAX", "OUTLET_X_MIN", "OUTLET_X_MAX")):
+        return (
+            [_plane_spec(0, design_x_min, config_values["INLET_Y_MIN"], config_values["INLET_Y_MAX"])],
+            [_plane_spec(1, design_y_min, config_values["OUTLET_X_MIN"], config_values["OUTLET_X_MAX"])],
+        )
+
+    if "OUTLET_Y_MIN" in config_values and "OUTLET_Y_MAX" in config_values:
+        return (
+            [_plane_spec(0, design_x_min, domain_y_min, domain_y_max)],
+            [_plane_spec(0, design_x_max, config_values["OUTLET_Y_MIN"], config_values["OUTLET_Y_MAX"])],
+        )
+
+    raise ValueError(
+        "Unable to infer design-domain pressure-drop planes. Define "
+        "DESIGN_PRESSURE_DROP_PLANES in the config."
+    )
+
+
+def build_design_pressure_drop_markers(
+    mesh,
+    config_values,
+    inlet_marker=101,
+    outlet_marker=102,
+):
+    inlet_specs, outlet_specs = _infer_design_pressure_drop_plane_specs(config_values)
+    tol = float(config_values.get("PRESSURE_DROP_PLANE_TOL", config_values.get("TOL", 1.0e-12)))
+    facet_markers = MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+    facet_markers.set_all(0)
+
+    for spec in inlet_specs:
+        _PlaneSegmentSubDomain(
+            spec["axis"], spec["location"], spec["range_axis"], spec["lower"], spec["upper"], tol
+        ).mark(facet_markers, int(inlet_marker))
+
+    for spec in outlet_specs:
+        _PlaneSegmentSubDomain(
+            spec["axis"], spec["location"], spec["range_axis"], spec["lower"], spec["upper"], tol
+        ).mark(facet_markers, int(outlet_marker))
+
+    return facet_markers, {"inlet": int(inlet_marker), "outlet": int(outlet_marker)}
+
+
+def _optimization_log_columns(include_ipcs_residuals=False, pressure_drop_columns=None):
+    if pressure_drop_columns is None:
+        pressure_drop_columns = ("DeltaP_Pa",)
+
     columns = [
         ("Stage", 7),
         ("Q", 7),
@@ -685,10 +863,13 @@ def _optimization_log_columns(include_ipcs_residuals=False):
         ("InnerIter", 10),
         ("GlobalIter", 11),
         ("Objective", 17),
+    ]
+    columns.extend((str(name), 17) for name in pressure_drop_columns)
+    columns.extend([
         ("ObjConv", 17),
         ("VolFrac", 17),
         ("VolResid", 17),
-    ]
+    ])
     if include_ipcs_residuals:
         columns.extend([
             ("du_ipcs", 17),
@@ -698,8 +879,11 @@ def _optimization_log_columns(include_ipcs_residuals=False):
     return columns
 
 
-def _format_optimization_log_row(values, include_ipcs_residuals=False):
-    columns = _optimization_log_columns(include_ipcs_residuals=include_ipcs_residuals)
+def _format_optimization_log_row(values, include_ipcs_residuals=False, pressure_drop_columns=None):
+    columns = _optimization_log_columns(
+        include_ipcs_residuals=include_ipcs_residuals,
+        pressure_drop_columns=pressure_drop_columns,
+    )
     if len(values) != len(columns):
         raise ValueError(
             "Expected {} optimization-log fields, got {}.".format(len(columns), len(values))
@@ -707,13 +891,17 @@ def _format_optimization_log_row(values, include_ipcs_residuals=False):
     return "   ".join(str(value).ljust(width) for value, (_, width) in zip(values, columns))
 
 
-def initialize_optimization_log(log_path, include_ipcs_residuals=False):
-    header_fields = _optimization_log_columns(include_ipcs_residuals=include_ipcs_residuals)
+def initialize_optimization_log(log_path, include_ipcs_residuals=False, pressure_drop_columns=None):
+    header_fields = _optimization_log_columns(
+        include_ipcs_residuals=include_ipcs_residuals,
+        pressure_drop_columns=pressure_drop_columns,
+    )
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "w") as txtout:
             txtout.write(_format_optimization_log_row(
                 [label for label, _ in header_fields],
                 include_ipcs_residuals=include_ipcs_residuals,
+                pressure_drop_columns=pressure_drop_columns,
             ) + "\r\n")
     MPI.barrier(MPI.comm_world)
 
@@ -726,14 +914,19 @@ def append_optimization_log_entry(
     inner_iter,
     global_iter,
     objective,
+    pressure_drop,
     objective_convergence,
     volume_fraction,
     volume_residual,
+    pressure_drop_values=None,
     du_ipcs=None,
     dp_ipcs=None,
 ):
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "a") as txtout:
+            if pressure_drop_values is None:
+                pressure_drop_values = [pressure_drop]
+            pressure_drop_values = [float(value) for value in pressure_drop_values]
             row_values = [
                 "{:d}".format(int(stage_idx)),
                 "{:.3f}".format(float(q_value)),
@@ -741,10 +934,13 @@ def append_optimization_log_entry(
                 "{:d}".format(int(inner_iter)),
                 "{:d}".format(int(global_iter)),
                 "{:.10e}".format(float(objective)),
+            ]
+            row_values.extend("{:.10e}".format(value) for value in pressure_drop_values)
+            row_values.extend([
                 "{:.10e}".format(float(objective_convergence)),
                 "{:.10e}".format(float(volume_fraction)),
                 "{:.10e}".format(float(volume_residual)),
-            ]
+            ])
             if du_ipcs is not None or dp_ipcs is not None:
                 if du_ipcs is None or dp_ipcs is None:
                     raise ValueError("Both du_ipcs and dp_ipcs must be provided together.")
@@ -757,5 +953,6 @@ def append_optimization_log_entry(
                 _format_optimization_log_row(
                     row_values,
                     include_ipcs_residuals=(du_ipcs is not None or dp_ipcs is not None),
+                    pressure_drop_columns=["dP"] * len(pressure_drop_values),
                 ) + "\r\n"
             )

@@ -20,7 +20,7 @@
 \usepackage{xltabular}    % combinatie van longtable + tabularx
 \usepackage{enumitem}
 \usepackage{stmaryrd}
-\usepackage{placeins}
+\usepackage[section]{placeins}
 \usepackage{xltabular,enumitem} 
 \usepackage{pdflscape}
 \usepackage{subcaption}
@@ -35,6 +35,9 @@
 	{Figures/Figures-Ch4/}%
 	{Figures/Figures-Ch5/}%
 	{Figures/Figures-Ch6/}%
+	{Figures/Figures-AppA/}%
+	{Figures/Figures-AppB/}%
+	{Figures/Figures-AppC/}%
 }
 \usepackage[utf8]{inputenc}
 \DeclareUnicodeCharacter{00A0}{ }
@@ -210,11 +213,10 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 % If you have appendices:
 \appendixpage*          % if wanted
 \appendix
-\include{appendix-1-SA-Verification}
-
+\include{appendix-A-SA-Verification-Cases}
 % ... and so on until
-\include{appendix-2-CFD-Mesh-Independence}
-\include{appendix-3-Laminar-Topology-Comparison}
+\include{appendix-B-TO-Benchmarks}
+\include{appendix-C-Laminar-TO-Comparison}
 \backmatter
 % The bibliography comes after the appendices.
 % You can replace the standard "abbrv" bibliography style by another one.

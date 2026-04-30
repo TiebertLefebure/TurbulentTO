@@ -16,6 +16,7 @@ from Utilities import (
     save_h5_file,
     save_list,
     save_pvd_file,
+    terminal_print,
     visualize_convergence,
     visualize_functions,
 )
@@ -43,6 +44,14 @@ def relative_vector_diff(f1, f0):
     diff_sq = MPI4PY.COMM_WORLD.allreduce(diff_sq_local, op=MPI4PY.SUM)
     norm_sq = MPI4PY.COMM_WORLD.allreduce(norm_sq_local, op=MPI4PY.SUM)
     return np.sqrt(diff_sq) / max(np.sqrt(norm_sq), 1.0e-12)
+
+
+def as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set, np.ndarray)):
+        return list(value)
+    return [value]
 
 
 def solve_linear_system(A, x, b, solver_name, preconditioner_name=None):
@@ -82,6 +91,8 @@ def run_steady_sa_ipcs_picard(
     turbulence_space,
     turbulence_model,
     normalize_pressure_mean=False,
+    ds=None,
+    pressure_drop_metric=None,
     is_root=True,
 ):
     """Run steady RANS-SA using an outer Picard loop and inner pseudo-time IPCS solves."""
@@ -163,6 +174,84 @@ def run_steady_sa_ipcs_picard(
 
     dt.assign(float(simulation_prm.get("FLOW_IPCS_TIME_STEP", simulation_prm.get("FORWARD_IPCS_DT"))))
     log_every = max(1, int(simulation_prm.get("FLOW_IPCS_LOG_EVERY", simulation_prm.get("FORWARD_IPCS_LOG_EVERY", 25))))
+    log_flow_iterations = bool(simulation_prm.get(
+        "FLOW_IPCS_VERBOSE",
+        simulation_prm.get("FORWARD_IPCS_VERBOSE", False),
+    ))
+
+    def scalar_value(value):
+        if value is None:
+            return None
+        return float(value)
+
+    def build_pressure_drop_evaluator():
+        if not pressure_drop_metric:
+            return None
+        if ds is None:
+            raise ValueError("Pressure-drop metric requires a boundary measure 'ds'.")
+
+        inlet_markers = as_list(pressure_drop_metric.get("INLET_MARKERS"))
+        outlet_markers = as_list(pressure_drop_metric.get("OUTLET_MARKERS"))
+        fixed_inlet_pressure = scalar_value(pressure_drop_metric.get("INLET_PRESSURE"))
+        fixed_outlet_pressure = scalar_value(pressure_drop_metric.get("OUTLET_PRESSURE"))
+
+        def boundary_pressure_average(field, markers, boundary_label):
+            if len(markers) == 0:
+                raise ValueError(
+                    "Pressure-drop metric needs {} markers when no fixed {} pressure is supplied.".format(
+                        boundary_label,
+                        boundary_label,
+                    )
+                )
+
+            weighted_pressure = 0.0
+            boundary_area = 0.0
+            for marker in markers:
+                marker_id = int(marker)
+                marker_area = float(assemble(Constant(1.0) * ds(marker_id)))
+                weighted_pressure += float(assemble(field * ds(marker_id)))
+                boundary_area += marker_area
+
+            if abs(boundary_area) <= 1.0e-30:
+                raise ValueError(
+                    "Pressure-drop metric found zero boundary measure for {} markers {}.".format(
+                        boundary_label,
+                        markers,
+                    )
+                )
+            return weighted_pressure / boundary_area
+
+        def pressure_average_or_fixed_value(field, markers, fixed_pressure, boundary_label):
+            if len(markers) > 0:
+                return boundary_pressure_average(field, markers, boundary_label)
+            if fixed_pressure is not None:
+                return fixed_pressure
+            raise ValueError(
+                "Pressure-drop metric needs {} markers or a fixed {} pressure.".format(
+                    boundary_label,
+                    boundary_label,
+                )
+            )
+
+        def evaluate_pressure_drop(field):
+            inlet_pressure = pressure_average_or_fixed_value(
+                field,
+                inlet_markers,
+                fixed_inlet_pressure,
+                "inlet",
+            )
+            outlet_pressure = pressure_average_or_fixed_value(
+                field,
+                outlet_markers,
+                fixed_outlet_pressure,
+                "outlet",
+            )
+
+            return float(inlet_pressure - outlet_pressure)
+
+        return evaluate_pressure_drop
+
+    pressure_drop_evaluator = build_pressure_drop_evaluator()
 
     def maybe_restart_from_saved_state():
         if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
@@ -221,7 +310,10 @@ def run_steady_sa_ipcs_picard(
 
     maybe_restart_from_saved_state()
 
-    residuals = {key: [] for key in ["u", "p", "nu_tilde", "flow_u", "flow_p"]}
+    residual_keys = ["u", "p", "nu_tilde", "flow_u", "flow_p"]
+    if pressure_drop_evaluator is not None:
+        residual_keys.append("pressure_drop")
+    residuals = {key: [] for key in residual_keys}
     start_time = time.time()
 
     u_prev_picard = Function(velocity_space)
@@ -236,7 +328,7 @@ def run_steady_sa_ipcs_picard(
             p_average = assemble(p1 * dx) / domain_area
             p1.vector()[:] -= p_average
 
-    def solve_flow_to_steady(label, max_iters=None):
+    def solve_flow_to_steady(label, max_iters=None, verbose=False):
         # Inner loop: keep SA viscosity fixed and advance the flow equations
         # with IPCS substeps until the velocity and pressure changes are small.
         step_limit = flow_max_iters if max_iters is None else int(max_iters)
@@ -269,11 +361,12 @@ def run_steady_sa_ipcs_picard(
             du_rel = relative_vector_diff(u1, u0)
             dp_rel = relative_vector_diff(p1, p0)
 
-            if is_root and (flow_iter == 1 or flow_iter % log_every == 0):
-                print(
+            if verbose and is_root and (flow_iter == 1 or flow_iter % log_every == 0):
+                terminal_print(
                     "    [{} IPCS {:04d}] du={:.3e}, dp={:.3e}".format(
                         label, flow_iter, du_rel, dp_rel
-                    )
+                    ),
+                    is_root=is_root,
                 )
 
             if du_rel <= flow_tolerance_u and dp_rel <= flow_tolerance_p:
@@ -286,8 +379,8 @@ def run_steady_sa_ipcs_picard(
             u0.vector()[:] = u_relaxation * u1.vector()[:] + (1.0 - u_relaxation) * u0.vector()[:]
             p0.vector()[:] = p_relaxation * p1.vector()[:] + (1.0 - p_relaxation) * p0.vector()[:]
 
-        if not converged:
-            root_print(
+        if verbose and not converged:
+            terminal_print(
                 "    [{} IPCS] reached {} steps without meeting flow tolerances: du={:.3e}, dp={:.3e}".format(
                     label, step_limit, du_rel, dp_rel
                 ),
@@ -307,10 +400,15 @@ def run_steady_sa_ipcs_picard(
         p_prev_picard.assign(p0)
         nu_tilde_prev_picard.assign(turbulence_model.nu_tilde0)
 
-        root_print("  [Picard {}] flow solve".format(picard_iter), is_root=is_root)
-        flow_du, flow_dp, flow_converged = solve_flow_to_steady("Picard {}".format(picard_iter))
+        if log_flow_iterations:
+            terminal_print("  [Picard {}] flow solve".format(picard_iter), is_root=is_root)
+        flow_du, flow_dp, _flow_converged = solve_flow_to_steady(
+            "Picard {}".format(picard_iter),
+            verbose=log_flow_iterations,
+        )
 
-        root_print("  [Picard {}] steady SA solve".format(picard_iter), is_root=is_root)
+        if log_flow_iterations:
+            terminal_print("  [Picard {}] steady SA solve".format(picard_iter), is_root=is_root)
         for sa_sweep in range(sa_sweeps):
             # Rebuild SA forms with the latest flow, solve nu_tilde, then relax it.
             turbulence_model.construct_forms(u0)
@@ -331,10 +429,14 @@ def run_steady_sa_ipcs_picard(
         residuals["nu_tilde"].append(float(picard_errors[2]))
         residuals["flow_u"].append(float(flow_du))
         residuals["flow_p"].append(float(flow_dp))
+        pressure_drop = None
+        if pressure_drop_evaluator is not None:
+            pressure_drop = pressure_drop_evaluator(p0)
+            residuals["pressure_drop"].append(float(pressure_drop))
 
         if is_root:
-            print(
-                "  Picard {:04d} ({:.2f}s): outer du={:.3e}, outer dp={:.3e}, "
+            picard_message = (
+                "Picard {:04d} ({:.2f}s): outer du={:.3e}, outer dp={:.3e}, "
                 "outer dnu_tilde={:.3e}; "
                 "flow du={:.3e}, flow dp={:.3e}".format(
                     picard_iter,
@@ -346,6 +448,9 @@ def run_steady_sa_ipcs_picard(
                     flow_dp,
                 )
             )
+            if pressure_drop is not None:
+                picard_message += "; area-weighted pressure drop={:.6e} Pa".format(pressure_drop)
+            print(picard_message)
 
         if (
             picard_errors[0] <= tolerance_u
@@ -353,14 +458,20 @@ def run_steady_sa_ipcs_picard(
             and picard_errors[2] <= tolerance_nu_tilde
         ):
             converged = True
-            root_print(
+            convergence_message = (
                 "Steady RANS-SA Picard solve converged in {} iterations ({:.2f}s); "
-                "final flow residuals: du={:.3e}, dp={:.3e}.".format(
+                "final flow residuals: du={:.3e}, dp={:.3e}".format(
                     picard_iter,
                     time.time() - start_time,
                     flow_du,
                     flow_dp,
-                ),
+                )
+            )
+            if pressure_drop is not None:
+                convergence_message += "; area-weighted pressure drop={:.6e} Pa".format(pressure_drop)
+            convergence_message += "."
+            root_print(
+                convergence_message,
                 is_root=is_root,
             )
             break
@@ -373,13 +484,22 @@ def run_steady_sa_ipcs_picard(
             is_root=is_root,
         )
 
-    root_print("  [Final flow] IPCS with updated turbulent viscosity", is_root=is_root)
+    if log_flow_iterations:
+        terminal_print("  [Final flow] IPCS with updated turbulent viscosity", is_root=is_root)
     final_flow_du, final_flow_dp, _ = solve_flow_to_steady(
         "Final flow",
         max_iters=final_flow_max_iters,
+        verbose=log_flow_iterations,
     )
     residuals["flow_u"].append(float(final_flow_du))
     residuals["flow_p"].append(float(final_flow_dp))
+    if pressure_drop_evaluator is not None:
+        final_pressure_drop = pressure_drop_evaluator(p0)
+        residuals["pressure_drop"].append(float(final_pressure_drop))
+        root_print(
+            "Final flow area-weighted pressure drop={:.6e} Pa.".format(final_pressure_drop),
+            is_root=is_root,
+        )
 
     solutions = {
         "u": u0,

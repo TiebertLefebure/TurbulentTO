@@ -20,6 +20,7 @@ from TurbulenceModel_SpalartAllmaras_TO import (
 from Utilities_SharedTO import (
     append_optimization_log_entry,
     as_list,
+    build_design_pressure_drop_markers,
     build_sa_inlet_nu_tilde_targets,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
@@ -27,6 +28,8 @@ from Utilities_SharedTO import (
     ensure_clean_dir,
     initialize_optimization_log,
     load_config_module_from_cli,
+    pressure_drop_between_boundaries,
+    pressure_drop_between_internal_facets,
     ResilientVTKFile,
 )
 from Utilities_TurbulentTO import (
@@ -326,9 +329,17 @@ if "QUADRATURE_DEGREE" in globals():
     ds = Measure("ds", domain=mesh, subdomain_data=boundaries, metadata=measure_metadata)
     dS = Measure("dS", domain=mesh, metadata=measure_metadata)
 else:
+    measure_metadata = {}
     dx = Measure("dx", domain=mesh)
     ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
     dS = Measure("dS", domain=mesh)
+design_pressure_drop_facets, design_pressure_drop_mark = build_design_pressure_drop_markers(mesh, globals())
+dS_design_pressure = Measure(
+    "dS",
+    domain=mesh,
+    subdomain_data=design_pressure_drop_facets,
+    metadata=measure_metadata,
+)
 n = FacetNormal(mesh)
 
 inlet_profiles, outlet_profiles = globals()["build_velocity_profile_sets"]()
@@ -1330,7 +1341,7 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path)
+initialize_optimization_log(log_path, pressure_drop_columns=("dP_nondesign", "dP_design"))
 
 initial_density = float(globals().get("INITIAL_DENSITY_VALUE", VOL_FRAC))
 assign(rho, interpolate(Constant(initial_density), DensitySpace))
@@ -1431,6 +1442,15 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         nu_tilde_out << w_state.sub(STATE_TURB_IDX)
 
         f0val = assemble(ObjFunctional)
+        pressure_drop_nondesign_now = pressure_drop_between_boundaries(
+            w_state.sub(STATE_P_IDX), ds, MARK["inlet"], MARK["outlet"]
+        )
+        pressure_drop_design_now = pressure_drop_between_internal_facets(
+            w_state.sub(STATE_P_IDX),
+            dS_design_pressure,
+            design_pressure_drop_mark["inlet"],
+            design_pressure_drop_mark["outlet"],
+        )
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1.0e-12))
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
@@ -1503,9 +1523,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             inner_count,
             iter_count,
             f0val,
+            pressure_drop_nondesign_now,
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
+            pressure_drop_values=(pressure_drop_nondesign_now, pressure_drop_design_now),
         )
 
         constraint_status_text = ""
@@ -1515,9 +1537,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
         root_print(
-            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
                 q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-                inner_count, iteration_elapsed, optimization_elapsed, f0val, obj_conv, vol_fraction_now,
+                inner_count, iteration_elapsed, optimization_elapsed, f0val,
+                pressure_drop_nondesign_now, pressure_drop_design_now, obj_conv, vol_fraction_now,
                 convergence_history, OBJECTIVE_STREAK_TO_STOP,
                 constraint_status_text,
             )
