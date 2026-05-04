@@ -720,6 +720,7 @@ else:
 ObjFunctional = ObjectiveRegion * (
     dissipation_density + alpha(rho_effective) * inner(u, u)
 ) * dx
+DissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 # Monolithic primal residual for the current design. Full simply adds the
 # reciprocal wall-distance equation to this same state system.
@@ -1341,7 +1342,14 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
-initialize_optimization_log(log_path, pressure_drop_columns=("dP_nondesign", "dP_design"))
+initialize_optimization_log(
+    log_path,
+    pressure_drop_columns=(
+        "Dissipation",
+        "dP_static_nondesign",
+        "dP_static_design",
+    ),
+)
 
 initial_density = float(globals().get("INITIAL_DENSITY_VALUE", VOL_FRAC))
 assign(rho, interpolate(Constant(initial_density), DensitySpace))
@@ -1442,6 +1450,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         nu_tilde_out << w_state.sub(STATE_TURB_IDX)
 
         f0val = assemble(ObjFunctional)
+        dissipation_now = assemble(DissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_state.sub(STATE_P_IDX), ds, MARK["inlet"], MARK["outlet"]
         )
@@ -1527,7 +1536,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
-            pressure_drop_values=(pressure_drop_nondesign_now, pressure_drop_design_now),
+            pressure_drop_values=(
+                dissipation_now,
+                pressure_drop_nondesign_now,
+                pressure_drop_design_now,
+            ),
         )
 
         constraint_status_text = ""
@@ -1537,10 +1550,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
         root_print(
-            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} Dissipation={:.4e} dP_static_nondesign={:.4e} Pa dP_static_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
                 q_val, float(BETA_PROJ.values()[0]), move_limit_now,
                 inner_count, iteration_elapsed, optimization_elapsed, f0val,
-                pressure_drop_nondesign_now, pressure_drop_design_now, obj_conv, vol_fraction_now,
+                dissipation_now, pressure_drop_nondesign_now, pressure_drop_design_now,
+                obj_conv, vol_fraction_now,
                 convergence_history, OBJECTIVE_STREAK_TO_STOP,
                 constraint_status_text,
             )

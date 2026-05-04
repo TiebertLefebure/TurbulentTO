@@ -42,7 +42,7 @@ The geometric discrepancy between the laminar and turbulent topologies for the d
 	\label{fig:app_C_diffuser_topologies}
 \end{figure}
 
-To guarantee a fair high-fidelity CFD comparison, the spatial resolution of the extracted laminar design was formally verified in Ansys Fluent. The grid independence study, ensuring the SST $k$-$\omega$ pressure drop metric is decoupled from discretization error, is detailed in Table~\ref{tab:app_C_diffuser_mesh_lam}.
+To guarantee a fair high-fidelity CFD comparison, the spatial resolution of the extracted laminar design was formally verified in Ansys Fluent. The grid independence study, ensuring the SST $k$-$\omega$ viscous dissipation metric is decoupled from discretization error, is detailed in Table~\ref{tab:app_C_diffuser_mesh_lam}.
 
 \begin{table}[htbp]
 	\centering
@@ -57,8 +57,8 @@ To guarantee a fair high-fidelity CFD comparison, the spatial resolution of the 
 		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
 		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -73,7 +73,7 @@ Evaluating both spatially converged geometries under the target turbulent bounda
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c}
 		\hline
-		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\textbf{Design Origin} & \textbf{Viscous Dissipation ($\Phi_D$) [W/m]} & \textbf{Relative Performance} \\
 		\hline
 		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
 		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
@@ -125,13 +125,13 @@ The spatial convergence of the extracted laminar design, evaluated using the SST
 		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
 		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-The resulting pressure drops for both optimized geometries are presented in Table~\ref{tab:app_C_doublepipe_perf}, quantifying the performance penalty incurred by neglecting inertial physics during the optimization phase.
+The resulting dissipation values for both optimized geometries are presented in Table~\ref{tab:app_C_doublepipe_perf}, quantifying the performance penalty incurred by neglecting inertial physics during the optimization phase.
 
 \begin{table}[!ht]
 	\centering
@@ -141,7 +141,7 @@ The resulting pressure drops for both optimized geometries are presented in Tabl
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c}
 		\hline
-		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\textbf{Design Origin} & \textbf{Viscous Dissipation ($\Phi_D$) [W/m]} & \textbf{Relative Performance} \\
 		\hline
 		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
 		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
@@ -193,13 +193,13 @@ The grid independence verification for the laminar pipe bend design in Ansys Flu
 		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
 		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-Evaluating these two disparate geometric strategies under the target turbulent regime yields the pressure drops shown in Table~\ref{tab:app_C_pipebend_perf}. The drastic reduction in form drag highlights the necessity of the fully coupled SA framework for highly convective turning flows.
+Evaluating these two disparate geometric strategies under the target turbulent regime yields the dissipation metrics shown in Table~\ref{tab:app_C_pipebend_perf}. The drastic reduction in form drag highlights the necessity of the fully coupled SA framework for highly convective turning flows.
 
 \begin{table}[!ht]
 	\centering
@@ -209,7 +209,7 @@ Evaluating these two disparate geometric strategies under the target turbulent r
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c}
 		\hline
-		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\textbf{Design Origin} & \textbf{Viscous Dissipation ($\Phi_D$) [W/m]} & \textbf{Relative Performance} \\
 		\hline
 		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
 		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\
@@ -261,8 +261,8 @@ The spatial convergence of the extracted laminar U-bend CAD was verified to ensu
 		Bulk mesh type & Polyhedral & Polyhedral & Polyhedral \\
 		Near-wall treatment & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ & Inflation, $y^+ \le 1$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D$ (Med--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -277,7 +277,7 @@ Table~\ref{tab:app_C_ubend_perf} summarizes the final power dissipation metrics.
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c}
 		\hline
-		\textbf{Design Origin} & \textbf{Pressure Drop ($\Delta p$) [Pa]} & \textbf{Relative Performance} \\
+		\textbf{Design Origin} & \textbf{Viscous Dissipation ($\Phi_D$) [W/m]} & \textbf{Relative Performance} \\
 		\hline
 		Laminar TO Formulation ($Re=1$) & [insert] & Baseline \\
 		Turbulent TO Formulation (SA) & [insert] & \textbf{-[insert]\%} \\

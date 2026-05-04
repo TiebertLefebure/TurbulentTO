@@ -5,7 +5,7 @@
 	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
 }
 
-To ensure complete scientific reproducibility and support the cross-code validation campaign detailed in Chapter~\ref{ch:benchmark_results}, this appendix documents the comprehensive physical boundary conditions, numerical FEniCS configurations, and Ansys spatial grid independence studies for all four topology optimization benchmarks. Because the native FEniCS topology optimization utilizes a fixed, Brinkman-penalized Cartesian grid, the transition to a sharp, body-fitted CAD geometry in Ansys introduces potential spatial discretization errors. Establishing grid independence ensures that the reported pressure drops ($\Delta p$) accurately reflect the underlying solver physics and turbulence models, rather than numerical remeshing noise.
+To ensure complete scientific reproducibility and support the cross-code validation campaign detailed in Chapter~\ref{ch:benchmark_results}, this appendix documents the comprehensive physical boundary conditions, numerical FEniCS configurations, and Ansys spatial grid independence studies for all four topology optimization benchmarks. Because the native FEniCS topology optimization utilizes a fixed, Brinkman-penalized Cartesian grid, the transition to a sharp, body-fitted CAD geometry in Ansys introduces potential spatial discretization errors. Establishing grid independence ensures that the reported viscous dissipation metrics ($\Phi_D$) accurately reflect the underlying solver physics and turbulence models, rather than numerical remeshing noise.
 
 \section{Near-Wall Treatment and Meshing Strategy}
 \label{sec:app_B_mesh_strategy}
@@ -43,7 +43,7 @@ The diffuser benchmark evaluates the framework's ability to mitigate adverse pre
 		Outlet condition & Relative static pressure $p=0$ Pa at the outlet \\
 		Wall conditions & No-slip velocity on all walls; $\tilde{\nu}=0$ at solid walls for the SA model \\
 		SA inlet turbulence & Turbulence intensity $I=5.0\%$; length-scale ratio $\ell/L=0.07$; inferred $\nu_t/\nu \approx 2.35$ \\
-		Pressure-drop metric & Area-weighted inlet pressure minus area-weighted outlet pressure \\
+		Performance metric & Viscous dissipation over the fluid domain ($\Phi_D$) \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -99,10 +99,10 @@ Upon convergence, the geometry was extracted and imported into Ansys Fluent. A f
 		Inflation layers & [insert] & [insert] & [insert] \\
 		Growth rate & $\le 1.20$ & $\le 1.20$ & $\le 1.20$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SA}}$ [Pa] & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p_{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
-		Relative change in $\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & [insert] & [insert] & [insert] \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D^{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		Relative change in $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -139,7 +139,7 @@ The double pipe benchmark forces complex fluid splitting and mixing. The domain 
 		Outlet condition & Relative static pressure $p=0$ Pa at both right ports \\
 		Wall conditions & No-slip velocity on all walls; $\tilde{\nu}=0$ at solid walls for the SA model \\
 		SA inlet turbulence & Turbulence intensity $I=7.5\%$; length-scale ratio $\ell/w_p=0.06$; inferred $\nu_t/\nu \approx 5.03$ \\
-		Pressure-drop metric & Area-weighted pressure over both inlet ports minus area-weighted pressure over both outlet ports \\
+		Performance metric & Viscous dissipation over the fluid domain ($\Phi_D$) \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -177,7 +177,7 @@ The optimization engine relied on the frozen turbulence adjoint subject to a res
 	\end{tabularx}
 \end{table}
 
-Following extraction, the resulting CAD manifold was meshed with boundary layer inflation strategies. The macroscopic pressure drop convergence across successive mesh refinements is verified in Table~\ref{tab:app_B_doublepipe_mesh}.
+Following extraction, the resulting CAD manifold was meshed with boundary layer inflation strategies. The macroscopic viscous dissipation convergence across successive mesh refinements is verified in Table~\ref{tab:app_B_doublepipe_mesh}.
 
 \begin{table}[htbp]
 	\centering
@@ -195,10 +195,10 @@ Following extraction, the resulting CAD manifold was meshed with boundary layer 
 		Inflation layers & [insert] & [insert] & [insert] \\
 		Growth rate & $\le 1.20$ & $\le 1.20$ & $\le 1.20$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SA}}$ [Pa] & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p_{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
-		Relative change in $\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & [insert] & [insert] & [insert] \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D^{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		Relative change in $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -235,7 +235,7 @@ The pipe bend isolates curvature-driven secondary flow phenomena. The specific g
 		Outlet condition & Relative static pressure $p=0$ Pa at the outlet; outlet component constraint $u_x=0$ \\
 		Wall conditions & No-slip velocity on all walls; $\tilde{\nu}=0$ at solid walls for the SA model \\
 		SA inlet turbulence & Turbulence intensity $I=7.5\%$; length-scale ratio $\ell/h_{in}=0.05$; inferred $\nu_t/\nu \approx 12.6$ \\
-		Pressure-drop metric & Area-weighted inlet pressure minus area-weighted outlet pressure \\
+		Performance metric & Viscous dissipation over the fluid domain ($\Phi_D$) \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -274,7 +274,7 @@ The numerical architecture utilized to solve this highly convective state within
 \end{table}
 
 
-The spatial discretization of the extracted curvature heavily impacts the Ansys solver physics. The asymptotic stabilization of the pressure drop across refined element counts is confirmed in Table~\ref{tab:app_B_pipebend_mesh}.
+The spatial discretization of the extracted curvature heavily impacts the Ansys solver physics. The asymptotic stabilization of the viscous dissipation across refined element counts is confirmed in Table~\ref{tab:app_B_pipebend_mesh}.
 
 \begin{table}[htbp]
 	\centering
@@ -292,10 +292,10 @@ The spatial discretization of the extracted curvature heavily impacts the Ansys 
 		Inflation layers & [insert] & [insert] & [insert] \\
 		Growth rate & $\le 1.20$ & $\le 1.20$ & $\le 1.20$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SA}}$ [Pa] & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p_{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
-		Relative change in $\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & [insert] & [insert] & [insert] \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D^{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		Relative change in $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -333,7 +333,7 @@ The U-bend represents the most severe aerodynamic challenge, combining strong cu
 		Outlet condition & Relative static pressure $p=0$ Pa at the bottom left outlet; outlet component constraint $u_y=0$ \\
 		Wall conditions & No-slip velocity on all walls; $\tilde{\nu}=0$ at solid walls for the SA model \\
 		SA inlet turbulence & Turbulence intensity $I=7.5\%$; length-scale ratio $\ell/h_p=0.05$; inferred $\nu_t/\nu \approx 12.6$ \\
-		Pressure-drop metric & Area-weighted inlet pressure minus area-weighted outlet pressure \\
+		Performance metric & Viscous dissipation over the fluid domain ($\Phi_D$) \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -392,10 +392,10 @@ Resolving the shear layers on the inner radius of the extracted U-bend requires 
 		Inflation layers & [insert] & [insert] & [insert] \\
 		Growth rate & $\le 1.20$ & $\le 1.20$ & $\le 1.20$ \\
 		Elements / cells & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SA}}$ [Pa] & [insert] & [insert] & [insert] \\
-		$\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [insert] & [insert] & [insert] \\
-		Relative change in $\Delta p_{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
-		Relative change in $\Delta p_{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & [insert] & [insert] & [insert] \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [insert] & [insert] & [insert] \\
+		Relative change in $\Phi_D^{\mathrm{SA}}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
+		Relative change in $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ (Medium--Fine) & \multicolumn{3}{c}{[insert]\%} \\
 		\hline
 	\end{tabularx}
 \end{table}

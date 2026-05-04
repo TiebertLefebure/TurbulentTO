@@ -60,6 +60,10 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 
+# ==============================================================================================
+# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
+# ==============================================================================================
+
 SA_TURBULENCE_INTENSITY = 0.075
 SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.05
 SA_REFERENCE_LENGTH = INLET_HEIGHT
@@ -67,7 +71,7 @@ SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_PENALTY_ALPHA = 10.0 #1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
 SA_WALL_SIGMA = 0.01
@@ -75,6 +79,8 @@ SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
 VOL_FRAC = 0.25
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
@@ -86,33 +92,40 @@ BETA_PROJ_SCHEDULE = [0.10, 0.25, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
 MAX_INNER_ITERATIONS_SCHEDULE = [60, 70, 80, 90, 90, 90, 100, 100, 100]
 
 LINEAR_SOLVER = "mumps"
-STATE_SOLVE_METHOD = "newtontr"
+STATE_SOLVE_METHOD = "newtonls"
+STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
-STATE_MAX_ITERS = 150
-STATE_INITIAL_SA_SWEEPS = 6
-STATE_INITIAL_SA_RELAXATION = 0.40
+STATE_MAX_ITERS = 180
+STATE_ERROR_ON_NONCONVERGENCE = False
+STATE_ACCEPTED_RESIDUAL_FACTOR = 1.0
+STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+STATE_INITIAL_SA_SWEEPS = 8
+STATE_INITIAL_SA_RELAXATION = 0.35
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
     {"convection_weight": 0.00, "weight": 0.00, "max_iters": 180, "atol": 8.0e-4, "accept_norm": 8.0e-2},
     {"convection_weight": 0.25, "weight": 0.00, "max_iters": 200, "atol": 5.0e-4, "accept_norm": 6.0e-2},
-    {"convection_weight": 0.50, "weight": 0.25, "max_iters": 220, "atol": 3.0e-4, "accept_norm": 3.0e-2},
-    {"convection_weight": 0.75, "weight": 0.55, "max_iters": 240, "atol": 2.0e-4, "accept_norm": 1.0e-2},
-    {"convection_weight": 1.00, "weight": 0.80, "max_iters": 260, "atol": 1.5e-4, "accept_norm": 3.0e-3},
-    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 280},
+    {"convection_weight": 0.50, "weight": 0.10, "max_iters": 220, "atol": 3.0e-4, "accept_norm": 4.0e-2},
+    {"convection_weight": 0.75, "weight": 0.25, "max_iters": 240, "atol": 2.0e-4, "accept_norm": 3.0e-2},
+    {"convection_weight": 1.00, "weight": 0.45, "max_iters": 260, "atol": 1.5e-4, "accept_norm": 3.0e-2},
+    {"convection_weight": 1.00, "weight": 0.65, "max_iters": 280, "atol": 1.2e-4, "accept_norm": 3.0e-2},
+    {"convection_weight": 1.00, "weight": 0.80, "max_iters": 300, "atol": 1.0e-4, "accept_norm": 3.0e-2},
+    {"convection_weight": 1.00, "weight": 0.90, "max_iters": 320, "atol": 1.0e-4, "accept_norm": 3.0e-2},
+    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 340, "atol": 1.0e-4, "accept_norm": 3.0e-2},
 ]
 STATE_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 240,
+        "max_iters": 280,
         "restart_with_stokes": False,
     },
     {
         "label": "Stokes rebuild line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 280,
+        "max_iters": 340,
         "restart_with_stokes": True,
     },
 ]

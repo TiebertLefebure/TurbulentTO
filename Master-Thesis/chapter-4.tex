@@ -213,19 +213,7 @@ This implementation utilizes a hyperbolic tangent ($\tanh$) projection function 
 	\bar{\gamma} = \frac{\tanh(\beta \eta) + \tanh(\beta (\tilde{\gamma} - \eta))}{\tanh(\beta \eta) + \tanh(\beta (1 - \eta))}
 	\label{eq:tanh_projection}
 \end{equation}
-where $\bar{\gamma}$ is the projected design variable, $\eta \in [0, 1]$ is the projection threshold (typically 0.5), and $\beta$ is a steepness parameter. As $\beta \to \infty$, the function approaches a strict Heaviside step function. The FEniCS implementation of this projection is provided in Listing~\ref{lst:projection}.
-
-\begin{lstlisting}[language=Python, caption={Implementation of the continuous hyperbolic tangent projection. Extracted from \texttt{TurbulentTO\_Frozen.py}.}, label={lst:projection}]
-	def projection(rho_design, eta_proj):
-	"""Hyperbolic tangent (tanh) projection used to sharpen the filtered design."""
-	return (
-	tanh(BETA_PROJ * Constant(eta_proj))
-	+ tanh(BETA_PROJ * (rho_design - Constant(eta_proj)))
-	) / (
-	tanh(BETA_PROJ * Constant(eta_proj))
-	+ tanh(BETA_PROJ * (Constant(1.0) - Constant(eta_proj)))
-	)
-\end{lstlisting}
+where $\bar{\gamma}$ is the projected design variable, $\eta \in [0, 1]$ is the projection threshold (typically 0.5), and $\beta$ is a steepness parameter. As $\beta \to \infty$, the function approaches a strict Heaviside step function.
 
 \section{Algorithmic Workflow and Solver Implementation}
 \label{sec:algorithmic_workflow}
@@ -245,7 +233,7 @@ To ensure convergence to a physically meaningful binary design, the algorithm it
 
 While the exact gradient assembly differs between the two frameworks, the overarching algorithmic architecture remains consistent. The global optimization routine, illustrated below via the baseline \texttt{TurbulentTO\_Frozen.py} execution script, is demonstrated in Listing~\ref{lst:to_loop}:
 
-\begin{lstlisting}[language=Python, caption={Algorithmic architecture of the iterative topology optimization loop using the frozen turbulence assumption. Code structure has been simplified to highlight the core physics and adjoint pipelines. Extracted from \texttt{TurbulentTO\_Frozen.py}.}, label={lst:to_loop}]
+\begin{lstlisting}[language=Python, caption={Pseudocode representing the algorithmic architecture of the iterative topology optimization loop using the frozen turbulence assumption. Code structure has been simplified and abstracted to highlight the core physics and adjoint pipelines.}, label={lst:to_loop}]
 	for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 	# Update continuation parameters for the current stage
 	BETA_PROJ.assign(BETA_PROJ_SCHEDULE[stage_idx])
@@ -283,3 +271,8 @@ While the exact gradient assembly differs between the two frameworks, the overar
 	
 	inner_count += 1
 \end{lstlisting}
+
+\section{Conclusion}
+This chapter has established the comprehensive mathematical and algorithmic framework required to perform continuous topology optimization in turbulent flows. By employing the Fictitious Domain Method with Brinkman penalization, the evolving structural topology is seamlessly integrated into the fixed computational grid. Furthermore, introducing the mathematically rigorous DG0 Helmholtz interior penalty filter paired with a continuous Heaviside projection guarantees the generation of manufacturable, mesh-independent designs free of numerical artifacts.
+
+To computationally drive the optimization, two distinct continuous adjoint pipelines were formulated. The baseline frozen turbulence assumption guarantees robust numerical stability and computational tractability, while the advanced semi-frozen formulation explicitly re-couples the Spalart-Allmaras transport equation to proactively detect and penalize turbulence production. Embedded within a deeply stabilized, Picard-decoupled Python architecture, this algorithmic methodology transforms the verified fluid dynamics engine from Chapter~\ref{ch:fenics_implementation} into a powerful, automated design tool. With the mathematical penalizations, adjoint sensitivities, and solver architectures now fully defined, Chapter~\ref{ch:benchmark_results} will deploy this continuous framework to solve rigorous boundary-value benchmark problems, quantifying its ability to minimize total energy dissipation in highly separated turbulent flows.

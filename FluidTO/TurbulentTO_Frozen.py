@@ -56,6 +56,82 @@ def root_print(message):
     if IS_ROOT:
         print(message)
 
+def initialize_df0dx_log(log_path):
+    if IS_ROOT:
+        with open(log_path, "w") as txtout:
+            txtout.write(
+                ",".join([
+                    "Stage",
+                    "Q",
+                    "Beta",
+                    "InnerIter",
+                    "GlobalIter",
+                    "Count",
+                    "FiniteCount",
+                    "Min",
+                    "Max",
+                    "Range",
+                    "Mean",
+                    "Std",
+                    "Rms",
+                    "Linf",
+                    "AbsMean",
+                    "RelStdAbsMean",
+                    "PosFrac",
+                    "NegFrac",
+                    "Timestamp",
+                ]) + "\n"
+            )
+    MPI.barrier(COMM)
+
+
+def append_df0dx_log_entry(log_path, stage_idx, q_value, beta_value, inner_iter, global_iter, values):
+    values = np.asarray(values, dtype=float).ravel()
+    finite_values = values[np.isfinite(values)]
+    count = int(values.size)
+    finite_count = int(finite_values.size)
+    if finite_count:
+        min_value = float(np.min(finite_values))
+        max_value = float(np.max(finite_values))
+        mean_value = float(np.mean(finite_values))
+        std_value = float(np.std(finite_values))
+        rms_value = float(np.sqrt(np.mean(finite_values**2)))
+        linf_value = float(np.max(np.abs(finite_values)))
+        abs_mean_value = float(np.mean(np.abs(finite_values)))
+        rel_std_abs_mean = std_value / max(abs_mean_value, 1.0e-300)
+        pos_frac = float(np.count_nonzero(finite_values > 0.0)) / finite_count
+        neg_frac = float(np.count_nonzero(finite_values < 0.0)) / finite_count
+    else:
+        min_value = max_value = mean_value = std_value = np.nan
+        rms_value = linf_value = abs_mean_value = rel_std_abs_mean = np.nan
+        pos_frac = neg_frac = np.nan
+
+    if IS_ROOT:
+        row_values = [
+            "{:d}".format(int(stage_idx)),
+            "{:.3f}".format(float(q_value)),
+            "{:.2f}".format(float(beta_value)),
+            "{:d}".format(int(inner_iter)),
+            "{:d}".format(int(global_iter)),
+            "{:d}".format(count),
+            "{:d}".format(finite_count),
+            "{:.10e}".format(min_value),
+            "{:.10e}".format(max_value),
+            "{:.10e}".format(max_value - min_value),
+            "{:.10e}".format(mean_value),
+            "{:.10e}".format(std_value),
+            "{:.10e}".format(rms_value),
+            "{:.10e}".format(linf_value),
+            "{:.10e}".format(abs_mean_value),
+            "{:.10e}".format(rel_std_abs_mean),
+            "{:.10e}".format(pos_frac),
+            "{:.10e}".format(neg_frac),
+            time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()),
+        ]
+        with open(log_path, "a") as txtout:
+            txtout.write(",".join(row_values) + "\n")
+
+
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
 for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
@@ -178,6 +254,7 @@ nu_tilde_frozen = Function(TurbulenceSpace)  # SA working variable, frozen durin
 rho_proj_plot = Function(DensitySpace)    # projected rho for visualisation only
 unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
+df0dx_centered_plot = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 unfiltered_constraint_gradient = Function(DensitySpace)
@@ -690,6 +767,7 @@ ObjFunctional = ObjectiveRegion * (
     dissipation_density
     + alpha(rho_effective) * inner(u, u)
 ) * dx
+DissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx, nu_tilde_frozen)
 flow_test_u, flow_test_p = TestFunctions(FlowSpace)
@@ -1690,6 +1768,7 @@ rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
+df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
 save_ipcs_residual_plots = (
@@ -1705,6 +1784,7 @@ ensure_clean_dir(rho_p_dir)
 ensure_clean_dir(u_dir)
 ensure_clean_dir(p_dir)
 ensure_clean_dir(nu_tilde_dir)
+ensure_clean_dir(df0dx_centered_dir)
 ensure_clean_dir(design_dir)
 if save_ipcs_residual_plots:
     ensure_clean_dir(ipcs_residual_dir)
@@ -1714,13 +1794,20 @@ rhop_out = ResilientVTKFile(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), C
 u_out = ResilientVTKFile(os.path.join(u_dir, "plot_u.pvd"), COMM)
 p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
+df0dx_centered_out = ResilientVTKFile(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
+df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
 initialize_optimization_log(
     log_path,
     include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"),
-    pressure_drop_columns=("dP_nondesign", "dP_design"),
+    pressure_drop_columns=(
+        "Dissipation",
+        "dP_static_nondesign",
+        "dP_static_design",
+    ),
 )
+initialize_df0dx_log(df0dx_log_path)
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -1842,6 +1929,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         nu_tilde_out << nu_tilde_frozen
 
         f0val = assemble(ObjFunctional)
+        dissipation_now = assemble(DissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
         )
@@ -1874,6 +1962,25 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
         dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
+        df0dx_centered = df0dx[:, 0] - np.mean(df0dx[:, 0])
+        df0dx_centered_values = np.zeros_like(filtered_gradient.vector().get_local())
+        df0dx_centered_values[ActiveDV] = df0dx_centered
+        df0dx_centered_plot.vector().set_local(df0dx_centered_values)
+        df0dx_centered_plot.vector().apply("insert")
+        df0dx_centered_plot.rename("df0dx_centered", "df0dx_centered")
+        df0dx_centered_out << df0dx_centered_plot
+        if bool(globals().get("SAVE_DF0DX_VECTOR", True)):
+            np.savetxt(os.path.join(design_dir, "df0dx_{:03}.txt".format(iter_count)), df0dx[:, 0])
+            np.savetxt(os.path.join(design_dir, "df0dx_centered_{:03}.txt".format(iter_count)), df0dx_centered)
+        append_df0dx_log_entry(
+            df0dx_log_path,
+            stage_idx + 1,
+            q_val,
+            beta_val,
+            inner_count,
+            iter_count,
+            df0dx[:, 0],
+        )
 
         mass_flow_status = []
         mass_flow_status_markers = set()
@@ -1932,7 +2039,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
-            pressure_drop_values=(pressure_drop_nondesign_now, pressure_drop_design_now),
+            pressure_drop_values=(
+                dissipation_now,
+                pressure_drop_nondesign_now,
+                pressure_drop_design_now,
+            ),
             du_ipcs=final_flow_du_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
             dp_ipcs=final_flow_dp_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
         )
@@ -1943,10 +2054,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} Dissipation={:.4e} dP_static_nondesign={:.4e} Pa dP_static_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
             inner_count, iteration_elapsed, optimization_elapsed, f0val,
-            pressure_drop_nondesign_now, pressure_drop_design_now, obj_conv, vol_fraction_now,
+            dissipation_now, pressure_drop_nondesign_now, pressure_drop_design_now,
+            obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
             constraint_status_text,
         ))

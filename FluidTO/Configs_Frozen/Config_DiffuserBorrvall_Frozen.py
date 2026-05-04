@@ -103,15 +103,21 @@ LINEAR_SOLVER = "mumps"
 
 # FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs"
 FORWARD_FLOW_SOLVER = "snes"
+
+# ===================================================================================== #
+# SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes":
 FORWARD_SNES_METHOD = "newtonls"
 FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 80
 FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-3
+# ===================================================================================== #
+
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.05
 
+# ===================================================================================== #
 # IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs":
 #   These match the shared defaults in TurbulentTO_Frozen.py and are written here
 #   explicitly so the case configuration is self-contained.
@@ -130,7 +136,9 @@ FORWARD_IPCS_P_SOLVER = "bicgstab" # Pressure correction solve (IPCS #2)
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 
-FORWARD_IPCS_ACCEPT_BEST_SCORE = 1.20
+FORWARD_IPCS_ACCEPT_BEST_SCORE = 1.00
+# ===================================================================================== #
+
 
 # Projection, boundary-condition, and output settings for the optimization loop.
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]

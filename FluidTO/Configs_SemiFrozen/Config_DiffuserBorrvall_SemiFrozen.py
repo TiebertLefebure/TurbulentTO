@@ -1,6 +1,6 @@
 import os
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
-from Utilities_SharedTO import load_mesh_from_xdmf
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
 # ===================================================================
@@ -18,11 +18,22 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
 mesh_files = {
     'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/mesh_guided.xdmf'),
+    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DiffuserBorrvall/cell_guided.xdmf'),
 }
+
+DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
+
+
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files['CELL_DIRECTORY'],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
 
 
 # Geometry and reference meshing parameters.
@@ -86,34 +97,38 @@ MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 160, 180, 220]
 
 # SemiFrozen primal-state solve parameters.
 LINEAR_SOLVER = "mumps"
-STATE_SOLVE_METHOD = "newtonls"
+STATE_SOLVE_METHOD = "newtontr"
 STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
-STATE_MAX_ITERS = 80
+STATE_MAX_ITERS = 120
 STATE_INITIAL_SA_SWEEPS = 4
-# The diffuser usually solves cleanly, so keep this continuation light. The
-# goal is only to soften occasional startup failures without importing the much
-# heavier double-pipe rescue schedule.
+# Treat the first substeps as state continuation from the Stokes warm start:
+# ramp convection first, then turbulent-viscosity feedback. This keeps the
+# passive inlet/outlet extensions from being hit by full Re=1000 NS immediately.
+STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
-    {"weight": 0.0, "max_iters": 120, "atol": 8.0e-4},
-    {"weight": 0.35, "max_iters": 100, "atol": 5.0e-4},
-    {"weight": 0.70, "max_iters": 100, "atol": 2.0e-4},
-    {"weight": 1.0},
+    {"convection_weight": 0.0, "weight": 0.0, "max_iters": 180, "atol": 8.0e-4, "accept_norm": 5.0e-2},
+    {"convection_weight": 0.35, "weight": 0.0, "max_iters": 180, "atol": 8.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 0.70, "weight": 0.0, "max_iters": 180, "atol": 6.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.0, "max_iters": 220, "atol": 6.0e-4, "accept_norm": 2.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.35, "max_iters": 180, "atol": 5.0e-4, "accept_norm": 1.0e-2, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 0.70, "max_iters": 200, "atol": 2.0e-4, "accept_norm": 5.0e-3, "accept_growth": 1.25},
+    {"convection_weight": 1.0, "weight": 1.0, "max_iters": 260},
 ]
 STATE_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 120,
+        "max_iters": 220,
         "restart_with_stokes": False,
     },
     {
         "label": "Stokes rebuild line-search retry",
         "method": "newtonls",
         "line_search": "bt",
-        "max_iters": 160,
+        "max_iters": 260,
         "restart_with_stokes": True,
     },
 ]
@@ -172,29 +187,6 @@ def mark_boundaries(mesh):
     InletBoundary().mark(boundaries, MARK["inlet"])
     OutletBoundary().mark(boundaries, MARK["outlet"])
     return boundaries
-
-
-def build_density_bounds(mesh, density_space):
-    non_design_fluid_lower = Expression(
-        "(x[0] < x_min || x[0] > x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-    return non_design_fluid_lower, 1.0
-
-
-def build_volume_region(mesh, density_space):
-    return Expression(
-        "(x[0] >= x_min && x[0] <= x_max) ? 1.0 : 0.0",
-        degree=0,
-        x_min=DESIGN_X_MIN,
-        x_max=DESIGN_X_MAX,
-    )
-
-
-def build_objective_region(mesh, density_space):
-    return build_volume_region(mesh, density_space)
 
 
 def build_velocity_profile_sets():
