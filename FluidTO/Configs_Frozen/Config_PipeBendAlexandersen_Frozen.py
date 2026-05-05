@@ -72,21 +72,35 @@ SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
-SA_WALL_DENSITY_SOURCE = "passive" #'design'
-SA_NU_TILDE_PENALTY_ALPHA = 10.0 #1.0e3
+
+SA_SUPG_STABILIZATION = True
+SA_SUPG_TAU_SCALE = 1.0
+
+SA_PSEUDO_TIME_STABILIZATION = False
+SA_PSEUDO_DT = 1.0e-4
+SA_PSEUDO_TIME_STEPS = 3
+
+SAVE_SA_CLIPPING_DIAGNOSTICS = True
+
+# Topology-created solids act as walls for the reciprocal wall-distance solve
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [10.0, 30.0, 100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3] # Start gently, then force eddy viscosity out of solid material
 SA_NU_TILDE_PENALTY_N = 3.0
 
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3, 1.0e3, 1.0e3] # Same continuation idea for design-induced wall distance
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
-#SA_WALL_NEWTON_RELAXATION = 0.35
-#SA_WALL_NEWTON_RELAXATION_CANDIDATES = [0.35, 0.20, 0.10, 0.05, 0.02, 0.01]
-#SA_WALL_PENALTY_HOMOTOPY = [0.0, 0.05, 0.15, 0.35, 0.65, 1.0]
 
+SA_WALL_DENSITY_SOURCE = "design"
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
+
+# ================================================================== #
+# MMA Objective and Continuation Parameters
 VOL_FRAC = 0.25
-#INITIAL_DENSITY_VALUE = 0.5 #VOL_FRAC
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -94,86 +108,93 @@ Q_PENAL_SCHEDULE = [0.05, 0.20, 0.50, 1.00, 1.50, 2.50, 3.00, 3.00]
 BETA_PROJ_SCHEDULE = [0.10, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
 MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.045, 0.03, 0.02, 0.01, 0.005, 0.002]
 MAX_INNER_ITERATIONS_SCHEDULE = [12, 20, 35, 50, 70, 80, 90, 90]
-
+# ================================================================== #
 
 LINEAR_SOLVER = "mumps"
 
 # FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
-# The Alexandersen pipe bend is a high-Re pressure-outlet case, so the SNES
-# solve is guarded by convection continuation and several recovery attempts.
-FORWARD_FLOW_SOLVER = "ipcs"
+# Use IPCS for frozen-SA Picard updates, then use SNES for the final flow state
+# that feeds the adjoint. This avoids high-Re Newton failures during Picard.
+FORWARD_FLOW_SOLVER = "snes"
+FORWARD_PICARD_FLOW_SOLVER = "ipcs"
+FORWARD_SNES_WARM_START_WITH_IPCS = True
+FORWARD_SNES_IPCS_WARM_START_MODE = "initial"
+FORWARD_SNES_STRICT_FINAL_SOLVE = False
+
+# =========================================================================== #
+# SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes"
 FORWARD_SNES_METHOD = "newtonls"
 FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_LINEAR_SOLVER = "mumps"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 220
-FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
-FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+
 FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
-FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-2
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
-    {"convection_weight": 0.00, "max_iters": 180, "atol": 2.0e-7, "accept_norm": 5.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.15, "max_iters": 200, "atol": 1.5e-7, "accept_norm": 4.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.35, "max_iters": 220, "atol": 1.0e-7, "accept_norm": 3.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.60, "max_iters": 240, "atol": 8.0e-8, "accept_norm": 2.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.85, "max_iters": 260, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 1.00, "max_iters": 300, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.20, "max_iters": 100, "atol": 1.5e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.40, "max_iters": 120, "atol": 1.0e-7, "accept_norm": 1.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.60, "max_iters": 140, "atol": 8.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.80, "max_iters": 160, "atol": 5.0e-8, "accept_norm": 6.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 180, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
 ]
 FORWARD_SNES_CONVECTION_SCHEDULE = [
-    {"convection_weight": 0.00, "max_iters": 120, "atol": 1.0e-7, "accept_norm": 2.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.30, "max_iters": 160, "atol": 8.0e-8, "accept_norm": 1.5e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.60, "max_iters": 200, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.85, "max_iters": 240, "atol": 2.5e-8, "accept_norm": 7.5e-4, "accept_nonconverged": True},
-    {"convection_weight": 1.00, "max_iters": 280, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.00, "max_iters": 60, "atol": 1.0e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.25, "max_iters": 80, "atol": 8.0e-8, "accept_norm": 1.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 100, "atol": 5.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.75, "max_iters": 120, "atol": 2.5e-8, "accept_norm": 6.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 140, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
 ]
 FORWARD_SNES_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate l2 line-search retry",
         "line_search": "l2",
-        "max_iters": 300,
+        "max_iters": 180,
         "restart_with_stokes": False,
-        "accept_norm": 7.5e-4,
+        "accept_norm": 7.5e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "current-iterate trust-region retry",
         "method": "newtontr",
-        "max_iters": 320,
+        "max_iters": 220,
         "restart_with_stokes": False,
-        "accept_norm": 7.5e-4,
+        "accept_norm": 7.5e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "Stokes rebuild backtracking retry",
         "line_search": "bt",
-        "max_iters": 340,
+        "max_iters": 240,
         "restart_with_stokes": True,
-        "accept_norm": 5.0e-4,
+        "accept_norm": 5.0e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "Stokes rebuild l2 line-search retry",
         "line_search": "l2",
-        "max_iters": 360,
+        "max_iters": 260,
         "restart_with_stokes": True,
-        "accept_norm": 5.0e-4,
+        "accept_norm": 5.0e-5,
         "accept_nonconverged": True,
     },
 ]
+
+# =========================================================================== #
 
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.20
 
 # =========================================================================== #
-# IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs".
-FORWARD_IPCS_DT = 5.0e-6
+# IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs"
+FORWARD_IPCS_DT = 2.5e-6
 FORWARD_IPCS_MAX_ITERS = 300
 FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_VEL_RELAXATION = 0.10
-FORWARD_IPCS_P_RELAXATION = 0.03
+FORWARD_IPCS_VEL_RELAXATION = 0.07
+FORWARD_IPCS_P_RELAXATION = 0.02
 FORWARD_IPCS_VEL_SOLVER = "bicgstab"
 FORWARD_IPCS_VEL_PRECONDITIONER = "ilu"
 FORWARD_IPCS_P_SOLVER = "bicgstab"
@@ -182,13 +203,6 @@ FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_MAX_RESTARTS = 2
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
-# The Alexandersen pipe bend can reach a near-steady IPCS state in the early
-# pressure-outlet Picard solves before the relative pressure update meets the
-# strict target. Accept that best iterate so the frozen SA outer loop can keep
-# settling the field instead of aborting the optimization.
-#FORWARD_IPCS_ACCEPT_BEST_SCORE = 2.0
-#FORWARD_IPCS_PICARD_ACCEPT_BEST_SCORE = 3.0
-#FORWARD_IPCS_FINAL_ACCEPT_BEST_SCORE = 2.0
 # =========================================================================== #
 
 
@@ -248,3 +262,37 @@ def mark_boundaries(mesh):
 def build_velocity_profile_sets():
     u_inlet = Expression(("u_max", "0.0"), degree=0, u_max=U_MAX_INLET)
     return [u_inlet], []
+
+# ================================================
+# === Diagnostic tests for Frozen Turbulent TO ===
+# ================================================
+# --- Step 3: restore real design, reintroduce TO turbulence coupling gently ---
+
+Q_PENAL_SCHEDULE = [0.05, 0.20, 0.50]
+BETA_PROJ_SCHEDULE = [0.10, 0.50, 1.00]
+MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.045]
+MAX_INNER_ITERATIONS_SCHEDULE = [3, 3, 3]
+
+INITIAL_DENSITY_VALUE = VOL_FRAC
+INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
+
+SA_SUPG_STABILIZATION = True
+SA_SUPG_TAU_SCALE = 0.2
+SA_PSEUDO_TIME_STABILIZATION = False
+
+SA_WALL_DENSITY_SOURCE = "design"
+SA_WALL_SOLID_THRESHOLD = 0.25
+SA_WALL_PENALTY_N = 6.0
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [0.0, 0.0, 10.0]
+
+SA_NU_TILDE_PENALTY_N = 6.0
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [0.0, 0.0, 1.0]
+
+PICARD_STEPS = 3
+TURBULENCE_RELAXATION = 0.20
+SAVE_SA_CLIPPING_DIAGNOSTICS = True
+
+FORWARD_FLOW_SOLVER = "ipcs"
+FORWARD_PICARD_FLOW_SOLVER = "ipcs"
+FORWARD_IPCS_FINAL_SNES_POLISH = False
+FORWARD_IPCS_ERROR_ON_NONCONVERGENCE = True

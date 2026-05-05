@@ -41,6 +41,8 @@ DOMAIN_Y_MAX = DESIGN_Y_MAX
 NX = 150  # reference resolution used to generate the Gmsh mesh
 NY = 100
 TOL = DOLFIN_EPS
+N = 120  # reference resolution used to generate the guided Gmsh mesh (LC = L/N)
+
 
 # Port layout on left/right boundaries
 PORT_WIDTH = 1.0 / 6.0
@@ -89,6 +91,12 @@ SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 
+SA_WALL_DENSITY_SOURCE = "design" # with "passive", the reciprocal wall-distance solver uses density_upper_bound
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 0.25 * (L / N)
+STATE_INITIAL_SA_RELAXATION = 0.25
+STATE_INITIAL_SA_SWEEPS = 4
+
 # MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 1.0 / 3.0
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
@@ -105,15 +113,19 @@ STATE_SOLVE_METHOD = "newtontr"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
 STATE_MAX_ITERS = 120
-STATE_INITIAL_SA_SWEEPS = 4
+
 # Ramp the turbulent-viscosity feedback into the momentum equations instead
 # of forcing the first monolithic Newton solve to handle the full coupling at
 # once from a Stokes/SA warm start.
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
-    {"weight": 0.0, "max_iters": 220, "atol": 8.0e-4},
-    {"weight": 0.35, "max_iters": 180, "atol": 5.0e-4},
-    {"weight": 0.70, "max_iters": 180, "atol": 2.0e-4},
-    {"weight": 1.0},
+    {"convection_weight": 0.00, "weight": 0.00, "max_iters": 160, "atol": 2.0e-4, "accept_norm": 1.0e-1},
+    {"convection_weight": 0.20, "weight": 0.00, "max_iters": 180, "atol": 2.0e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 0.45, "weight": 0.00, "max_iters": 200, "atol": 2.0e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 0.70, "weight": 0.20, "max_iters": 220, "atol": 2.0e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 0.90, "weight": 0.45, "max_iters": 240, "atol": 1.5e-4, "accept_norm": 1.0e0},
+    {"convection_weight": 1.00, "weight": 0.70, "max_iters": 260, "atol": 1.2e-4, "accept_norm": 7.5e-1},
+    {"convection_weight": 1.00, "weight": 0.90, "max_iters": 280, "atol": 1.0e-4, "accept_norm": 3.0e-1},
+    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 320, "atol": 1.0e-4},
 ]
 # Keep one alternate-globalization retry from the current iterate, then one
 # clean Stokes rebuild retry with the same safer line-search globalization.

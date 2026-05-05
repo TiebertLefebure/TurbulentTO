@@ -67,6 +67,18 @@ def positive_part(expr):
     return conditional(gt(expr, zero), expr, zero)
 
 
+def _scalar_value(value):
+    """Return the current scalar value of a Python float or dolfin Constant."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value.values()[0])
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return float(np.asarray(value.values(), dtype=float).ravel()[0])
+
+
 def enforce_scalar_floor(scalar_function, floor_value):
     """Enforce scalar_function >= floor_value in-place."""
     values = scalar_function.vector().get_local()
@@ -134,7 +146,13 @@ def build_penalized_wall_distance_solver(
     """
     g0_constant = Constant(g0_value)
     sigma_w_constant = Constant(sigma_w)
-    alpha_g_constant = Constant(alpha_g_value)
+    # Keep a mutable base so outer continuation can change wall penalty strength.
+    alpha_g_base = (
+        alpha_g_value
+        if hasattr(alpha_g_value, "assign") and hasattr(alpha_g_value, "values")
+        else Constant(alpha_g_value)
+    )
+    alpha_g_constant = Constant(_scalar_value(alpha_g_base))
     n_g_constant = Constant(n_g_value)
     solid_threshold_value = float(solid_threshold)
     solid_threshold_constant = Constant(solid_threshold_value)
@@ -220,7 +238,7 @@ def build_penalized_wall_distance_solver(
         scale = float(scale)
         if 0.0 <= scale <= 1.0 and scale not in homotopy_scales:
             homotopy_scales.append(scale)
-    if alpha_g_value > 0.0:
+    if _scalar_value(alpha_g_base) > 0.0:
         if not homotopy_scales:
             homotopy_scales = [0.0, 1.0]
         if homotopy_scales[0] != 0.0:
@@ -261,7 +279,7 @@ def build_penalized_wall_distance_solver(
     has_successful_update = False
 
     def solve_with_pseudo_time(scale):
-        alpha_stage_constant = Constant(float(scale) * float(alpha_g_value))
+        alpha_stage_constant = Constant(float(scale) * _scalar_value(alpha_g_base))
         stage_start_values = reciprocal_distance.vector().get_local().copy()
         last_error = None
         last_finite_values = None
@@ -374,7 +392,7 @@ def build_penalized_wall_distance_solver(
                 reciprocal_distance.vector().apply("insert")
             sequence_solved = True
             for scale in scales:
-                alpha_g_constant.assign(float(scale) * float(alpha_g_value))
+                alpha_g_constant.assign(float(scale) * _scalar_value(alpha_g_base))
                 stage_start_values = reciprocal_distance.vector().get_local().copy()
                 stage_solved = False
                 if not prefer_pseudo_time:
@@ -398,13 +416,13 @@ def build_penalized_wall_distance_solver(
                         sequence_solved = False
                         break
             if sequence_solved:
-                alpha_g_constant.assign(float(alpha_g_value))
+                alpha_g_constant.assign(_scalar_value(alpha_g_base))
                 has_successful_update = True
                 return
 
         reciprocal_distance.vector().set_local(previous_values)
         reciprocal_distance.vector().apply("insert")
-        alpha_g_constant.assign(float(alpha_g_value))
+        alpha_g_constant.assign(_scalar_value(alpha_g_base))
         if MPI.rank(space.mesh().mpi_comm()) == 0:
             print(
                 "Warning: penalized wall-distance update did not converge; reusing previous wall-distance field."

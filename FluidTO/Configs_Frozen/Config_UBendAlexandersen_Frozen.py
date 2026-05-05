@@ -36,7 +36,6 @@ build_density_bounds, build_volume_region, build_objective_region = build_cell_t
 
 
 L = 1.0
-H_MAX = 0.007
 LEAD_LENGTH = 0.2 * L
 PORT_HEIGHT = 0.2 * L
 TOP_PORT_Y_MIN = 0.55 * L
@@ -80,19 +79,32 @@ SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
-SA_WALL_DENSITY_SOURCE = "passive" #'design'
-SA_NU_TILDE_PENALTY_ALPHA = 30.0 #1.0e3
+SA_SUPG_STABILIZATION = True
+SA_SUPG_TAU_SCALE = 1.0
+SA_PSEUDO_TIME_STABILIZATION = True
+SA_PSEUDO_DT = 1.0e-4
+SA_PSEUDO_TIME_STEPS = 3
+SAVE_SA_CLIPPING_DIAGNOSTICS = True
+# Topology-created solids act as walls for the reciprocal wall-distance solve.
+SA_WALL_DENSITY_SOURCE = "design"
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
+# Start gently, then force eddy viscosity out of solid material.
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [30.0, 60.0, 150.0, 350.0, 700.0, 1.0e3, 1.0e3, 1.0e3]
 SA_NU_TILDE_PENALTY_N = 3.0
 
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
+# Same continuation idea for design-induced wall distance.
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3, 1.0e3, 1.0e3]
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 
 VOL_FRAC = 0.27
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
+RUN_FINITE_DIFFERENCE_CHECKS = False
+FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
 
 Q_PENAL_SCHEDULE = [0.05, 0.20, 0.50, 1.00, 1.50, 2.50, 3.00, 3.00]
 BETA_PROJ_SCHEDULE = [0.10, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
@@ -102,9 +114,13 @@ MAX_INNER_ITERATIONS_SCHEDULE = [12, 20, 35, 50, 70, 80, 90, 90]
 LINEAR_SOLVER = "mumps"
 
 # FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
-# Keep IPCS as the default for continuity with existing U-bend runs; switch this
-# to "snes" to use the monolithic frozen-viscosity Navier-Stokes solve.
-FORWARD_FLOW_SOLVER = "ipcs"
+# Use IPCS for frozen-SA Picard updates, then use SNES for the final flow state
+# that feeds the adjoint. This avoids high-Re Newton failures during Picard.
+FORWARD_FLOW_SOLVER = "snes"
+FORWARD_PICARD_FLOW_SOLVER = "ipcs"
+FORWARD_SNES_WARM_START_WITH_IPCS = True
+FORWARD_SNES_IPCS_WARM_START_MODE = "initial"
+FORWARD_SNES_STRICT_FINAL_SOLVE = False
 
 # ============================================================================ #
 # SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes".
@@ -116,60 +132,61 @@ FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 260
 FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
 FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM = True
 FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
 FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
-FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 0.05
-FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-2
+FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 1.0
+FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-3
 
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
-FORWARD_SNES_MIN_CONVECTION_STEP = 0.01
-FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 24
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 16
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
-    {"convection_weight": 0.00, "max_iters": 180, "atol": 2.0e-7, "accept_norm": 5.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.15, "max_iters": 220, "atol": 1.5e-7, "accept_norm": 4.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.35, "max_iters": 240, "atol": 1.0e-7, "accept_norm": 3.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.60, "max_iters": 260, "atol": 8.0e-8, "accept_norm": 2.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.85, "max_iters": 280, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 1.00, "max_iters": 320, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.20, "max_iters": 100, "atol": 1.5e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.40, "max_iters": 120, "atol": 1.0e-7, "accept_norm": 1.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.60, "max_iters": 140, "atol": 8.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.80, "max_iters": 160, "atol": 5.0e-8, "accept_norm": 6.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 180, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
 ]
 FORWARD_SNES_CONVECTION_SCHEDULE = [
-    {"convection_weight": 0.00, "max_iters": 120, "atol": 1.0e-7, "accept_norm": 2.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.30, "max_iters": 180, "atol": 8.0e-8, "accept_norm": 1.5e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.60, "max_iters": 220, "atol": 5.0e-8, "accept_norm": 1.0e-3, "accept_nonconverged": True},
-    {"convection_weight": 0.85, "max_iters": 260, "atol": 2.5e-8, "accept_norm": 7.5e-4, "accept_nonconverged": True},
-    {"convection_weight": 1.00, "max_iters": 300, "atol": 1.0e-8, "accept_norm": 5.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.00, "max_iters": 60, "atol": 1.0e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.25, "max_iters": 80, "atol": 8.0e-8, "accept_norm": 1.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 100, "atol": 5.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.75, "max_iters": 120, "atol": 2.5e-8, "accept_norm": 6.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 140, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
 ]
 FORWARD_SNES_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate l2 line-search retry",
         "line_search": "l2",
-        "max_iters": 320,
+        "max_iters": 180,
         "restart_with_stokes": False,
-        "accept_norm": 7.5e-4,
+        "accept_norm": 7.5e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "current-iterate trust-region retry",
         "method": "newtontr",
-        "max_iters": 340,
+        "max_iters": 220,
         "restart_with_stokes": False,
-        "accept_norm": 7.5e-4,
+        "accept_norm": 7.5e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "Stokes rebuild backtracking retry",
         "line_search": "bt",
-        "max_iters": 360,
+        "max_iters": 240,
         "restart_with_stokes": True,
-        "accept_norm": 5.0e-4,
+        "accept_norm": 5.0e-5,
         "accept_nonconverged": True,
     },
     {
         "label": "Stokes rebuild l2 line-search retry",
         "line_search": "l2",
-        "max_iters": 380,
+        "max_iters": 260,
         "restart_with_stokes": True,
-        "accept_norm": 5.0e-4,
+        "accept_norm": 5.0e-5,
         "accept_nonconverged": True,
     },
 ]

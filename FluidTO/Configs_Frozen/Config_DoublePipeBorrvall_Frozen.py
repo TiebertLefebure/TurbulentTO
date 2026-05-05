@@ -1,6 +1,5 @@
 import os
-import numpy as np
-from dolfin import DOLFIN_EPS, Expression, Function, MeshFunction, MPI, SubDomain, cells, near
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
@@ -49,9 +48,6 @@ DOMAIN_Y_MAX = DESIGN_Y_MAX
 NX = 150  # reference resolution used to generate the Gmsh mesh
 NY = 100
 TOL = DOLFIN_EPS
-CELL_SIZE_X = (DESIGN_X_MAX - DESIGN_X_MIN) / NX
-CELL_SIZE_Y = (DESIGN_Y_MAX - DESIGN_Y_MIN) / NY
-CELL_SIZE = min(CELL_SIZE_X, CELL_SIZE_Y)
 
 # Port layout on left/right boundaries
 PORT_WIDTH = 1.0 / 6.0
@@ -231,10 +227,6 @@ MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 
 def between(value, limits, eps=DOLFIN_EPS):
     return (limits[0] - eps <= value) and (value <= limits[1] + eps)
-
-
-def inside_any_segment(value, segments, eps=DOLFIN_EPS):
-    return any(between(value, segment, eps) for segment in segments)
 
 
 class VerticalPortBoundary(SubDomain):

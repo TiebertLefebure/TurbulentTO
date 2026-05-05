@@ -56,33 +56,113 @@ def root_print(message):
     if IS_ROOT:
         print(message)
 
+
+DF0DX_LOG_COLUMNS = [
+    ("Stage", 5),
+    ("Q", 6),
+    ("Beta", 5),
+    ("InnerIter", 9),
+    ("GlobalIter", 10),
+    ("Count", 7),
+    ("FiniteCount", 11),
+    ("Min", 18),
+    ("Max", 18),
+    ("Range", 18),
+    ("Mean", 18),
+    ("Std", 18),
+    ("Rms", 18),
+    ("Linf", 18),
+    ("AbsMean", 18),
+    ("RelStdAbsMean", 18),
+    ("PosFrac", 18),
+    ("NegFrac", 18),
+    ("Timestamp", 24),
+]
+
+SA_CLIPPING_LOG_COLUMNS = [
+    ("Stage", 5),
+    ("Q", 6),
+    ("Beta", 5),
+    ("InnerIter", 9),
+    ("GlobalIter", 10),
+    ("Picard", 6),
+    ("RawMin", 18),
+    ("RawMax", 18),
+    ("PreclipMin", 18),
+    ("PreclipMax", 18),
+    ("ClippedMin", 18),
+    ("ClippedMax", 18),
+    ("Floor", 18),
+    ("Ceiling", 18),
+    ("FloorClipCount", 14),
+    ("CeilingClipCount", 16),
+    ("FloorBoundCount", 15),
+    ("CeilingBoundCount", 17),
+    ("DofCount", 8),
+    ("FloorClipFrac", 18),
+    ("CeilingClipFrac", 18),
+    ("FloorBoundFrac", 18),
+    ("CeilingBoundFrac", 18),
+    ("Timestamp", 24),
+]
+
+
+def fixed_width_log_row(values, columns):
+    widths = [width for _name, width in columns]
+    cells = [
+        str(value).ljust(width)
+        for value, width in zip(values, widths)
+    ]
+    return " ".join(cells).rstrip() + "\n"
+
+
 def initialize_df0dx_log(log_path):
     if IS_ROOT:
         with open(log_path, "w") as txtout:
+            txtout.write(fixed_width_log_row([name for name, _width in DF0DX_LOG_COLUMNS], DF0DX_LOG_COLUMNS))
+    MPI.barrier(COMM)
+
+
+def initialize_sa_clipping_log(log_path):
+    if IS_ROOT:
+        with open(log_path, "w") as txtout:
             txtout.write(
-                ",".join([
-                    "Stage",
-                    "Q",
-                    "Beta",
-                    "InnerIter",
-                    "GlobalIter",
-                    "Count",
-                    "FiniteCount",
-                    "Min",
-                    "Max",
-                    "Range",
-                    "Mean",
-                    "Std",
-                    "Rms",
-                    "Linf",
-                    "AbsMean",
-                    "RelStdAbsMean",
-                    "PosFrac",
-                    "NegFrac",
-                    "Timestamp",
-                ]) + "\n"
+                fixed_width_log_row([name for name, _width in SA_CLIPPING_LOG_COLUMNS], SA_CLIPPING_LOG_COLUMNS)
             )
     MPI.barrier(COMM)
+
+
+def append_sa_clipping_log_entry(log_path, stats):
+    if not IS_ROOT:
+        return
+    row_values = [
+        "{:d}".format(int(stats["stage"])),
+        "{:.3f}".format(float(stats["q"])),
+        "{:.2f}".format(float(stats["beta"])),
+        "{:d}".format(int(stats["inner_iter"])),
+        "{:d}".format(int(stats["global_iter"])),
+        "{:d}".format(int(stats["picard"])),
+        "{:.10e}".format(float(stats["raw_min"])),
+        "{:.10e}".format(float(stats["raw_max"])),
+        "{:.10e}".format(float(stats["preclip_min"])),
+        "{:.10e}".format(float(stats["preclip_max"])),
+        "{:.10e}".format(float(stats["clipped_min"])),
+        "{:.10e}".format(float(stats["clipped_max"])),
+        "{:.10e}".format(float(stats["floor"])),
+        "{:.10e}".format(float(stats["ceiling"])),
+        "{:d}".format(int(stats["floor_clip_count"])),
+        "{:d}".format(int(stats["ceiling_clip_count"])),
+        "{:d}".format(int(stats["floor_bound_count"])),
+        "{:d}".format(int(stats["ceiling_bound_count"])),
+        "{:d}".format(int(stats["dof_count"])),
+        "{:.10e}".format(float(stats["floor_clip_frac"])),
+        "{:.10e}".format(float(stats["ceiling_clip_frac"])),
+        "{:.10e}".format(float(stats["floor_bound_frac"])),
+        "{:.10e}".format(float(stats["ceiling_bound_frac"])),
+        time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()),
+    ]
+    with open(log_path, "a") as txtout:
+        txtout.write(fixed_width_log_row(row_values, SA_CLIPPING_LOG_COLUMNS))
 
 
 def append_df0dx_log_entry(log_path, stage_idx, q_value, beta_value, inner_iter, global_iter, values):
@@ -129,7 +209,7 @@ def append_df0dx_log_entry(log_path, stage_idx, q_value, beta_value, inner_iter,
             time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime()),
         ]
         with open(log_path, "a") as txtout:
-            txtout.write(",".join(row_values) + "\n")
+            txtout.write(fixed_width_log_row(row_values, DF0DX_LOG_COLUMNS))
 
 
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
@@ -140,10 +220,8 @@ for _name, _value in vars(CONFIG).items():
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
 FORWARD_IPCS_LOG_EVERY = max(1, int(globals().get("FORWARD_IPCS_LOG_EVERY", 25)))
-LINEAR_SOLVER_NAME = str(globals().get("LINEAR_SOLVER", globals().get("SNES_LINEAR_SOLVER", "mumps")))
-FORWARD_FLOW_SOLVER = str(
-    globals().get("FORWARD_FLOW_SOLVER", globals().get("FORWARD_SOLVE_METHOD", "ipcs"))
-).strip().lower()
+LINEAR_SOLVER_NAME = str(globals().get("LINEAR_SOLVER", "mumps"))
+FORWARD_FLOW_SOLVER = str(globals().get("FORWARD_FLOW_SOLVER", "snes")).strip().lower()
 if FORWARD_FLOW_SOLVER in {"newton", "newtonls", "snes"}:
     FORWARD_FLOW_SOLVER = "snes"
 elif FORWARD_FLOW_SOLVER != "ipcs":
@@ -200,6 +278,18 @@ def alpha(brinkman_density):
 # alpha = alpha_solid (>>) in solid region
 # alpha = alpha_fluid (<<) in fluid region
 
+def strain_tensor(velocity):
+    """Symmetric velocity-gradient operator used by residual and objective."""
+    return nabla_grad(velocity) + nabla_grad(velocity).T
+
+
+def viscous_stress_form(mu_value, trial_velocity, test_velocity):
+    return Constant(0.5) * mu_value * inner(
+        strain_tensor(trial_velocity),
+        strain_tensor(test_velocity),
+    )
+
+
 def sa_positive_viscosity(state_nu_tilde):
     """Return the SA turbulent viscosity with negative values clipped away."""
     nu_lam = mu_fluid / rho_fluid
@@ -207,6 +297,7 @@ def sa_positive_viscosity(state_nu_tilde):
         state_nu_tilde,
         nu_lam,
         smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+        nu_tilde_floor=float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12)),
     )
 
 
@@ -220,7 +311,7 @@ def build_state_form(state_u, state_p, adj_u, adj_p, rho_eff, custom_dx, frozen_
     mu_effective = effective_dynamic_viscosity(frozen_nu_tilde)
     return (
         forward_convection_coupling_weight * rho_fluid * inner(dot(state_u, nabla_grad(state_u)), adj_u) * custom_dx
-        + mu_effective * inner(grad(state_u), grad(adj_u)) * custom_dx
+        + viscous_stress_form(mu_effective, state_u, adj_u) * custom_dx
         + inner(grad(state_p), adj_u) * custom_dx
         + inner(div(state_u), adj_p) * custom_dx
         + alpha(rho_eff) * inner(state_u, adj_u) * custom_dx
@@ -633,11 +724,25 @@ r = r_filter / (2.0 * 3.0**0.5)  # convert cell-count radius to PDE length scale
 u_filter = TrialFunction(DensitySpace)
 v_filter = TestFunction(DensitySpace)
 filter_in = Function(DensitySpace)
+filter_work = Function(DensitySpace)
+active_design_indicator = Function(DensitySpace)
+filter_denominator = Function(DensitySpace)
 h = CellDiameter(mesh)
 h_avg = (h("+") + h("-")) / 2.0
 
 
-def pde_filter(input_field, output_field):
+active_indicator_values = np.zeros_like(density_lower_values)
+active_indicator_values[ActiveDV] = 1.0
+active_design_indicator.vector().set_local(active_indicator_values)
+active_design_indicator.vector().apply("insert")
+filter_denominator_values = None
+filter_denominator_floor = max(
+    float(globals().get("FILTER_DENOMINATOR_FLOOR", 1.0e-12)),
+    1.0e-300,
+)
+
+
+def pde_filter_raw(input_field, output_field):
     alpha_dg = 4.0
     helmholtz = (
         r**2 * (alpha_dg / h_avg * dot(jump(v_filter, n), jump(u_filter, n))) * dS
@@ -646,6 +751,67 @@ def pde_filter(input_field, output_field):
     )
     assign(filter_in, input_field)
     solve(lhs(helmholtz) == rhs(helmholtz), output_field)
+    return output_field
+
+
+def initialize_design_filter_normalization():
+    """Precompute H(mask) for the active-design normalized Helmholtz filter."""
+    global filter_denominator_values
+    pde_filter_raw(active_design_indicator, filter_denominator)
+    filter_denominator_values = np.maximum(
+        filter_denominator.vector().get_local(),
+        filter_denominator_floor,
+    )
+    min_active_denom = float(np.min(filter_denominator_values[ActiveDV]))
+    if min_active_denom <= 10.0 * filter_denominator_floor:
+        raise RuntimeError(
+            "Active-design filter normalization has near-zero denominator. "
+            "Check design-region tags and FILTER_DENOMINATOR_FLOOR."
+        )
+    root_print(
+        "Design filter: active-cell mask normalization enabled "
+        "(min active denominator {:.3e}).".format(min_active_denom)
+    )
+
+
+def pde_filter_design_density(input_field, output_field):
+    """Filter only active design variables and normalize by the filtered mask."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    # rho_f = H(M rho) / H(M); passive cells are restored after filtering.
+    output_values = output_field.vector().get_local() / filter_denominator_values
+    output_values = np.clip(output_values, 0.0, 1.0)
+    output_values[PassiveDV] = np.clip(
+        input_values[PassiveDV],
+        density_lower_values[PassiveDV],
+        density_upper_values[PassiveDV],
+    )
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
+    return output_field
+
+
+def pde_filter_design_gradient(input_field, output_field):
+    """Apply the transpose of the active mask-normalized density filter."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    # This is the adjoint of rho -> H(M rho) / H(M), restricted to active DOFs.
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV] / filter_denominator_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    output_values = output_field.vector().get_local()
+    output_values[PassiveDV] = 0.0
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
     return output_field
 
 
@@ -686,9 +852,10 @@ if sa_wall_density_source not in {"design", "passive"}:
         "SA_WALL_DENSITY_SOURCE must be either 'design' or 'passive'. "
         "Got {!r}.".format(sa_wall_density_source)
     )
-sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
+sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", 0.01))
 sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
-sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+sa_wall_penalty_alpha_base = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+sa_wall_penalty_alpha = Constant(sa_wall_penalty_alpha_base)
 sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
 sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
 sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
@@ -739,16 +906,131 @@ if sa_nu_tilde_ceiling is not None:
     root_print("SA nu_tilde ceiling: {:.4e}".format(sa_nu_tilde_ceiling))
 
 nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
-sa_nu_tilde_penalty_reaction = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))) * (
+sa_nu_tilde_penalty_alpha_base = float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))
+sa_nu_tilde_penalty_alpha = Constant(sa_nu_tilde_penalty_alpha_base)
+sa_nu_tilde_penalty_reaction = sa_nu_tilde_penalty_alpha * (
     positive_part(Constant(1.0) - rho_effective) ** float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
 )
+sa_pseudo_time_stabilization = bool(globals().get("SA_PSEUDO_TIME_STABILIZATION", False))
+sa_pseudo_dt = float(globals().get("SA_PSEUDO_DT", 1.0))
+sa_pseudo_time_steps = max(1, int(globals().get("SA_PSEUDO_TIME_STEPS", 1)))
+if sa_pseudo_time_stabilization:
+    root_print(
+        "SA pseudo-time stabilization: dt = {:.3e}, substeps = {}".format(
+            sa_pseudo_dt,
+            sa_pseudo_time_steps,
+        )
+    )
 
 sa_model = SpalartAllmarasSteadyState(
     TurbulenceSpace, bcn_turbulence, sa_nu_tilde_init, nu_laminar,
     dx, wall_distance,
     nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
     wall_distance_floor=float(globals().get("SA_WALL_DISTANCE_FLOOR", 0.0)),
+    smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+    nu_tilde_floor=sa_nu_tilde_floor,
+    supg_stabilization=bool(globals().get("SA_SUPG_STABILIZATION", True)),
+    supg_tau_scale=float(globals().get("SA_SUPG_TAU_SCALE", 1.0)),
+    pseudo_time_stabilization=sa_pseudo_time_stabilization,
+    pseudo_dt=sa_pseudo_dt,
 )
+
+save_sa_clipping_diagnostics = bool(globals().get("SAVE_SA_CLIPPING_DIAGNOSTICS", False))
+sa_clipping_diagnostic_tolerance = max(
+    float(globals().get("SA_CLIPPING_DIAGNOSTIC_TOL", 1.0e-14)),
+    0.0,
+)
+nu_tilde_raw_diagnostic = Function(TurbulenceSpace)
+nu_tilde_raw_diagnostic.rename("nu_tilde_raw_sa_solve", "nu_tilde_raw_sa_solve")
+nu_tilde_preclip_diagnostic = Function(TurbulenceSpace)
+nu_tilde_preclip_diagnostic.rename("nu_tilde_relaxed_preclip", "nu_tilde_relaxed_preclip")
+nu_tilde_floor_clip_mask = Function(TurbulenceSpace)
+nu_tilde_floor_clip_mask.rename("nu_tilde_floor_clip_mask", "nu_tilde_floor_clip_mask")
+nu_tilde_ceiling_clip_mask = Function(TurbulenceSpace)
+nu_tilde_ceiling_clip_mask.rename("nu_tilde_ceiling_clip_mask", "nu_tilde_ceiling_clip_mask")
+nu_tilde_floor_bound_mask = Function(TurbulenceSpace)
+nu_tilde_floor_bound_mask.rename("nu_tilde_floor_bound_mask", "nu_tilde_floor_bound_mask")
+nu_tilde_ceiling_bound_mask = Function(TurbulenceSpace)
+nu_tilde_ceiling_bound_mask.rename("nu_tilde_ceiling_bound_mask", "nu_tilde_ceiling_bound_mask")
+
+
+def _field_minmax(values):
+    finite_values = values[np.isfinite(values)]
+    if finite_values.size == 0:
+        return np.nan, np.nan
+    return float(np.min(finite_values)), float(np.max(finite_values))
+
+
+def _set_diagnostic_values(function, values):
+    function.vector().set_local(np.asarray(values, dtype=float))
+    function.vector().apply("insert")
+
+
+def update_sa_clipping_diagnostics(stage_idx, q_value, beta_value, inner_iter, global_iter, picard_idx):
+    """Store the last SA Picard raw/preclip fields and masks for VTK/log output."""
+    if not save_sa_clipping_diagnostics:
+        return None
+
+    raw_values = sa_model.nu_tilde1.vector().get_local().copy()
+    preclip_values = sa_model.nu_tilde0.vector().get_local().copy()
+    clipped_values = nu_tilde_frozen.vector().get_local().copy()
+    ceiling_value = np.inf if sa_nu_tilde_ceiling is None else float(sa_nu_tilde_ceiling)
+
+    floor_clip_values = (preclip_values < float(sa_nu_tilde_floor)).astype(float)
+    ceiling_clip_values = (preclip_values > ceiling_value).astype(float)
+    floor_bound_values = (
+        clipped_values <= float(sa_nu_tilde_floor) + sa_clipping_diagnostic_tolerance
+    ).astype(float)
+    if sa_nu_tilde_ceiling is None:
+        ceiling_bound_values = np.zeros_like(clipped_values, dtype=float)
+    else:
+        ceiling_bound_values = (
+            clipped_values >= float(sa_nu_tilde_ceiling) - sa_clipping_diagnostic_tolerance
+        ).astype(float)
+
+    _set_diagnostic_values(nu_tilde_raw_diagnostic, raw_values)
+    _set_diagnostic_values(nu_tilde_preclip_diagnostic, preclip_values)
+    _set_diagnostic_values(nu_tilde_floor_clip_mask, floor_clip_values)
+    _set_diagnostic_values(nu_tilde_ceiling_clip_mask, ceiling_clip_values)
+    _set_diagnostic_values(nu_tilde_floor_bound_mask, floor_bound_values)
+    _set_diagnostic_values(nu_tilde_ceiling_bound_mask, ceiling_bound_values)
+
+    raw_min, raw_max = _field_minmax(raw_values)
+    preclip_min, preclip_max = _field_minmax(preclip_values)
+    clipped_min, clipped_max = _field_minmax(clipped_values)
+    dof_count = int(preclip_values.size)
+    denominator = max(dof_count, 1)
+    floor_clip_count = int(np.count_nonzero(floor_clip_values))
+    ceiling_clip_count = int(np.count_nonzero(ceiling_clip_values))
+    floor_bound_count = int(np.count_nonzero(floor_bound_values))
+    ceiling_bound_count = int(np.count_nonzero(ceiling_bound_values))
+
+    return {
+        "stage": int(stage_idx) + 1,
+        "q": float(q_value),
+        "beta": float(beta_value),
+        "inner_iter": int(inner_iter),
+        "global_iter": int(global_iter),
+        "picard": int(picard_idx) + 1,
+        "raw_min": raw_min,
+        "raw_max": raw_max,
+        "preclip_min": preclip_min,
+        "preclip_max": preclip_max,
+        "clipped_min": clipped_min,
+        "clipped_max": clipped_max,
+        "floor": float(sa_nu_tilde_floor),
+        "ceiling": float(sa_nu_tilde_ceiling) if sa_nu_tilde_ceiling is not None else np.nan,
+        "floor_clip_count": floor_clip_count,
+        "ceiling_clip_count": ceiling_clip_count,
+        "floor_bound_count": floor_bound_count,
+        "ceiling_bound_count": ceiling_bound_count,
+        "dof_count": dof_count,
+        "floor_clip_frac": float(floor_clip_count) / denominator,
+        "ceiling_clip_frac": float(ceiling_clip_count) / denominator,
+        "floor_bound_frac": float(floor_bound_count) / denominator,
+        "ceiling_bound_frac": float(ceiling_bound_count) / denominator,
+    }
+
 
 # ---------------------------------------------------------------
 # Objective, state, adjoint, and sensitivity forms.
@@ -759,7 +1041,7 @@ mu_effective = effective_dynamic_viscosity(nu_tilde_frozen)
 if callable(dissipation_density_builder):
     dissipation_density = dissipation_density_builder(u, mu_effective)
 else:
-    deformation = nabla_grad(u) + nabla_grad(u).T
+    deformation = strain_tensor(u)
     dissipation_density = 0.5 * mu_effective * inner(deformation, deformation)
 
 # Objective: dissipation plus Brinkman drag.
@@ -829,7 +1111,7 @@ if mass_flow_target_fractions:
 u_lin, p_lin = TrialFunctions(FlowSpace)
 v_lin, q_lin = TestFunctions(FlowSpace)
 a_stokes = (
-    mu_effective * inner(grad(u_lin), grad(v_lin))
+    viscous_stress_form(mu_effective, u_lin, v_lin)
     + inner(grad(p_lin), v_lin)
     + inner(div(u_lin), q_lin)
     + alpha(rho_effective) * inner(u_lin, v_lin)
@@ -872,7 +1154,7 @@ dt_pc = Constant(float(globals().get("FORWARD_IPCS_DT", 2.0e-4)))
 # Tentative velocity step.
 a_pc_u    = (rho_fluid / dt_pc * inner(u_pc_tr, z_pc)
            + rho_fluid * inner(dot(u_pc_old, nabla_grad(u_pc_tr)), z_pc)
-           + mu_effective * inner(grad(u_pc_tr), grad(z_pc))
+           + viscous_stress_form(mu_effective, u_pc_tr, z_pc)
            + alpha(rho_effective) * inner(u_pc_tr, z_pc)) * dx
 L_pc_u    = (rho_fluid / dt_pc * inner(u_pc_old, z_pc)
            - inner(grad(p_pc_old), z_pc)) * dx
@@ -1178,19 +1460,7 @@ def build_forward_snes_recovery_attempts():
     }
     configured_attempts = globals().get("FORWARD_SNES_RECOVERY_ATTEMPTS", None)
     if configured_attempts is None:
-        fallback_line_search = globals().get("FORWARD_SNES_FALLBACK_LINE_SEARCH", None)
-        if fallback_line_search is None:
-            return [base_attempt]
-        fallback_attempt = dict(base_attempt)
-        fallback_attempt.update(
-            {
-                "label": "fallback retry",
-                "line_search": str(fallback_line_search),
-                "max_iters": int(globals().get("FORWARD_SNES_FALLBACK_MAX_ITERS", base_attempt["max_iters"])),
-                "restart_with_stokes": bool(globals().get("FORWARD_SNES_RESTART_WITH_STOKES", True)),
-            }
-        )
-        return [base_attempt, fallback_attempt]
+        return [base_attempt]
 
     if isinstance(configured_attempts, np.ndarray):
         configured_attempts = configured_attempts.tolist()
@@ -1291,6 +1561,23 @@ def solve_forward_snes_once(
     if accept_residual_growth_override is not None:
         accepted_limit = max(accepted_limit, float(accept_residual_growth_override) * initial_norm)
     max_absolute_residual = globals().get("FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL", None)
+    if (
+        accept_nonconverged
+        and bool(globals().get("FORWARD_SNES_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM", True))
+        and initial_norm <= accepted_limit
+        and (
+            max_absolute_residual is None
+            or initial_norm <= float(max_absolute_residual)
+        )
+    ):
+        solver_log(
+            "      [SNES] initial iterate already satisfies accept limit "
+            "{:.2e} <= {:.2e}; skipping Newton update".format(
+                initial_norm,
+                accepted_limit,
+            )
+        )
+        return 1.0, float(initial_norm)
 
     if (
         accept_nonconverged
@@ -1380,15 +1667,18 @@ def solve_forward_snes_attempt(attempt, convection_schedule):
                 step_attempt[key] = step[key]
         if len(pending_steps) > 1:
             details = []
-            if "max_iters" in step:
+            if "max_iters" in step and step_attempt.get("max_iters") is not None:
                 details.append("max_it={}".format(step_attempt["max_iters"]))
-            if "atol" in step:
+            if "atol" in step and step_attempt.get("atol") is not None:
                 details.append("atol={:.1e}".format(step_attempt["atol"]))
             if "accept_norm" in step:
-                details.append("accept={:.1e}".format(step_attempt["accept_norm"]))
-            if "accept_growth" in step:
+                if step_attempt.get("accept_norm") is None:
+                    details.append("accept=off")
+                else:
+                    details.append("accept={:.1e}".format(step_attempt["accept_norm"]))
+            if "accept_growth" in step and step_attempt.get("accept_growth") is not None:
                 details.append("growth<={:.2f}".format(step_attempt["accept_growth"]))
-            if "rtol" in step:
+            if "rtol" in step and step_attempt.get("rtol") is not None:
                 details.append("rtol={:.1e}".format(step_attempt["rtol"]))
             solver_log(
                 "      [SNES continuation] step {}/{}: convection = {:.2f}{}".format(
@@ -1436,9 +1726,46 @@ def solve_forward_snes_attempt(attempt, convection_schedule):
 
 def solve_forward_snes(solve_label=None):
     """Solve the frozen-viscosity Navier-Stokes system with configured recovery."""
+    global snes_ipcs_warm_start_done
     recovery_attempts = build_forward_snes_recovery_attempts()
     convection_schedule = build_forward_snes_convection_schedule()
+    label_text = "" if solve_label is None else str(solve_label).lower()
+    # The adjoint needs a true monolithic residual, not a loose continuation accept.
+    if "final" in label_text and bool(globals().get("FORWARD_SNES_STRICT_FINAL_SOLVE", True)):
+        for attempt in recovery_attempts:
+            attempt["accept_norm"] = None
+            attempt["accept_growth"] = None
+            attempt["accept_nonconverged"] = False
+        for step in convection_schedule:
+            if abs(float(step["convection_weight"]) - 1.0) < 1.0e-12:
+                step["accept_norm"] = None
+                step["accept_growth"] = None
+                step["accept_nonconverged"] = False
     entry_state_values = w_fwd.vector().get_local()
+    warm_start_with_ipcs = bool(globals().get("FORWARD_SNES_WARM_START_WITH_IPCS", False))
+    warm_start_mode = str(globals().get("FORWARD_SNES_IPCS_WARM_START_MODE", "initial")).strip().lower()
+    if warm_start_with_ipcs:
+        # IPCS is only a pseudo-transient initializer; SNES still owns acceptance.
+        run_ipcs_warm_start = False
+        if warm_start_mode == "always":
+            run_ipcs_warm_start = True
+        elif warm_start_mode == "final":
+            run_ipcs_warm_start = "final" in label_text
+        else:
+            run_ipcs_warm_start = not snes_ipcs_warm_start_done
+        if run_ipcs_warm_start:
+            solver_log("      [SNES warm start] IPCS pseudo-transient initialization")
+            try:
+                solve_forward_ipcs(
+                    "{}_ipcs_warm_start".format(solve_label if solve_label is not None else "snes")
+                )
+            except RuntimeError as exc:
+                root_print(
+                    "Warning: IPCS warm start did not meet its acceptance criteria; "
+                    "continuing to SNES from the best IPCS iterate. {}".format(exc)
+                )
+            snes_ipcs_warm_start_done = True
+            entry_state_values = w_fwd.vector().get_local()
     num_retries = max(0, len(recovery_attempts) - 1)
     try:
         for attempt_idx, attempt in enumerate(recovery_attempts):
@@ -1479,9 +1806,169 @@ def solve_forward_snes(solve_label=None):
 
 
 def solve_forward(solve_label=None):
+    """Dispatch the forward solve; IPCS final solves get an SNES polish by default."""
     if FORWARD_FLOW_SOLVER == "snes":
         return solve_forward_snes(solve_label)
-    return solve_forward_ipcs(solve_label)
+    ipcs_result = solve_forward_ipcs(solve_label)
+    label_text = "" if solve_label is None else str(solve_label).lower()
+    polish_all = bool(globals().get("FORWARD_IPCS_SNES_POLISH_ALL", False))
+    polish_final = bool(globals().get("FORWARD_IPCS_FINAL_SNES_POLISH", True))
+    if polish_all or (polish_final and "final" in label_text):
+        solver_log("      [IPCS] polishing accepted iterate with monolithic SNES")
+        return solve_forward_snes("{}_snes_polish".format(solve_label))
+    return ipcs_result
+
+
+def solve_forward_picard(solve_label=None):
+    """Use a configurable cheaper solve for frozen-SA Picard updates."""
+    picard_solver = str(globals().get("FORWARD_PICARD_FLOW_SOLVER", FORWARD_FLOW_SOLVER)).strip().lower()
+    if picard_solver in {"newton", "newtonls", "snes"}:
+        return solve_forward_snes(solve_label)
+    if picard_solver == "ipcs":
+        return solve_forward_ipcs(solve_label)
+    raise ValueError("FORWARD_PICARD_FLOW_SOLVER must be either 'ipcs' or 'snes'.")
+
+
+def finite_difference_check_iterations():
+    raw_iterations = globals().get("FINITE_DIFFERENCE_CHECK_ITERATIONS", (0,))
+    if isinstance(raw_iterations, np.ndarray):
+        raw_iterations = raw_iterations.tolist()
+    elif not isinstance(raw_iterations, (list, tuple, set)):
+        raw_iterations = [raw_iterations]
+    return {int(value) for value in raw_iterations}
+
+
+def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_objective, objective_gradient_active):
+    """Optional expensive coordinate checks for the frozen-adjoint gradient."""
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if int(global_iter) not in finite_difference_check_iterations():
+        return
+
+    sample_count = min(
+        int(globals().get("FINITE_DIFFERENCE_CHECK_SAMPLES", 4)),
+        int(ActiveDV.size),
+    )
+    if sample_count <= 0:
+        return
+
+    fd_step = float(globals().get("FINITE_DIFFERENCE_CHECK_STEP", 1.0e-3))
+    rng = np.random.RandomState(int(globals().get("FINITE_DIFFERENCE_CHECK_SEED", 13)) + int(global_iter))
+    sampled_active_positions = rng.choice(int(ActiveDV.size), size=sample_count, replace=False)
+    check_updated_turbulence = bool(globals().get("FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE", False))
+
+    base_rho_values = rho.vector().get_local().copy()
+    base_rho_f_values = rho_f.vector().get_local().copy()
+    base_w_values = w_fwd.vector().get_local().copy()
+    base_adj_values = w_adj.vector().get_local().copy()
+    base_nu_values = nu_tilde_frozen.vector().get_local().copy()
+    base_sa0_values = sa_model.nu_tilde0.vector().get_local().copy()
+    base_sa1_values = sa_model.nu_tilde1.vector().get_local().copy()
+
+    def restore_base_state(refresh_wall_distance):
+        rho.vector().set_local(base_rho_values)
+        rho.vector().apply("insert")
+        rho_f.vector().set_local(base_rho_f_values)
+        rho_f.vector().apply("insert")
+        w_fwd.vector().set_local(base_w_values)
+        w_fwd.vector().apply("insert")
+        w_adj.vector().set_local(base_adj_values)
+        w_adj.vector().apply("insert")
+        nu_tilde_frozen.vector().set_local(base_nu_values)
+        nu_tilde_frozen.vector().apply("insert")
+        sa_model.nu_tilde0.vector().set_local(base_sa0_values)
+        sa_model.nu_tilde0.vector().apply("insert")
+        sa_model.nu_tilde1.vector().set_local(base_sa1_values)
+        sa_model.nu_tilde1.vector().apply("insert")
+        if refresh_wall_distance:
+            update_wall_distance_field()
+
+    def evaluate_perturbed_objective(active_position, delta, update_turbulence, label):
+        perturbed_values = base_rho_values.copy()
+        density_dof = ActiveDV[active_position]
+        perturbed_values[density_dof] += float(delta)
+        perturbed_values = np.clip(perturbed_values, density_lower_values, density_upper_values)
+        rho.vector().set_local(perturbed_values)
+        rho.vector().apply("insert")
+        pde_filter_design_density(rho, rho_f)
+
+        if update_turbulence:
+            update_wall_distance_field()
+            fd_picard_steps = max(1, int(globals().get("FINITE_DIFFERENCE_CHECK_PICARD_STEPS", 1)))
+            for fd_picard_idx in range(fd_picard_steps):
+                solve_forward_snes("{}_picard{:02d}".format(label, fd_picard_idx + 1))
+                velocity_for_sa = w_fwd.sub(0, deepcopy=True)
+                sa_model.construct_forms(velocity_for_sa)
+                sa_model.solve_turbulence_model()
+                sa_model.update_variables(
+                    relaxation=float(globals().get("TURBULENCE_RELAXATION", 1.0))
+                )
+                nu_tilde_frozen.assign(sa_model.nu_tilde0)
+                enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
+                sa_model.nu_tilde0.assign(nu_tilde_frozen)
+                sa_model.nu_tilde1.assign(nu_tilde_frozen)
+        solve_forward_snes(label)
+        return float(assemble(ObjFunctional))
+
+    root_print(
+        "  [FD check] stage {} iter {} global {} with {} coordinate sample(s).".format(
+            stage_idx, inner_iter, global_iter, sample_count,
+        )
+    )
+    try:
+        for mode_name, update_turbulence in (
+            ("frozen", False),
+            ("updated-SA-wall", True),
+        ):
+            if update_turbulence and not check_updated_turbulence:
+                continue
+            root_print("  [FD check] mode: {}".format(mode_name))
+            for active_position in sampled_active_positions:
+                density_dof = ActiveDV[active_position]
+                max_step = min(
+                    base_rho_values[density_dof] - density_lower_values[density_dof],
+                    density_upper_values[density_dof] - base_rho_values[density_dof],
+                )
+                step = min(fd_step, 0.5 * max_step)
+                if step <= 1.0e-12:
+                    root_print(
+                        "    dof {} skipped: insufficient bound margin for FD step.".format(
+                            int(density_dof),
+                        )
+                    )
+                    continue
+                restore_base_state(refresh_wall_distance=update_turbulence)
+                plus_objective = evaluate_perturbed_objective(
+                    active_position,
+                    step,
+                    update_turbulence,
+                    "fd_final_{}_dof{}_plus".format(mode_name, int(density_dof)),
+                )
+                restore_base_state(refresh_wall_distance=update_turbulence)
+                minus_objective = evaluate_perturbed_objective(
+                    active_position,
+                    -step,
+                    update_turbulence,
+                    "fd_final_{}_dof{}_minus".format(mode_name, int(density_dof)),
+                )
+                fd_derivative = (plus_objective - minus_objective) / (2.0 * step)
+                adjoint_derivative = float(objective_gradient_active[active_position])
+                rel_error = abs(fd_derivative - adjoint_derivative) / max(
+                    abs(fd_derivative),
+                    abs(adjoint_derivative),
+                    1.0e-30,
+                )
+                root_print(
+                    "    dof {} adj={:.6e} fd={:.6e} rel_err={:.3e} J0={:.6e}".format(
+                        int(density_dof),
+                        adjoint_derivative,
+                        fd_derivative,
+                        rel_error,
+                        float(base_objective),
+                    )
+                )
+    finally:
+        restore_base_state(refresh_wall_distance=check_updated_turbulence)
 
 
 def ipcs_accept_best_score_for_label(solve_label, default_score):
@@ -1511,9 +1998,9 @@ def solve_forward_ipcs(solve_label=None):
     global ipcs_solve_counter
     global save_ipcs_residual_plots
     max_it  = int(globals().get("FORWARD_IPCS_MAX_ITERS", 200))
-    rtol_u  = float(globals().get("FORWARD_IPCS_VELOCITY_RTOL", globals().get("FORWARD_IPCS_RTOL", 1.0e-3)))
+    rtol_u  = float(globals().get("FORWARD_IPCS_VELOCITY_RTOL", 1.0e-3))
     rtol_p  = float(globals().get("FORWARD_IPCS_PRESSURE_RTOL", 2.0e-2))
-    omega_u_base = float(globals().get("FORWARD_IPCS_VEL_RELAXATION", globals().get("FORWARD_IPCS_U_RELAXATION", 0.5)))
+    omega_u_base = float(globals().get("FORWARD_IPCS_VEL_RELAXATION", 0.5))
     omega_p_base = float(globals().get("FORWARD_IPCS_P_RELAXATION", 0.2))
     min_omega_u = float(globals().get("FORWARD_IPCS_MIN_U_RELAXATION", 0.05))
     min_omega_p = float(globals().get("FORWARD_IPCS_MIN_P_RELAXATION", 0.02))
@@ -1768,6 +2255,12 @@ rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
+nu_tilde_raw_dir = os.path.join(results_root, "nu_tilde_raw_sa_solve")
+nu_tilde_preclip_dir = os.path.join(results_root, "nu_tilde_relaxed_preclip")
+nu_tilde_clip_floor_dir = os.path.join(results_root, "nu_tilde_floor_clip_mask")
+nu_tilde_clip_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_clip_mask")
+nu_tilde_bound_floor_dir = os.path.join(results_root, "nu_tilde_floor_bound_mask")
+nu_tilde_bound_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_bound_mask")
 df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
@@ -1777,6 +2270,7 @@ save_ipcs_residual_plots = (
 )
 save_ipcs_residual_svgs = bool(globals().get("SAVE_IPCS_RESIDUAL_SVGS", False))
 ipcs_solve_counter = 0
+snes_ipcs_warm_start_done = False
 
 ensure_clean_dir(results_root)
 ensure_clean_dir(rho_dir)
@@ -1784,6 +2278,13 @@ ensure_clean_dir(rho_p_dir)
 ensure_clean_dir(u_dir)
 ensure_clean_dir(p_dir)
 ensure_clean_dir(nu_tilde_dir)
+if save_sa_clipping_diagnostics:
+    ensure_clean_dir(nu_tilde_raw_dir)
+    ensure_clean_dir(nu_tilde_preclip_dir)
+    ensure_clean_dir(nu_tilde_clip_floor_dir)
+    ensure_clean_dir(nu_tilde_clip_ceiling_dir)
+    ensure_clean_dir(nu_tilde_bound_floor_dir)
+    ensure_clean_dir(nu_tilde_bound_ceiling_dir)
 ensure_clean_dir(df0dx_centered_dir)
 ensure_clean_dir(design_dir)
 if save_ipcs_residual_plots:
@@ -1794,10 +2295,30 @@ rhop_out = ResilientVTKFile(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), C
 u_out = ResilientVTKFile(os.path.join(u_dir, "plot_u.pvd"), COMM)
 p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
+if save_sa_clipping_diagnostics:
+    nu_tilde_raw_out = ResilientVTKFile(
+        os.path.join(nu_tilde_raw_dir, "plot_nu_tilde_raw_sa_solve.pvd"), COMM
+    )
+    nu_tilde_preclip_out = ResilientVTKFile(
+        os.path.join(nu_tilde_preclip_dir, "plot_nu_tilde_relaxed_preclip.pvd"), COMM
+    )
+    nu_tilde_floor_clip_mask_out = ResilientVTKFile(
+        os.path.join(nu_tilde_clip_floor_dir, "plot_nu_tilde_floor_clip_mask.pvd"), COMM
+    )
+    nu_tilde_ceiling_clip_mask_out = ResilientVTKFile(
+        os.path.join(nu_tilde_clip_ceiling_dir, "plot_nu_tilde_ceiling_clip_mask.pvd"), COMM
+    )
+    nu_tilde_floor_bound_mask_out = ResilientVTKFile(
+        os.path.join(nu_tilde_bound_floor_dir, "plot_nu_tilde_floor_bound_mask.pvd"), COMM
+    )
+    nu_tilde_ceiling_bound_mask_out = ResilientVTKFile(
+        os.path.join(nu_tilde_bound_ceiling_dir, "plot_nu_tilde_ceiling_bound_mask.pvd"), COMM
+    )
 df0dx_centered_out = ResilientVTKFile(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
+sa_clipping_log_path = os.path.join(results_root, "NuTildeClippingLog.txt")
 initialize_optimization_log(
     log_path,
     include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"),
@@ -1808,6 +2329,8 @@ initialize_optimization_log(
     ),
 )
 initialize_df0dx_log(df0dx_log_path)
+if save_sa_clipping_diagnostics:
+    initialize_sa_clipping_log(sa_clipping_log_path)
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -1818,6 +2341,7 @@ enforce_density_bounds_inplace(rho)
 
 iter_count = 0
 previous_objective = 0.0
+objective_scale_reference = None
 
 num_mma = int(ActiveDV.size)
 active_density_lower_values = density_lower_values[ActiveDV]
@@ -1846,6 +2370,68 @@ volume = assemble(VolumeRegion * dx)
 if volume <= 0.0:
     raise ValueError("The volume-constrained design region has zero measure.")
 
+
+def _assign_scalar_active_density(active_density_value):
+    """Set a uniform active density while preserving configured passive cells."""
+    density_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+    density_values[ActiveDV] = np.clip(
+        float(active_density_value),
+        active_density_lower_values,
+        active_density_upper_values,
+    )
+    rho.vector().set_local(density_values)
+    rho.vector().apply("insert")
+    return rho
+
+
+def _filtered_volume_fraction_for_active_density(active_density_value):
+    _assign_scalar_active_density(active_density_value)
+    pde_filter_design_density(rho, rho_f)
+    return float(assemble(VolumeRegion * rho_effective * dx) / volume)
+
+
+def initialize_active_density_to_filtered_volume_target():
+    """Choose the initial active value so rho_effective starts at VOL_FRAC."""
+    if not bool(globals().get("INITIAL_DENSITY_MATCH_FILTERED_VOLUME", True)):
+        pde_filter_design_density(rho, rho_f)
+        return
+
+    target = float(VOL_FRAC)
+    lower_value = float(np.min(active_density_lower_values))
+    upper_value = float(np.max(active_density_upper_values))
+    lower_fraction = _filtered_volume_fraction_for_active_density(lower_value)
+    upper_fraction = _filtered_volume_fraction_for_active_density(upper_value)
+    if lower_fraction > upper_fraction:
+        lower_value, upper_value = upper_value, lower_value
+        lower_fraction, upper_fraction = upper_fraction, lower_fraction
+
+    if target <= lower_fraction:
+        chosen_density = lower_value
+    elif target >= upper_fraction:
+        chosen_density = upper_value
+    else:
+        lo = lower_value
+        hi = upper_value
+        for _ in range(36):
+            mid = 0.5 * (lo + hi)
+            mid_fraction = _filtered_volume_fraction_for_active_density(mid)
+            if mid_fraction < target:
+                lo = mid
+            else:
+                hi = mid
+        chosen_density = 0.5 * (lo + hi)
+
+    final_fraction = _filtered_volume_fraction_for_active_density(chosen_density)
+    root_print(
+        "Initial active density {:.6f} gives filtered volume {:.6f} "
+        "(target {:.6f}).".format(chosen_density, final_fraction, target)
+    )
+
+
+initialize_design_filter_normalization()
+initialize_active_density_to_filtered_volume_target()
+xval[:, 0] = rho.vector().get_local()[ActiveDV]
+
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
@@ -1858,8 +2444,42 @@ if isinstance(_max_iters_raw, (list, tuple)):
 else:
     MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
 
+
+def stage_schedule_value(schedule_name, fallback_value, stage_idx):
+    raw_schedule = globals().get(schedule_name, None)
+    if raw_schedule is None:
+        return float(fallback_value)
+    if isinstance(raw_schedule, np.ndarray):
+        values = raw_schedule.tolist()
+    elif isinstance(raw_schedule, (list, tuple)):
+        values = list(raw_schedule)
+    else:
+        values = [raw_schedule]
+    if not values:
+        return float(fallback_value)
+    return float(values[min(int(stage_idx), len(values) - 1)])
+
+
+def update_stage_penalty_parameters(stage_idx):
+    """Advance wall-distance and nu_tilde solid penalties with continuation."""
+    wall_alpha_now = stage_schedule_value(
+        "SA_WALL_PENALTY_ALPHA_SCHEDULE",
+        sa_wall_penalty_alpha_base,
+        stage_idx,
+    )
+    nu_tilde_alpha_now = stage_schedule_value(
+        "SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE",
+        sa_nu_tilde_penalty_alpha_base,
+        stage_idx,
+    )
+    sa_wall_penalty_alpha.assign(wall_alpha_now)
+    sa_nu_tilde_penalty_alpha.assign(nu_tilde_alpha_now)
+    return wall_alpha_now, nu_tilde_alpha_now
+
 # ===============================================================
-# Continuation and MMA optimization loop
+# Continuation and MMA optimization loop.
+# Each iteration: filter design -> update wall distance -> Picard flow/SA
+# updates -> strict final flow -> adjoint -> filtered sensitivities -> MMA.
 # ===============================================================
 optimization_start_time = time.perf_counter()
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
@@ -1868,11 +2488,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     max_iters_now = MAX_INNER_ITERATIONS_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
+    wall_alpha_now, nu_tilde_alpha_now = update_stage_penalty_parameters(stage_idx)
     inner_count = 0
     convergence_history = 0
     objective_converged = False
-    root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+    root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}, wall_alpha = {:.3e}, nu_tilde_alpha = {:.3e}".format(
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
+        wall_alpha_now, nu_tilde_alpha_now,
     ))
 
     while inner_count < max_iters_now and not objective_converged:
@@ -1883,7 +2505,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- Filtering and wall distance ---
         solver_log("  [Filter] design density")
-        rho_f = pde_filter(rho, rho_f)
+        rho_f = pde_filter_design_density(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
         solver_log("  [Wall distance] update")
         update_wall_distance_field()
@@ -1897,25 +2519,53 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- Forward solve: configured flow solver + frozen SA Picard updates ---
         root_print("  [Forward solve]")
-        picard_steps = max(1, int(globals().get("PICARD_STEPS", globals().get("FROZEN_PICARD_STEPS", 1))))
+        picard_steps = max(1, int(globals().get("PICARD_STEPS", 1)))
+        last_sa_clipping_stats = None
         for picard_idx in range(picard_steps):
             solver_log("    [Picard {}/{}] flow".format(picard_idx + 1, picard_steps))
-            solve_forward("stage{:02d}_iter{:03d}_picard{:02d}".format(
+            solve_forward_picard("stage{:02d}_iter{:03d}_picard{:02d}".format(
                 stage_idx + 1, inner_count, picard_idx + 1,
             ))
             velocity_for_sa = w_fwd.sub(0, deepcopy=True)
             sa_model.construct_forms(velocity_for_sa)
-            solver_log("    [Picard {}/{}] SA transport".format(picard_idx + 1, picard_steps))
-            sa_model.solve_turbulence_model()
-            sa_model.update_variables(
-                relaxation=float(globals().get("TURBULENCE_RELAXATION", globals().get("NUT_RELAXATION_FACTOR", 1.0)))
-            )
-            nu_tilde_frozen.assign(sa_model.nu_tilde0)
-            enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
-            sa_model.nu_tilde0.assign(nu_tilde_frozen)
-            sa_model.nu_tilde1.assign(nu_tilde_frozen)
+            sa_substeps_now = sa_pseudo_time_steps if sa_pseudo_time_stabilization else 1
+            for sa_substep_idx in range(sa_substeps_now):
+                if sa_substeps_now > 1:
+                    solver_log(
+                        "    [Picard {}/{}] SA transport substep {}/{}".format(
+                            picard_idx + 1,
+                            picard_steps,
+                            sa_substep_idx + 1,
+                            sa_substeps_now,
+                        )
+                    )
+                else:
+                    solver_log("    [Picard {}/{}] SA transport".format(picard_idx + 1, picard_steps))
+                sa_model.solve_turbulence_model()
+                sa_model.update_variables(
+                    relaxation=float(globals().get("TURBULENCE_RELAXATION", 1.0))
+                )
+                nu_tilde_frozen.assign(sa_model.nu_tilde0)
+                enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
+                if picard_idx == picard_steps - 1 and sa_substep_idx == sa_substeps_now - 1:
+                    last_sa_clipping_stats = update_sa_clipping_diagnostics(
+                        stage_idx,
+                        q_val,
+                        beta_val,
+                        inner_count,
+                        iter_count,
+                        picard_idx,
+                    )
+                sa_model.nu_tilde0.assign(nu_tilde_frozen)
+                sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
-        solver_log("    [Final flow] {} with updated turbulent viscosity".format(FORWARD_FLOW_SOLVER.upper()))
+        final_flow_solver_label = FORWARD_FLOW_SOLVER.upper()
+        if (
+            FORWARD_FLOW_SOLVER == "ipcs"
+            and bool(globals().get("FORWARD_IPCS_FINAL_SNES_POLISH", True))
+        ):
+            final_flow_solver_label = "IPCS + SNES polish"
+        solver_log("    [Final flow] {} with updated turbulent viscosity".format(final_flow_solver_label))
         final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward("stage{:02d}_iter{:03d}_final".format(
             stage_idx + 1, inner_count,
         ))
@@ -1927,8 +2577,22 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         u_out << w_fwd.sub(0)
         p_out << w_fwd.sub(1)
         nu_tilde_out << nu_tilde_frozen
+        if save_sa_clipping_diagnostics:
+            nu_tilde_raw_out << nu_tilde_raw_diagnostic
+            nu_tilde_preclip_out << nu_tilde_preclip_diagnostic
+            nu_tilde_floor_clip_mask_out << nu_tilde_floor_clip_mask
+            nu_tilde_ceiling_clip_mask_out << nu_tilde_ceiling_clip_mask
+            nu_tilde_floor_bound_mask_out << nu_tilde_floor_bound_mask
+            nu_tilde_ceiling_bound_mask_out << nu_tilde_ceiling_bound_mask
+            if last_sa_clipping_stats is not None:
+                append_sa_clipping_log_entry(sa_clipping_log_path, last_sa_clipping_stats)
 
         f0val = assemble(ObjFunctional)
+        if objective_scale_reference is None:
+            objective_scale_reference = max(abs(float(f0val)), float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)))
+            root_print("MMA objective scale: initial objective {:.6e}.".format(objective_scale_reference))
+        # MMA sees scaled objective values; logs keep physical values.
+        f0val_mma = float(f0val) / objective_scale_reference
         dissipation_now = assemble(DissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
@@ -1951,17 +2615,19 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- Sensitivities and constraints ---
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
-        filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
+        filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
-        fval[0, 0] = assemble(vol_constraint)
+        fval[0, 0] = assemble(vol_constraint) / volume
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
-        filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
+        filtered_s_vol = pde_filter_design_gradient(unfiltered_s_vol, filtered_s_vol)
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
-        vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
+        vol_residual_now = float(fval[0, 0])
 
-        df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
-        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
+        # Store only active-design sensitivities for MMA.
+        objective_gradient_active_unscaled = filtered_gradient.vector().get_local()[ActiveDV].copy()
+        df0dx[:, 0] = objective_gradient_active_unscaled / objective_scale_reference
+        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV] / volume
         df0dx_centered = df0dx[:, 0] - np.mean(df0dx[:, 0])
         df0dx_centered_values = np.zeros_like(filtered_gradient.vector().get_local())
         df0dx_centered_values[ActiveDV] = df0dx_centered
@@ -1981,6 +2647,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             iter_count,
             df0dx[:, 0],
         )
+        run_finite_difference_checks(
+            stage_idx + 1,
+            inner_count,
+            iter_count,
+            f0val,
+            objective_gradient_active_unscaled,
+        )
 
         mass_flow_status = []
         mass_flow_status_markers = set()
@@ -1990,7 +2663,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 assemble(constraint_spec["functional"]) + constraint_spec["offset"]
             )
             unfiltered_constraint_gradient.vector()[:] = assemble(constraint_spec["gradient_form"])[:]
-            filtered_constraint_gradient = pde_filter(
+            filtered_constraint_gradient = pde_filter_design_gradient(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
             dfdx[constraint_idx, :] = filtered_constraint_gradient.vector().get_local()[ActiveDV]
@@ -2012,7 +2685,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
             mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,
-            f0val, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
+            f0val_mma, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
         )
 
         xold2 = xold1.copy()
@@ -2076,7 +2749,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         ))
 
 root_print("Writing final post-update density output.")
-rho_f = pde_filter(rho, rho_f)
+rho_f = pde_filter_design_density(rho, rho_f)
 rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
 rho_out << rho
 rhop_out << rho_proj_plot

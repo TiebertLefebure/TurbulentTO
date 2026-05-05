@@ -78,6 +78,8 @@ SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
+SAVE_SA_CLIPPING_DIAGNOSTICS = True
+
 # Relaxed wall equation parameters for the external reciprocal distance solve.
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
@@ -101,8 +103,11 @@ MAX_INNER_ITERATIONS_SCHEDULE = [80, 80, 100, 120, 120, 140, 140, 140]
 # Frozen flow/turbulence coupling and forward solve parameters.
 LINEAR_SOLVER = "mumps"
 
-# FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs"
+# FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
+# Use IPCS for frozen-SA Picard updates, then use a short SNES residual polish
+# for the final flow state that feeds the adjoint.
 FORWARD_FLOW_SOLVER = "snes"
+FORWARD_PICARD_FLOW_SOLVER = "ipcs"
 
 # ===================================================================================== #
 # SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes":
@@ -111,7 +116,45 @@ FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 80
+FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
+FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 1.0
 FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-3
+
+FORWARD_SNES_ADAPTIVE_CONVECTION = True
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.10
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 6
+FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 60, "atol": 1.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 80, "atol": 5.0e-8, "accept_norm": 1.0e-4, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 100, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
+]
+FORWARD_SNES_CONVECTION_SCHEDULE = [
+    {"convection_weight": 0.00, "max_iters": 40, "atol": 1.0e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 60, "atol": 5.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 80, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
+]
+FORWARD_SNES_RECOVERY_ATTEMPTS = [
+    {
+        "label": "l2 line-search retry",
+        "line_search": "l2",
+        "max_iters": 120,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-5,
+        "accept_nonconverged": True,
+    },
+    {
+        "label": "trust-region retry",
+        "method": "newtontr",
+        "max_iters": 140,
+        "restart_with_stokes": False,
+        "accept_norm": 7.5e-5,
+        "accept_nonconverged": True,
+    },
+]
 # ===================================================================================== #
 
 PICARD_STEPS = 3
@@ -121,12 +164,12 @@ TURBULENCE_RELAXATION = 0.05
 # IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs":
 #   These match the shared defaults in TurbulentTO_Frozen.py and are written here
 #   explicitly so the case configuration is self-contained.
-FORWARD_IPCS_DT = 2.5e-5
-FORWARD_IPCS_MAX_ITERS = 400
+FORWARD_IPCS_DT = 1.25e-5
+FORWARD_IPCS_MAX_ITERS = 500
 FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
-FORWARD_IPCS_VEL_RELAXATION = 0.25
-FORWARD_IPCS_P_RELAXATION = 0.07
+FORWARD_IPCS_VEL_RELAXATION = 0.17
+FORWARD_IPCS_P_RELAXATION = 0.05
 FORWARD_IPCS_MAX_RESTARTS = 5
 FORWARD_IPCS_DT_REDUCTION_FACTOR = 0.5
 FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7

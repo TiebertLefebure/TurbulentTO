@@ -74,12 +74,19 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
 
+
 # Relaxed wall equation parameters for the external reciprocal distance solve.
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
+
+SA_WALL_DENSITY_SOURCE = "design" # with "passive", the reciprocal wall-distance solver uses density_upper_bound
+SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_DISTANCE_FLOOR = 0.25 * (L / N)
+STATE_INITIAL_SA_RELAXATION = 0.25
+STATE_INITIAL_SA_SWEEPS = 4
 
 # MMA objective and continuation parameters for the topology update.
 VOL_FRAC = 0.50
@@ -102,7 +109,7 @@ STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
 STATE_MAX_ITERS = 120
-STATE_INITIAL_SA_SWEEPS = 4
+
 # Treat the first substeps as state continuation from the Stokes warm start:
 # ramp convection first, then turbulent-viscosity feedback. This keeps the
 # passive inlet/outlet extensions from being hit by full Re=1000 NS immediately.

@@ -661,11 +661,6 @@ class ResilientVTKFile:
                 self._disable_writes(fallback_err)
         return self
 
-    @property
-    def active_path(self):
-        return self._active_path
-
-
 def compute_filter_base_length_from_config(config_values):
     custom_base = config_values.get("FILTER_BASE_LENGTH")
     if custom_base is not None:

@@ -690,16 +690,16 @@ else:
         prefer_pseudo_time=sa_wall_prefer_pseudo_time,
     )
 
-bc_state = (
+bc_flow_state = (
     bcu_walls
     + bcu_inlet
     + bcu_outlet
     + bcu_pressure_outlet_components
     + bcp_outlet
     + bcp_pin
-    + bcn_turbulence_state
-    + bcg_state
 )
+bc_turbulence_state = bcn_turbulence_state
+bc_state = bc_flow_state + bc_turbulence_state + bcg_state
 bc_state_adj += bcn_turbulence_adj + bcg_adj
 
 
@@ -724,26 +724,27 @@ DissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 # Monolithic primal residual for the current design. Full simply adds the
 # reciprocal wall-distance equation to this same state system.
-state_form = (
-    build_flow_residual(u, p, v, q, rho_effective, dx, nu_tilde)
-    + build_spalart_allmaras_residual(
-        u,
-        nu_tilde,
-        xi,
-        nu_laminar,
-        wall_distance,
-        dx,
-        nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
-        smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
-        wall_distance_floor=float(globals().get("SA_WALL_DISTANCE_FLOOR", 0.0)),
-        nu_tilde_floor=float(globals().get("SA_NU_TILDE_FLOOR", 0.0)),
-    )
+flow_state_form = build_flow_residual(u, p, v, q, rho_effective, dx, nu_tilde)
+sa_state_form = build_spalart_allmaras_residual(
+    u,
+    nu_tilde,
+    xi,
+    nu_laminar,
+    wall_distance,
+    dx,
+    nu_tilde_penalty_reaction=sa_nu_tilde_penalty_reaction,
+    smooth_abs_eps=float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12)),
+    wall_distance_floor=float(globals().get("SA_WALL_DISTANCE_FLOOR", 0.0)),
+    nu_tilde_floor=float(globals().get("SA_NU_TILDE_FLOOR", 0.0)),
 )
+state_form = flow_state_form + sa_state_form
 if FULL_STATE_INCLUDE_G:
     state_form += wall_distance_state_residual
 lagrangian_form = ObjFunctional + state_form
 
 state_residual_form = derivative(state_form, w_adj, TestFunction(StateSpace))
+flow_state_residual_form = derivative(flow_state_form, w_adj, TestFunction(StateSpace))
+sa_state_residual_form = derivative(sa_state_form, w_adj, TestFunction(StateSpace))
 objective_adjoint_form = derivative(lagrangian_form, w_state, TestFunction(StateSpaceAdj))
 objective_ddx = derivative(lagrangian_form, rho_f)
 
@@ -940,6 +941,371 @@ def initialize_state_guess_with_stokes(reset_g=False):
     run_sa_warm_start_sweeps(w_state.sub(STATE_VEL_IDX, deepcopy=True))
 
 
+def _comm_sum(value):
+    return float(MPI.sum(COMM, float(value)))
+
+
+def _comm_min(value):
+    return float(MPI.min(COMM, float(value)))
+
+
+def _comm_max(value):
+    return float(MPI.max(COMM, float(value)))
+
+
+def _field_values(function_or_vector):
+    if hasattr(function_or_vector, "vector"):
+        return function_or_vector.vector().get_local()
+    return function_or_vector.get_local()
+
+
+def _global_min_max(values):
+    values = np.asarray(values, dtype=float)
+    finite_values = values[np.isfinite(values)]
+    if finite_values.size:
+        local_min = float(np.min(finite_values))
+        local_max = float(np.max(finite_values))
+    else:
+        local_min = np.inf
+        local_max = -np.inf
+    global_min = _comm_min(local_min)
+    global_max = _comm_max(local_max)
+    if not np.isfinite(global_min):
+        global_min = np.nan
+    if not np.isfinite(global_max):
+        global_max = np.nan
+    return global_min, global_max
+
+
+def _global_mean(values):
+    values = np.asarray(values, dtype=float)
+    finite_mask = np.isfinite(values)
+    local_count = int(np.count_nonzero(finite_mask))
+    total_count = _comm_sum(local_count)
+    if total_count <= 0:
+        return np.nan
+    return _comm_sum(float(np.sum(values[finite_mask]))) / total_count
+
+
+def _global_fraction(mask, denominator_mask=None):
+    mask = np.asarray(mask, dtype=bool)
+    if denominator_mask is None:
+        denominator_mask = np.ones(mask.shape, dtype=bool)
+    else:
+        denominator_mask = np.asarray(denominator_mask, dtype=bool)
+    denominator = _comm_sum(int(np.count_nonzero(denominator_mask)))
+    if denominator <= 0:
+        return np.nan
+    numerator = _comm_sum(int(np.count_nonzero(mask & denominator_mask)))
+    return numerator / denominator
+
+
+def _global_l2_and_max_abs(values):
+    values = np.asarray(values, dtype=float)
+    finite_values = values[np.isfinite(values)]
+    local_sum_sq = float(np.sum(finite_values**2)) if finite_values.size else 0.0
+    local_max_abs = float(np.max(np.abs(finite_values))) if finite_values.size else 0.0
+    return _comm_sum(local_sum_sq) ** 0.5, _comm_max(local_max_abs)
+
+
+def constrained_residual_norm_for_form(residual_form, state_function, bcs):
+    residual_vector = assemble(residual_form)
+    fallback_residual_values = None
+    current_state_values = None
+    for bc in bcs:
+        try:
+            # For nonzero Dirichlet data, the constrained residual must be
+            # measured as x - g, not overwritten with the prescribed value.
+            bc.apply(residual_vector, state_function.vector())
+        except TypeError:
+            if fallback_residual_values is None:
+                fallback_residual_values = residual_vector.get_local()
+                current_state_values = state_function.vector().get_local()
+            for dof, value in bc.get_boundary_values().items():
+                fallback_residual_values[dof] = current_state_values[dof] - float(value)
+    if fallback_residual_values is not None:
+        residual_vector.set_local(fallback_residual_values)
+        residual_vector.apply("insert")
+    return float(residual_vector.norm("l2"))
+
+
+def constrained_state_residual_norm(state_function):
+    return constrained_residual_norm_for_form(state_residual_form, state_function, bc_state)
+
+
+def split_state_residual_norms(state_function):
+    flow_norm = constrained_residual_norm_for_form(
+        flow_state_residual_form,
+        state_function,
+        bc_flow_state,
+    )
+    sa_norm = constrained_residual_norm_for_form(
+        sa_state_residual_form,
+        state_function,
+        bc_turbulence_state,
+    )
+    return flow_norm, sa_norm
+
+
+def _timestamp_text():
+    return time.strftime("%a, %d %b %Y %H:%M:%S")
+
+
+def _format_diag_value(value):
+    if value is None:
+        return "nan"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bool, np.bool_)):
+        return "1" if value else "0"
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if not np.isfinite(numeric_value):
+        return "nan"
+    if numeric_value.is_integer() and abs(numeric_value) < 1.0e9:
+        return str(int(numeric_value))
+    if numeric_value == 0.0:
+        return "0"
+    if 1.0e-3 <= abs(numeric_value) < 1.0e4:
+        return "{:.6g}".format(numeric_value)
+    return "{:.3e}".format(numeric_value)
+
+
+def initialize_state_diagnostics_log(path):
+    if not IS_ROOT:
+        return
+    with open(path, "w") as log_file:
+        log_file.write(
+            "\t".join(
+                [
+                    "Stage",
+                    "Q",
+                    "Beta",
+                    "InnerIter",
+                    "GlobalIter",
+                    "Attempt",
+                    "AttemptLabel",
+                    "Step",
+                    "TotalSteps",
+                    "ConvectionWeight",
+                    "TurbulenceWeight",
+                    "Method",
+                    "LineSearch",
+                    "MaxIters",
+                    "SNESIters",
+                    "ReportedConverged",
+                    "Status",
+                    "Reason",
+                    "RTOL",
+                    "ATOL",
+                    "StrictLimit",
+                    "AcceptNorm",
+                    "AcceptedLimit",
+                    "InitialResidual",
+                    "FinalResidual",
+                    "FlowResidual",
+                    "SAResidual",
+                    "Timestamp",
+                ]
+            )
+            + "\n"
+        )
+
+
+def append_state_diagnostics_log_entry(path, context, diagnostics):
+    if not IS_ROOT:
+        return
+    row = [
+        context.get("stage", np.nan),
+        context.get("q", np.nan),
+        context.get("beta", np.nan),
+        context.get("inner_iter", np.nan),
+        context.get("global_iter", np.nan),
+        context.get("attempt_idx", np.nan),
+        context.get("attempt_label", ""),
+        context.get("coupling_idx", np.nan),
+        context.get("total_coupling_steps", np.nan),
+        context.get("convection_weight", np.nan),
+        context.get("turbulence_weight", np.nan),
+        diagnostics.get("method", ""),
+        diagnostics.get("line_search", ""),
+        diagnostics.get("max_iters", np.nan),
+        diagnostics.get("iterations", np.nan),
+        diagnostics.get("reported_converged", np.nan),
+        diagnostics.get("status", ""),
+        diagnostics.get("reason", ""),
+        diagnostics.get("rtol", np.nan),
+        diagnostics.get("atol", np.nan),
+        diagnostics.get("strict_limit", np.nan),
+        diagnostics.get("accept_norm", np.nan),
+        diagnostics.get("accepted_limit", np.nan),
+        diagnostics.get("initial_residual", np.nan),
+        diagnostics.get("final_residual", np.nan),
+        diagnostics.get("flow_residual", np.nan),
+        diagnostics.get("sa_residual", np.nan),
+        _timestamp_text(),
+    ]
+    with open(path, "a") as log_file:
+        log_file.write("\t".join(_format_diag_value(value) for value in row) + "\n")
+
+
+def append_state_solve_diagnostics(context, diagnostics):
+    if not bool(globals().get("SAVE_SEMIFROZEN_DIAGNOSTICS", False)):
+        return
+    path = globals().get("state_diagnostics_log_path")
+    if path:
+        append_state_diagnostics_log_entry(path, context or {}, diagnostics)
+
+
+def initialize_field_diagnostics_log(path):
+    if not IS_ROOT:
+        return
+    with open(path, "w") as log_file:
+        log_file.write(
+            "\t".join(
+                [
+                    "Stage",
+                    "Q",
+                    "Beta",
+                    "InnerIter",
+                    "GlobalIter",
+                    "NuTildeMin",
+                    "NuTildeMax",
+                    "NuTildeNegativeFrac",
+                    "NuTildeNearFloorFrac",
+                    "EddyRatioMin",
+                    "EddyRatioMax",
+                    "EddyRatioMean",
+                    "RhoProjectedGrayFrac",
+                    "WallDistanceMin",
+                    "WallDistanceMax",
+                    "DesignWallActiveFrac",
+                    "GradientL2",
+                    "GradientMaxAbs",
+                    "FilteredGradientL2",
+                    "FilteredGradientMaxAbs",
+                    "Timestamp",
+                ]
+            )
+            + "\n"
+        )
+
+
+def append_field_diagnostics_log_entry(path, context, diagnostics):
+    if not IS_ROOT:
+        return
+    row = [
+        context.get("stage", np.nan),
+        context.get("q", np.nan),
+        context.get("beta", np.nan),
+        context.get("inner_iter", np.nan),
+        context.get("global_iter", np.nan),
+        diagnostics.get("nu_tilde_min", np.nan),
+        diagnostics.get("nu_tilde_max", np.nan),
+        diagnostics.get("nu_tilde_negative_frac", np.nan),
+        diagnostics.get("nu_tilde_near_floor_frac", np.nan),
+        diagnostics.get("eddy_ratio_min", np.nan),
+        diagnostics.get("eddy_ratio_max", np.nan),
+        diagnostics.get("eddy_ratio_mean", np.nan),
+        diagnostics.get("rho_projected_gray_frac", np.nan),
+        diagnostics.get("wall_distance_min", np.nan),
+        diagnostics.get("wall_distance_max", np.nan),
+        diagnostics.get("design_wall_active_frac", np.nan),
+        diagnostics.get("gradient_l2", np.nan),
+        diagnostics.get("gradient_max_abs", np.nan),
+        diagnostics.get("filtered_gradient_l2", np.nan),
+        diagnostics.get("filtered_gradient_max_abs", np.nan),
+        _timestamp_text(),
+    ]
+    with open(path, "a") as log_file:
+        log_file.write("\t".join(_format_diag_value(value) for value in row) + "\n")
+
+
+def append_field_diagnostics(context):
+    if not bool(globals().get("SAVE_SEMIFROZEN_DIAGNOSTICS", False)):
+        return
+    path = globals().get("field_diagnostics_log_path")
+    if not path:
+        return
+
+    nu_values = w_state.sub(STATE_TURB_IDX, deepcopy=True).vector().get_local()
+    nu_min, nu_max = _global_min_max(nu_values)
+    nu_floor = float(globals().get("SA_NU_TILDE_FLOOR", 0.0))
+    near_floor_tol = max(
+        float(globals().get("SA_DIAGNOSTIC_NEAR_FLOOR_TOL", 1.0e-10)),
+        10.0 * max(nu_floor, 0.0),
+    )
+    nu_negative_frac = _global_fraction(nu_values < 0.0)
+    nu_near_floor_frac = _global_fraction(nu_values <= near_floor_tol)
+
+    nu_lam = float(MU_FLUID_VALUE / RHO_FLUID_VALUE)
+    smooth_eps = float(globals().get("SA_SMOOTH_ABS_EPS", 1.0e-12))
+    nu_safe = 0.5 * (
+        (nu_values - nu_floor)
+        + np.sqrt((nu_values - nu_floor) ** 2 + smooth_eps)
+    ) + nu_floor
+    chi = nu_safe / (nu_lam + float(DOLFIN_EPS))
+    fv1 = chi**3 / (chi**3 + 7.1**3)
+    eddy_raw = nu_safe * fv1
+    eddy_values = 0.5 * (eddy_raw + np.sqrt(eddy_raw**2 + smooth_eps))
+    eddy_ratio_values = eddy_values / max(nu_lam, 1.0e-30)
+    eddy_ratio_min, eddy_ratio_max = _global_min_max(eddy_ratio_values)
+    eddy_ratio_mean = _global_mean(eddy_ratio_values)
+
+    rho_projected_values = rho_proj_plot.vector().get_local()
+    design_mask = (density_upper_values - density_lower_values) > 1.0e-12
+    rho_gray_frac = _global_fraction(
+        (rho_projected_values > 0.1) & (rho_projected_values < 0.9),
+        design_mask,
+    )
+
+    if sa_wall_density_source == "passive":
+        wall_indicator_values = density_upper_values
+    else:
+        wall_indicator_values = rho_projected_values
+    design_wall_active_frac = _global_fraction(
+        wall_indicator_values < sa_wall_solid_threshold,
+        design_mask,
+    )
+
+    try:
+        wall_distance_values = project(wall_distance, TurbulenceSpace).vector().get_local()
+        wall_distance_min, wall_distance_max = _global_min_max(wall_distance_values)
+    except RuntimeError as err:
+        wall_distance_min, wall_distance_max = np.nan, np.nan
+        if IS_ROOT:
+            print("Warning: failed to project wall-distance diagnostics: {}".format(err))
+
+    gradient_l2, gradient_max_abs = _global_l2_and_max_abs(unfiltered_gradient.vector().get_local())
+    filtered_gradient_l2, filtered_gradient_max_abs = _global_l2_and_max_abs(
+        filtered_gradient.vector().get_local()
+    )
+
+    append_field_diagnostics_log_entry(
+        path,
+        context or {},
+        {
+            "nu_tilde_min": nu_min,
+            "nu_tilde_max": nu_max,
+            "nu_tilde_negative_frac": nu_negative_frac,
+            "nu_tilde_near_floor_frac": nu_near_floor_frac,
+            "eddy_ratio_min": eddy_ratio_min,
+            "eddy_ratio_max": eddy_ratio_max,
+            "eddy_ratio_mean": eddy_ratio_mean,
+            "rho_projected_gray_frac": rho_gray_frac,
+            "wall_distance_min": wall_distance_min,
+            "wall_distance_max": wall_distance_max,
+            "design_wall_active_frac": design_wall_active_frac,
+            "gradient_l2": gradient_l2,
+            "gradient_max_abs": gradient_max_abs,
+            "filtered_gradient_l2": filtered_gradient_l2,
+            "filtered_gradient_max_abs": filtered_gradient_max_abs,
+        },
+    )
+
+
 # ===============================================================
 # Nonlinear state solve
 # ===============================================================
@@ -952,27 +1318,8 @@ def solve_state_once(
     accept_function_norm_override=None,
     accept_nonconverged_override=None,
     accept_residual_growth_override=None,
+    diagnostic_context=None,
 ):
-    def constrained_state_residual_norm(state_function):
-        residual_vector = assemble(state_residual_form)
-        fallback_residual_values = None
-        current_state_values = None
-        for bc in bc_state:
-            try:
-                # For nonzero Dirichlet data, the constrained residual must be
-                # measured as x - g, not overwritten with the prescribed value.
-                bc.apply(residual_vector, state_function.vector())
-            except TypeError:
-                if fallback_residual_values is None:
-                    fallback_residual_values = residual_vector.get_local()
-                    current_state_values = state_function.vector().get_local()
-                for dof, value in bc.get_boundary_values().items():
-                    fallback_residual_values[dof] = current_state_values[dof] - float(value)
-        if fallback_residual_values is not None:
-            residual_vector.set_local(fallback_residual_values)
-            residual_vector.apply("insert")
-        return float(residual_vector.norm("l2"))
-
     jac_state = derivative(state_residual_form, w_state)
     problem_state = NonlinearVariationalProblem(state_residual_form, w_state, bc_state, jac_state)
     solver_state = NonlinearVariationalSolver(problem_state)
@@ -982,12 +1329,14 @@ def solve_state_once(
     )
     method = method_override or str(get_state_option("STATE_SOLVE_METHOD", "FULL_STATE_SNES_METHOD", "newtonls"))
     solver_state.parameters["snes_solver"]["method"] = method
+    current_line_search = ""
     if method == "newtonls":
-        solver_state.parameters["snes_solver"]["line_search"] = (
+        current_line_search = (
             str(get_state_option("STATE_LINE_SEARCH", "FULL_STATE_SNES_LINE_SEARCH", "bt"))
             if line_search_override is None
             else line_search_override
         )
+        solver_state.parameters["snes_solver"]["line_search"] = current_line_search
     current_rtol = float(
         get_state_option("STATE_RTOL", "FULL_STATE_SNES_RTOL", globals().get("FORWARD_SNES_RTOL", 1.0e-6))
         if rtol_override is None
@@ -1000,11 +1349,12 @@ def solve_state_once(
     )
     solver_state.parameters["snes_solver"]["relative_tolerance"] = current_rtol
     solver_state.parameters["snes_solver"]["absolute_tolerance"] = current_atol
-    solver_state.parameters["snes_solver"]["maximum_iterations"] = int(
+    current_max_iters = int(
         get_state_option("STATE_MAX_ITERS", "FULL_STATE_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", 80))
         if max_iters_override is None
         else max_iters_override
     )
+    solver_state.parameters["snes_solver"]["maximum_iterations"] = current_max_iters
     initial_residual_norm = constrained_state_residual_norm(w_state)
     accepted_function_norm = (
         max(current_atol, current_rtol * max(initial_residual_norm, 1.0e-16))
@@ -1038,13 +1388,74 @@ def solve_state_once(
     solver_state.parameters["snes_solver"]["error_on_nonconvergence"] = error_on_nonconvergence
 
     solve_result = solver_state.solve()
+    solver_iterations = np.nan
     solver_converged = True
     if isinstance(solve_result, tuple) and len(solve_result) >= 2:
+        solver_iterations = solve_result[0]
         solver_converged = bool(solve_result[1])
 
     residual_norm = constrained_state_residual_norm(w_state)
+    flow_residual_norm, sa_residual_norm = split_state_residual_norms(w_state)
+    strict_function_norm_limit = max(current_atol, current_rtol * max(initial_residual_norm, 1.0e-16))
     if not np.isfinite(residual_norm):
+        diagnostics = {
+            "method": method,
+            "line_search": current_line_search,
+            "max_iters": current_max_iters,
+            "iterations": solver_iterations,
+            "reported_converged": solver_converged,
+            "status": "NONFINITE",
+            "reason": "NONFINITE_RESIDUAL",
+            "rtol": current_rtol,
+            "atol": current_atol,
+            "strict_limit": strict_function_norm_limit,
+            "accept_norm": accepted_function_norm,
+            "accepted_limit": accepted_function_norm_limit,
+            "initial_residual": initial_residual_norm,
+            "final_residual": residual_norm,
+            "flow_residual": flow_residual_norm,
+            "sa_residual": sa_residual_norm,
+        }
+        append_state_solve_diagnostics(diagnostic_context, diagnostics)
         raise RuntimeError("Accepted SNES iterate produced a non-finite state residual norm.")
+    if residual_norm <= strict_function_norm_limit:
+        status = "CONVERGED_RESIDUAL"
+        reason = "CONVERGED_STRICT_RESIDUAL"
+    elif residual_norm <= accepted_function_norm_limit:
+        status = "ACCEPTED_NONCONVERGED"
+        if np.isfinite(solver_iterations) and int(solver_iterations) >= current_max_iters:
+            reason = "DIVERGED_MAX_IT"
+        elif not solver_converged:
+            reason = "NONCONVERGED_REPORTED_BY_SOLVER"
+        else:
+            reason = "RESIDUAL_ABOVE_STRICT_LIMIT"
+    else:
+        status = "REJECTED"
+        if np.isfinite(solver_iterations) and int(solver_iterations) >= current_max_iters:
+            reason = "DIVERGED_MAX_IT"
+        elif not solver_converged:
+            reason = "NONCONVERGED_REPORTED_BY_SOLVER"
+        else:
+            reason = "RESIDUAL_EXCEEDS_ACCEPTED_LIMIT"
+    diagnostics = {
+        "method": method,
+        "line_search": current_line_search,
+        "max_iters": current_max_iters,
+        "iterations": solver_iterations,
+        "reported_converged": solver_converged,
+        "status": status,
+        "reason": reason,
+        "rtol": current_rtol,
+        "atol": current_atol,
+        "strict_limit": strict_function_norm_limit,
+        "accept_norm": accepted_function_norm,
+        "accepted_limit": accepted_function_norm_limit,
+        "initial_residual": initial_residual_norm,
+        "final_residual": residual_norm,
+        "flow_residual": flow_residual_norm,
+        "sa_residual": sa_residual_norm,
+    }
+    append_state_solve_diagnostics(diagnostic_context, diagnostics)
     if residual_norm > accepted_function_norm_limit:
         raise RuntimeError(
             "Accepted SNES iterate has state residual norm {:.4e}, exceeding the allowed {:.4e} "
@@ -1191,7 +1602,7 @@ def build_state_turbulence_coupling_schedule():
     return schedule
 
 
-def solve_state_attempt(attempt, coupling_schedule):
+def solve_state_attempt(attempt, coupling_schedule, solve_context=None, attempt_idx=0):
     total_coupling_steps = len(coupling_schedule)
     for coupling_idx, coupling_step in enumerate(coupling_schedule, start=1):
         coupling_weight = coupling_step["weight"]
@@ -1223,6 +1634,17 @@ def solve_state_attempt(attempt, coupling_schedule):
                     "" if not step_details else " ({})".format(", ".join(step_details)),
                 )
             )
+        diagnostic_context = dict(solve_context or {})
+        diagnostic_context.update(
+            {
+                "attempt_idx": attempt_idx,
+                "attempt_label": attempt["label"],
+                "coupling_idx": coupling_idx,
+                "total_coupling_steps": total_coupling_steps,
+                "convection_weight": convection_weight,
+                "turbulence_weight": coupling_weight,
+            }
+        )
         solve_state_once(
             method_override=step_attempt["method"],
             line_search_override=step_attempt["line_search"],
@@ -1232,16 +1654,24 @@ def solve_state_attempt(attempt, coupling_schedule):
             accept_function_norm_override=coupling_step.get("accept_norm"),
             accept_nonconverged_override=coupling_step.get("accept_nonconverged"),
             accept_residual_growth_override=coupling_step.get("accept_growth"),
+            diagnostic_context=diagnostic_context,
         )
 
 
-def solve_state_with_recovery():
+def solve_state_with_recovery(stage=None, q_value=None, beta_value=None, inner_iter=None, global_iter=None):
     # Try the configured SNES recovery attempts before giving up on the current
     # MMA iterate. This keeps the outer optimization loop from failing on the
     # first nonlinear solve breakdown.
     recovery_attempts = build_state_snes_recovery_attempts()
     coupling_schedule = build_state_turbulence_coupling_schedule()
     num_retries = max(0, len(recovery_attempts) - 1)
+    solve_context = {
+        "stage": stage,
+        "q": q_value,
+        "beta": beta_value,
+        "inner_iter": inner_iter,
+        "global_iter": global_iter,
+    }
     try:
         for attempt_idx, attempt in enumerate(recovery_attempts):
             if attempt_idx > 0:
@@ -1268,7 +1698,12 @@ def solve_state_with_recovery():
                         )
                     )
             try:
-                solve_state_attempt(attempt, coupling_schedule)
+                solve_state_attempt(
+                    attempt,
+                    coupling_schedule,
+                    solve_context=solve_context,
+                    attempt_idx=attempt_idx,
+                )
                 state_turbulence_coupling_weight.assign(1.0)
                 state_convection_coupling_weight.assign(1.0)
                 return
@@ -1350,6 +1785,12 @@ initialize_optimization_log(
         "dP_static_design",
     ),
 )
+save_semifrozen_diagnostics = bool(globals().get("SAVE_SEMIFROZEN_DIAGNOSTICS", False))
+state_diagnostics_log_path = os.path.join(results_root, "StateSolveDiagnostics.txt")
+field_diagnostics_log_path = os.path.join(results_root, "FieldDiagnostics.txt")
+if save_semifrozen_diagnostics:
+    initialize_state_diagnostics_log(state_diagnostics_log_path)
+    initialize_field_diagnostics_log(field_diagnostics_log_path)
 
 initial_density = float(globals().get("INITIAL_DENSITY_VALUE", VOL_FRAC))
 assign(rho, interpolate(Constant(initial_density), DensitySpace))
@@ -1439,7 +1880,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- State solve ---
         root_print("  [State solve]")
-        solve_state_with_recovery()
+        solve_state_with_recovery(
+            stage=stage_idx + 1,
+            q_value=q_val,
+            beta_value=beta_val,
+            inner_iter=inner_count,
+            global_iter=iter_count,
+        )
 
         # --- Adjoint solve ---
         root_print("  [Adjoint solve]")
@@ -1482,6 +1929,15 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         df0dx[:, 0] = filtered_gradient.vector()[:]
         dfdx[0, :] = filtered_s_vol.vector()[:]
+        append_field_diagnostics(
+            {
+                "stage": stage_idx + 1,
+                "q": q_val,
+                "beta": beta_val,
+                "inner_iter": inner_count,
+                "global_iter": iter_count,
+            }
+        )
 
         mass_flow_status = []
         mass_flow_status_markers = set()
