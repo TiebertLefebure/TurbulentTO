@@ -34,7 +34,9 @@ from Utilities_SharedTO import (
 )
 from Utilities_TurbulentTO import (
     build_penalized_reciprocal_distance_residual,
+    build_penalized_poisson_wall_distance_solver,
     build_penalized_wall_distance_solver,
+    calculate_poisson_wall_distance_field,
     enforce_scalar_floor,
     initialize_penalized_reciprocal_distance,
     nu_tilde_from_viscosity_ratio,
@@ -64,10 +66,18 @@ for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
 # The TurbulentTO_Full.py wrapper flips this environment variable so the main
-# implementation can stay shared in one file.
-FULL_STATE_INCLUDE_G = str(os.environ.get("TURBULENTTO_INCLUDE_G_STATE", "0")).strip().lower() in {
+# implementation can stay shared in one file. Dilgen's Poisson wall-distance
+# path has no reciprocal G state; in that case the paper's "full turbulence"
+# SA adjoint is the 3-field (u, p, nu_tilde) state.
+SA_WALL_DISTANCE_MODE = str(globals().get("SA_WALL_DISTANCE_MODE", "reciprocal")).strip().lower()
+_REQUESTED_FULL_STATE_INCLUDE_G = str(os.environ.get("TURBULENTTO_INCLUDE_G_STATE", "0")).strip().lower() in {
     "1", "true", "yes", "on",
 }
+_RECIPROCAL_WALL_DISTANCE_MODES = {"reciprocal", "penalized_reciprocal", "yoon"}
+FULL_STATE_INCLUDE_G = (
+    _REQUESTED_FULL_STATE_INCLUDE_G
+    and SA_WALL_DISTANCE_MODE in _RECIPROCAL_WALL_DISTANCE_MODES
+)
 
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
@@ -82,6 +92,12 @@ if not SHOW_DOLFIN_SOLVER_LOGS:
         set_log_level(LogLevel.WARNING)
     except NameError:
         set_log_level(30)
+
+if _REQUESTED_FULL_STATE_INCLUDE_G and not FULL_STATE_INCLUDE_G:
+    root_print(
+        "Full wrapper requested, but SA_WALL_DISTANCE_MODE='{}' has no G state; "
+        "using Dilgen 3-field full-turbulence adjoint.".format(SA_WALL_DISTANCE_MODE)
+    )
 
 
 def solver_log(message):
@@ -111,6 +127,8 @@ state_convection_coupling_weight = Constant(
 
 
 def projection(rho_design, eta_proj):
+    if not bool(globals().get("USE_HEAVISIDE_PROJECTION", True)):
+        return rho_design
     return (
         tanh(BETA_PROJ * Constant(eta_proj))
         + tanh(BETA_PROJ * (rho_design - Constant(eta_proj)))
@@ -123,6 +141,17 @@ def projection(rho_design, eta_proj):
 def alpha(brinkman_density):
     return alpha_solid + (alpha_fluid - alpha_solid) * brinkman_density * (1 + q_penal) / (
         brinkman_density + q_penal
+    )
+
+
+def strain_tensor(velocity):
+    return nabla_grad(velocity) + nabla_grad(velocity).T
+
+
+def viscous_stress_form(mu_value, trial_velocity, test_velocity):
+    return Constant(0.5) * mu_value * inner(
+        strain_tensor(trial_velocity),
+        strain_tensor(test_velocity),
     )
 
 
@@ -143,7 +172,7 @@ def build_flow_residual(state_u, state_p, test_u, test_p, rho_eff, custom_dx, st
     mu_effective = effective_dynamic_viscosity(state_nu_tilde)
     return (
         state_convection_coupling_weight * rho_fluid * inner(dot(state_u, nabla_grad(state_u)), test_u) * custom_dx
-        + mu_effective * inner(grad(state_u), grad(test_u)) * custom_dx
+        + viscous_stress_form(mu_effective, state_u, test_u) * custom_dx
         + inner(grad(state_p), test_u) * custom_dx
         + inner(div(state_u), test_p) * custom_dx
         + alpha(rho_eff) * inner(state_u, test_u) * custom_dx
@@ -315,6 +344,9 @@ outlet_markers = as_list(mark["outlet"])
 density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
+ActiveDV = np.where((density_upper_values - density_lower_values) > 1.0e-12)[0]
+if ActiveDV.size == 0:
+    raise ValueError("No active design variables remain after applying density bounds.")
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
 if callable(globals().get("build_objective_region")):
     ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
@@ -532,16 +564,49 @@ else:
     )
     nu_tilde_inlet_bc_values = [Constant(value) for value in _sa_nu_tilde_targets]
 
+nu_tilde_outlet_bc_values = []
+custom_turbulence_outlet_builder = globals().get("build_turbulence_outlet_profile_sets")
+if callable(custom_turbulence_outlet_builder):
+    nu_tilde_outlet_bc_values = as_list(custom_turbulence_outlet_builder())
+    if len(nu_tilde_outlet_bc_values) != len(outlet_markers):
+        raise ValueError(
+            "Expected {} custom SA outlet profiles, got {}.".format(
+                len(outlet_markers), len(nu_tilde_outlet_bc_values),
+            )
+        )
+    root_print("SA outlet nu_tilde: custom profiles  (nu_lam = {:.3e})".format(_nu_lam))
+elif "SA_NU_TILDE_OUTLETS" in globals() or "SA_NU_TILDE_OUTLET" in globals():
+    outlet_raw = globals().get("SA_NU_TILDE_OUTLETS", globals().get("SA_NU_TILDE_OUTLET"))
+    outlet_values = [float(value) for value in as_list(outlet_raw)]
+    if len(outlet_values) == 1 and len(outlet_markers) > 1:
+        outlet_values = outlet_values * len(outlet_markers)
+    if len(outlet_values) != len(outlet_markers):
+        raise ValueError(
+            "Expected {} SA outlet nu_tilde values, got {}.".format(
+                len(outlet_markers), len(outlet_values),
+            )
+        )
+    nu_tilde_outlet_bc_values = [Constant(value) for value in outlet_values]
+    root_print(
+        "SA outlet nu_tilde: {}  (nu_lam = {:.3e})".format(
+            ", ".join("{:.4e}".format(value) for value in outlet_values),
+            _nu_lam,
+        )
+    )
+
 bcn_turbulence_state = (
     [DirichletBC(StateSpace.sub(STATE_TURB_IDX), bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_inlet_bc_values, inlet_markers)]
+    + [DirichletBC(StateSpace.sub(STATE_TURB_IDX), bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_outlet_bc_values, outlet_markers)]
     + [DirichletBC(StateSpace.sub(STATE_TURB_IDX), Constant(0.0), boundaries, m) for m in wall_markers]
 )
 bcn_turbulence_warm = (
     [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_inlet_bc_values, inlet_markers)]
+    + [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_outlet_bc_values, outlet_markers)]
     + [DirichletBC(TurbulenceSpace, Constant(0.0), boundaries, m) for m in wall_markers]
 )
 bcn_turbulence_adj = (
     [DirichletBC(StateSpaceAdj.sub(STATE_TURB_IDX), Constant(0.0), boundaries, m) for m in inlet_markers]
+    + [DirichletBC(StateSpaceAdj.sub(STATE_TURB_IDX), Constant(0.0), boundaries, m) for m in outlet_markers if nu_tilde_outlet_bc_values]
     + [DirichletBC(StateSpaceAdj.sub(STATE_TURB_IDX), Constant(0.0), boundaries, m) for m in wall_markers]
 )
 
@@ -598,8 +663,12 @@ if sa_wall_density_source not in {"design", "passive"}:
     )
 sa_wall_sigma = float(globals().get("SA_WALL_SIGMA", globals().get("SA_DISTANCE_RELAXATION", 0.01)))
 sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
-sa_wall_penalty_alpha = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+sa_wall_penalty_alpha_base = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
+sa_wall_penalty_alpha = Constant(sa_wall_penalty_alpha_base)
 sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
+sa_wall_penalty_interpolation = str(
+    globals().get("SA_WALL_PENALTY_INTERPOLATION", globals().get("SA_WALL_DISTANCE_INTERPOLATION", "power"))
+).strip().lower()
 sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
 sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
 sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
@@ -614,6 +683,33 @@ if sa_wall_density_source == "passive":
     wall_penalty_fluid_indicator = density_upper_bound
 else:
     wall_penalty_fluid_indicator = rho_effective
+
+_alpha_solid_reference = max(
+    float(globals().get("ALPHA_SOLID", alpha_solid.values()[0])),
+    1.0e-300,
+)
+
+
+def build_topology_penalty_reaction(alpha_constant, interpolation, power, fluid_indicator, label):
+    if interpolation in {"brinkman", "dilgen", "chi"}:
+        return (alpha_constant / _alpha_solid_reference) * alpha(fluid_indicator)
+    if interpolation == "power":
+        return alpha_constant * (positive_part(Constant(1.0) - fluid_indicator) ** float(power))
+    raise ValueError(
+        "{} interpolation must be 'power' or 'brinkman', got {!r}.".format(
+            label,
+            interpolation,
+        )
+    )
+
+
+wall_penalty_reaction = build_topology_penalty_reaction(
+    sa_wall_penalty_alpha,
+    sa_wall_penalty_interpolation,
+    sa_wall_penalty_power,
+    wall_penalty_fluid_indicator,
+    "SA wall-distance penalty",
+)
 
 wall_distance_state_residual = None
 g_state_initial_guess = None
@@ -665,30 +761,64 @@ if FULL_STATE_INCLUDE_G:
         return None
 
 else:
-    # SemiFrozen mode: solve G externally, reconstruct y from that solve, and
-    # keep the wall-distance update outside the adjointed state system.
-    wall_distance, update_wall_distance_field = build_penalized_wall_distance_solver(
-        TurbulenceSpace,
-        boundaries,
-        wall_markers,
-        dx,
-        wall_penalty_fluid_indicator,
-        sa_wall_sigma,
-        sa_wall_g0,
-        sa_wall_penalty_alpha,
-        sa_wall_penalty_power,
-        sa_wall_g_floor,
-        newton_rtol=sa_wall_newton_rtol,
-        newton_atol=sa_wall_newton_atol,
-        newton_max_iters=sa_wall_newton_max_iters,
-        newton_relax=sa_wall_newton_relax,
-        penalty_homotopy=sa_wall_penalty_homotopy,
-        solid_guess_weight=sa_wall_initial_solid_guess,
-        extra_relaxations=sa_wall_extra_relaxations,
-        solid_threshold=sa_wall_solid_threshold,
-        initial_wall_distance=custom_initial_wall_distance,
-        prefer_pseudo_time=sa_wall_prefer_pseudo_time,
-    )
+    if SA_WALL_DISTANCE_MODE in {"poisson", "poisson_like", "tucker"}:
+        if custom_initial_wall_distance is None:
+            wall_distance = calculate_poisson_wall_distance_field(
+                TurbulenceSpace, boundaries, wall_markers, dx
+            )
+        elif isinstance(custom_initial_wall_distance, Function):
+            wall_distance = Function(TurbulenceSpace)
+            wall_distance.assign(custom_initial_wall_distance)
+        else:
+            wall_distance = project(custom_initial_wall_distance, TurbulenceSpace)
+
+        def update_wall_distance_field():
+            return wall_distance
+
+        root_print("SA wall-distance mode: Tucker Poisson-like static field")
+    elif SA_WALL_DISTANCE_MODE in {"poisson_penalized", "penalized_poisson", "dilgen_poisson"}:
+        wall_distance, update_wall_distance_field = build_penalized_poisson_wall_distance_solver(
+            TurbulenceSpace,
+            boundaries,
+            wall_markers,
+            dx,
+            wall_penalty_reaction,
+            initial_wall_distance=custom_initial_wall_distance,
+            floor_value=float(globals().get("SA_WALL_DISTANCE_SOLVE_FLOOR", 0.0)),
+        )
+        root_print("SA wall-distance mode: Dilgen penalized Poisson-like field")
+    elif SA_WALL_DISTANCE_MODE in _RECIPROCAL_WALL_DISTANCE_MODES:
+        # Legacy SemiFrozen mode: solve Yoon's G externally, reconstruct y from
+        # that solve, and keep the wall-distance update outside the adjointed
+        # state system.
+        wall_distance, update_wall_distance_field = build_penalized_wall_distance_solver(
+            TurbulenceSpace,
+            boundaries,
+            wall_markers,
+            dx,
+            wall_penalty_fluid_indicator,
+            sa_wall_sigma,
+            sa_wall_g0,
+            sa_wall_penalty_alpha,
+            sa_wall_penalty_power,
+            sa_wall_g_floor,
+            newton_rtol=sa_wall_newton_rtol,
+            newton_atol=sa_wall_newton_atol,
+            newton_max_iters=sa_wall_newton_max_iters,
+            newton_relax=sa_wall_newton_relax,
+            penalty_homotopy=sa_wall_penalty_homotopy,
+            solid_guess_weight=sa_wall_initial_solid_guess,
+            extra_relaxations=sa_wall_extra_relaxations,
+            solid_threshold=sa_wall_solid_threshold,
+            initial_wall_distance=custom_initial_wall_distance,
+            prefer_pseudo_time=sa_wall_prefer_pseudo_time,
+        )
+        root_print("SA wall-distance mode: Yoon penalized reciprocal-distance field")
+    else:
+        raise ValueError(
+            "SA_WALL_DISTANCE_MODE must be 'reciprocal', 'poisson', or "
+            "'poisson_penalized', got {!r}.".format(SA_WALL_DISTANCE_MODE)
+        )
 
 bc_flow_state = (
     bcu_walls
@@ -704,9 +834,18 @@ bc_state_adj += bcn_turbulence_adj + bcg_adj
 
 
 nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
-sa_nu_tilde_penalty_reaction = Constant(float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))) * (
-    positive_part(Constant(1.0) - rho_effective)
-    ** float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
+sa_nu_tilde_penalty_alpha_base = float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))
+sa_nu_tilde_penalty_alpha = Constant(sa_nu_tilde_penalty_alpha_base)
+sa_nu_tilde_penalty_power = float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
+sa_nu_tilde_penalty_interpolation = str(
+    globals().get("SA_NU_TILDE_PENALTY_INTERPOLATION", "power")
+).strip().lower()
+sa_nu_tilde_penalty_reaction = build_topology_penalty_reaction(
+    sa_nu_tilde_penalty_alpha,
+    sa_nu_tilde_penalty_interpolation,
+    sa_nu_tilde_penalty_power,
+    rho_effective,
+    "SA nu_tilde penalty",
 )
 
 dissipation_density_builder = globals().get("build_dissipation_density")
@@ -720,7 +859,14 @@ else:
 ObjFunctional = ObjectiveRegion * (
     dissipation_density + alpha(rho_effective) * inner(u, u)
 ) * dx
-DissipationFunctional = ObjectiveRegion * dissipation_density * dx
+objective_log_column = "J_dissipation_W_per_m"
+objective_console_label = "J_dissipation"
+objective_console_unit = " W/m"
+root_print(
+    "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
+    "(2D unit-depth power, W/m)."
+)
+ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 # Monolithic primal residual for the current design. Full simply adds the
 # reciprocal wall-distance equation to this same state system.
@@ -1371,6 +1517,7 @@ def solve_state_once(
             accepted_function_norm_limit,
             float(accept_residual_growth_override) * initial_residual_norm,
         )
+    strict_function_norm_limit = max(current_atol, current_rtol * max(initial_residual_norm, 1.0e-16))
     accept_nonconverged = bool(
         get_state_option(
             "STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM",
@@ -1387,6 +1534,52 @@ def solve_state_once(
         error_on_nonconvergence = False
     solver_state.parameters["snes_solver"]["error_on_nonconvergence"] = error_on_nonconvergence
 
+    explicit_accept_limit = (
+        accept_function_norm_override is not None
+        or accept_residual_growth_override is not None
+    )
+    if (
+        explicit_accept_limit
+        and accept_nonconverged
+        and bool(
+            get_state_option(
+                "STATE_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM",
+                "FULL_STATE_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM",
+                True,
+            )
+        )
+        and np.isfinite(initial_residual_norm)
+        and initial_residual_norm <= accepted_function_norm_limit
+    ):
+        flow_residual_norm, sa_residual_norm = split_state_residual_norms(w_state)
+        diagnostics = {
+            "method": method,
+            "line_search": current_line_search,
+            "max_iters": current_max_iters,
+            "iterations": 0,
+            "reported_converged": False,
+            "status": "ACCEPTED_INITIAL",
+            "reason": "INITIAL_RESIDUAL_WITHIN_ACCEPTED_LIMIT",
+            "rtol": current_rtol,
+            "atol": current_atol,
+            "strict_limit": strict_function_norm_limit,
+            "accept_norm": accepted_function_norm,
+            "accepted_limit": accepted_function_norm_limit,
+            "initial_residual": initial_residual_norm,
+            "final_residual": initial_residual_norm,
+            "flow_residual": flow_residual_norm,
+            "sa_residual": sa_residual_norm,
+        }
+        append_state_solve_diagnostics(diagnostic_context, diagnostics)
+        solver_log(
+            "    [SNES] initial continuation iterate satisfies accept limit {:.2e} <= {:.2e}; "
+            "skipping Newton update".format(
+                initial_residual_norm,
+                accepted_function_norm_limit,
+            )
+        )
+        return initial_residual_norm
+
     solve_result = solver_state.solve()
     solver_iterations = np.nan
     solver_converged = True
@@ -1396,7 +1589,6 @@ def solve_state_once(
 
     residual_norm = constrained_state_residual_norm(w_state)
     flow_residual_norm, sa_residual_norm = split_state_residual_norms(w_state)
-    strict_function_norm_limit = max(current_atol, current_rtol * max(initial_residual_norm, 1.0e-16))
     if not np.isfinite(residual_norm):
         diagnostics = {
             "method": method,
@@ -1603,8 +1795,30 @@ def build_state_turbulence_coupling_schedule():
 
 
 def solve_state_attempt(attempt, coupling_schedule, solve_context=None, attempt_idx=0):
-    total_coupling_steps = len(coupling_schedule)
-    for coupling_idx, coupling_step in enumerate(coupling_schedule, start=1):
+    pending_steps = [dict(step) for step in coupling_schedule]
+    adaptive_coupling = bool(
+        get_state_option("STATE_ADAPTIVE_COUPLING", "FULL_STATE_ADAPTIVE_COUPLING", False)
+    )
+    min_coupling_step = max(
+        0.0,
+        float(get_state_option("STATE_MIN_COUPLING_STEP", "FULL_STATE_MIN_COUPLING_STEP", 0.01)),
+    )
+    max_insertions = max(
+        0,
+        int(
+            get_state_option(
+                "STATE_MAX_ADAPTIVE_COUPLING_STEPS",
+                "FULL_STATE_MAX_ADAPTIVE_COUPLING_STEPS",
+                16,
+            )
+        ),
+    )
+    accepted_step = None
+    inserted_steps = 0
+    coupling_idx = 0
+    while coupling_idx < len(pending_steps):
+        coupling_step = pending_steps[coupling_idx]
+        total_coupling_steps = len(pending_steps)
         coupling_weight = coupling_step["weight"]
         convection_weight = coupling_step["convection_weight"]
         state_turbulence_coupling_weight.assign(float(coupling_weight))
@@ -1627,7 +1841,7 @@ def solve_state_attempt(attempt, coupling_schedule, solve_context=None, attempt_
                 step_details.append("rtol={:.1e}".format(step_attempt["rtol"]))
             root_print(
                 "    State continuation step {}/{}: convection = {:.2f}, turbulence = {:.2f}{}".format(
-                    coupling_idx,
+                    coupling_idx + 1,
                     total_coupling_steps,
                     convection_weight,
                     coupling_weight,
@@ -1639,23 +1853,67 @@ def solve_state_attempt(attempt, coupling_schedule, solve_context=None, attempt_
             {
                 "attempt_idx": attempt_idx,
                 "attempt_label": attempt["label"],
-                "coupling_idx": coupling_idx,
+                "coupling_idx": coupling_idx + 1,
                 "total_coupling_steps": total_coupling_steps,
                 "convection_weight": convection_weight,
                 "turbulence_weight": coupling_weight,
             }
         )
-        solve_state_once(
-            method_override=step_attempt["method"],
-            line_search_override=step_attempt["line_search"],
-            max_iters_override=step_attempt["max_iters"],
-            rtol_override=step_attempt["rtol"],
-            atol_override=step_attempt["atol"],
-            accept_function_norm_override=coupling_step.get("accept_norm"),
-            accept_nonconverged_override=coupling_step.get("accept_nonconverged"),
-            accept_residual_growth_override=coupling_step.get("accept_growth"),
-            diagnostic_context=diagnostic_context,
-        )
+        previous_state_values = w_state.vector().get_local()
+        try:
+            solve_state_once(
+                method_override=step_attempt["method"],
+                line_search_override=step_attempt["line_search"],
+                max_iters_override=step_attempt["max_iters"],
+                rtol_override=step_attempt["rtol"],
+                atol_override=step_attempt["atol"],
+                accept_function_norm_override=coupling_step.get("accept_norm"),
+                accept_nonconverged_override=coupling_step.get("accept_nonconverged"),
+                accept_residual_growth_override=coupling_step.get("accept_growth"),
+                diagnostic_context=diagnostic_context,
+            )
+        except RuntimeError:
+            if (
+                adaptive_coupling
+                and accepted_step is not None
+                and inserted_steps < max_insertions
+            ):
+                accepted_convection = float(accepted_step["convection_weight"])
+                accepted_turbulence = float(accepted_step["weight"])
+                failed_convection = float(convection_weight)
+                failed_turbulence = float(coupling_weight)
+                coupling_distance = max(
+                    abs(failed_convection - accepted_convection),
+                    abs(failed_turbulence - accepted_turbulence),
+                )
+                if coupling_distance > min_coupling_step:
+                    w_state.vector().set_local(previous_state_values)
+                    w_state.vector().apply("insert")
+                    midpoint_step = dict(coupling_step)
+                    midpoint_step["convection_weight"] = 0.5 * (
+                        accepted_convection + failed_convection
+                    )
+                    midpoint_step["weight"] = 0.5 * (
+                        accepted_turbulence + failed_turbulence
+                    )
+                    pending_steps.insert(coupling_idx, midpoint_step)
+                    inserted_steps += 1
+                    root_print(
+                        "    State continuation split failed step "
+                        "(convection {:.3f}->{:.3f}, turbulence {:.3f}->{:.3f}); "
+                        "trying midpoint convection = {:.3f}, turbulence = {:.3f}".format(
+                            accepted_convection,
+                            failed_convection,
+                            accepted_turbulence,
+                            failed_turbulence,
+                            midpoint_step["convection_weight"],
+                            midpoint_step["weight"],
+                        )
+                    )
+                    continue
+            raise
+        accepted_step = dict(coupling_step)
+        coupling_idx += 1
 
 
 def solve_state_with_recovery(stage=None, q_value=None, beta_value=None, inner_iter=None, global_iter=None):
@@ -1730,6 +1988,241 @@ def solve_adjoint(adjoint_residual_form=objective_adjoint_form):
     solve(A_adj, w_adj.vector(), b_adj, LINEAR_SOLVER_NAME)
 
 
+def finite_difference_check_iterations():
+    raw_iterations = globals().get("FINITE_DIFFERENCE_CHECK_ITERATIONS", (0,))
+    if isinstance(raw_iterations, np.ndarray):
+        raw_iterations = raw_iterations.tolist()
+    elif not isinstance(raw_iterations, (list, tuple, set)):
+        raw_iterations = [raw_iterations]
+    return {int(value) for value in raw_iterations}
+
+
+def finite_difference_sample_active_positions(global_iter, sample_count):
+    raw_positions = globals().get("FINITE_DIFFERENCE_CHECK_ACTIVE_POSITIONS", None)
+    raw_dofs = globals().get("FINITE_DIFFERENCE_CHECK_DOF_INDICES", None)
+    active_position_by_dof = {int(dof): idx for idx, dof in enumerate(ActiveDV.tolist())}
+
+    if raw_dofs is not None:
+        if isinstance(raw_dofs, np.ndarray):
+            raw_dofs = raw_dofs.tolist()
+        elif not isinstance(raw_dofs, (list, tuple, set)):
+            raw_dofs = [raw_dofs]
+        positions = []
+        for dof in raw_dofs:
+            dof = int(dof)
+            if dof not in active_position_by_dof:
+                raise ValueError(
+                    "FINITE_DIFFERENCE_CHECK_DOF_INDICES contains inactive/unknown dof {}.".format(dof)
+                )
+            positions.append(active_position_by_dof[dof])
+        return np.asarray(positions, dtype=np.int64)
+
+    if raw_positions is not None:
+        if isinstance(raw_positions, np.ndarray):
+            raw_positions = raw_positions.tolist()
+        elif not isinstance(raw_positions, (list, tuple, set)):
+            raw_positions = [raw_positions]
+        positions = np.asarray([int(value) for value in raw_positions], dtype=np.int64)
+        if np.any(positions < 0) or np.any(positions >= int(ActiveDV.size)):
+            raise ValueError("FINITE_DIFFERENCE_CHECK_ACTIVE_POSITIONS contains an out-of-range index.")
+        return positions
+
+    rng = np.random.RandomState(int(globals().get("FINITE_DIFFERENCE_CHECK_SEED", 13)) + int(global_iter))
+    return rng.choice(int(ActiveDV.size), size=sample_count, replace=False)
+
+
+def density_dof_coordinates():
+    try:
+        coords = DensitySpace.tabulate_dof_coordinates()
+        return coords.reshape((DensitySpace.dim(), -1))
+    except RuntimeError:
+        return None
+
+
+def initialize_sensitivity_check_log(log_path):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "w") as handle:
+        handle.write(
+            "\t".join(
+                [
+                    "Stage",
+                    "InnerIter",
+                    "GlobalIter",
+                    "Mode",
+                    "CV",
+                    "ActivePosition",
+                    "DensityDof",
+                    "X",
+                    "Y",
+                    "Step",
+                    "BaseObjective",
+                    "AdjointDerivative",
+                    "FiniteDifferenceDerivative",
+                    "RelativeError",
+                    "PlusObjective",
+                    "MinusObjective",
+                ]
+            )
+            + "\n"
+        )
+
+
+def append_sensitivity_check_log_entry(log_path, values):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "a") as handle:
+        handle.write("\t".join(str(value) for value in values) + "\n")
+
+
+def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_objective, objective_gradient_active):
+    """Optional Dilgen-style coordinate checks for the SA adjoint gradient."""
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if int(global_iter) not in finite_difference_check_iterations():
+        return
+
+    sample_count = min(
+        int(globals().get("FINITE_DIFFERENCE_CHECK_SAMPLES", 4)),
+        int(ActiveDV.size),
+    )
+    if sample_count <= 0:
+        return
+
+    fd_step = float(globals().get("FINITE_DIFFERENCE_CHECK_STEP", 1.0e-6))
+    sampled_active_positions = finite_difference_sample_active_positions(global_iter, sample_count)
+    clip_to_bounds = bool(globals().get("FINITE_DIFFERENCE_CHECK_CLIP_TO_BOUNDS", True))
+    coords = density_dof_coordinates()
+
+    base_rho_values = rho.vector().get_local().copy()
+    base_rho_f_values = rho_f.vector().get_local().copy()
+    base_state_values = w_state.vector().get_local().copy()
+    base_adj_values = w_adj.vector().get_local().copy()
+
+    def restore_base_state(refresh_wall_distance=True):
+        rho.vector().set_local(base_rho_values)
+        rho.vector().apply("insert")
+        rho_f.vector().set_local(base_rho_f_values)
+        rho_f.vector().apply("insert")
+        w_state.vector().set_local(base_state_values)
+        w_state.vector().apply("insert")
+        w_adj.vector().set_local(base_adj_values)
+        w_adj.vector().apply("insert")
+        if refresh_wall_distance and not FULL_STATE_INCLUDE_G:
+            update_wall_distance_field()
+
+    def evaluate_perturbed_objective(active_position, delta, label):
+        perturbed_values = base_rho_values.copy()
+        density_dof = int(ActiveDV[active_position])
+        perturbed_values[density_dof] += float(delta)
+        if clip_to_bounds:
+            perturbed_values = np.clip(perturbed_values, density_lower_values, density_upper_values)
+        rho.vector().set_local(perturbed_values)
+        rho.vector().apply("insert")
+        pde_filter(rho, rho_f)
+        if not FULL_STATE_INCLUDE_G:
+            update_wall_distance_field()
+        solve_state_with_recovery(
+            stage=stage_idx,
+            q_value=float(q_penal.values()[0]),
+            beta_value=float(BETA_PROJ.values()[0]),
+            inner_iter=inner_iter,
+            global_iter=global_iter,
+        )
+        return float(assemble(ObjFunctional))
+
+    mode_name = "adjoint-SA"
+    root_print(
+        "  [FD check] stage {} iter {} global {} with {} coordinate sample(s).".format(
+            stage_idx, inner_iter, global_iter, len(sampled_active_positions),
+        )
+    )
+    root_print("  [FD check] mode: {}".format(mode_name))
+    try:
+        for cv_idx, active_position in enumerate(sampled_active_positions, start=1):
+            density_dof = int(ActiveDV[active_position])
+            if clip_to_bounds:
+                max_step = min(
+                    base_rho_values[density_dof] - density_lower_values[density_dof],
+                    density_upper_values[density_dof] - base_rho_values[density_dof],
+                )
+                step = min(fd_step, 0.5 * max_step)
+            else:
+                step = fd_step
+            if step <= 1.0e-12:
+                root_print(
+                    "    CV{} dof {} skipped: insufficient bound margin for FD step.".format(
+                        cv_idx,
+                        density_dof,
+                    )
+                )
+                continue
+
+            restore_base_state()
+            plus_objective = evaluate_perturbed_objective(
+                active_position,
+                step,
+                "fd_final_{}_dof{}_plus".format(mode_name, density_dof),
+            )
+            restore_base_state()
+            minus_objective = evaluate_perturbed_objective(
+                active_position,
+                -step,
+                "fd_final_{}_dof{}_minus".format(mode_name, density_dof),
+            )
+            fd_derivative = (plus_objective - minus_objective) / (2.0 * step)
+            adjoint_derivative = float(objective_gradient_active[active_position])
+            rel_error = abs(fd_derivative - adjoint_derivative) / max(
+                abs(fd_derivative),
+                abs(adjoint_derivative),
+                1.0e-30,
+            )
+            root_print(
+                "    CV{} dof {} adj={:.6e} fd={:.6e} rel_err={:.3e} J0={:.6e}".format(
+                    cv_idx,
+                    density_dof,
+                    adjoint_derivative,
+                    fd_derivative,
+                    rel_error,
+                    float(base_objective),
+                )
+            )
+            if coords is not None and density_dof < coords.shape[0]:
+                xy = coords[density_dof]
+                x_coord = "{:.16e}".format(float(xy[0]))
+                y_coord = "{:.16e}".format(float(xy[1])) if xy.size > 1 else "nan"
+            else:
+                x_coord = "nan"
+                y_coord = "nan"
+            append_sensitivity_check_log_entry(
+                sensitivity_check_log_path,
+                [
+                    int(stage_idx),
+                    int(inner_iter),
+                    int(global_iter),
+                    mode_name,
+                    "CV{}".format(cv_idx),
+                    int(active_position),
+                    density_dof,
+                    x_coord,
+                    y_coord,
+                    "{:.16e}".format(float(step)),
+                    "{:.16e}".format(float(base_objective)),
+                    "{:.16e}".format(float(adjoint_derivative)),
+                    "{:.16e}".format(float(fd_derivative)),
+                    "{:.16e}".format(float(rel_error)),
+                    "{:.16e}".format(float(plus_objective)),
+                    "{:.16e}".format(float(minus_objective)),
+                ],
+            )
+    finally:
+        restore_base_state()
+
+
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 # Keep SemiFrozen and Full outputs separated by default so the two formulations
 # can be compared without clobbering each other's result folders.
@@ -1777,14 +2270,18 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
+sensitivity_check_log_path = os.path.join(results_root, "SensitivityCheckLog.tsv")
+optimization_log_quantity_columns = (
+    "ViscousDissipation_design_W_per_m",
+    "dP_nondesign_Pa",
+    "dP_design_Pa",
+)
 initialize_optimization_log(
     log_path,
-    pressure_drop_columns=(
-        "Dissipation",
-        "dP_static_nondesign",
-        "dP_static_design",
-    ),
+    pressure_drop_columns=optimization_log_quantity_columns,
+    objective_column=objective_log_column,
 )
+initialize_sensitivity_check_log(sensitivity_check_log_path)
 save_semifrozen_diagnostics = bool(globals().get("SAVE_SEMIFROZEN_DIAGNOSTICS", False))
 state_diagnostics_log_path = os.path.join(results_root, "StateSolveDiagnostics.txt")
 field_diagnostics_log_path = os.path.join(results_root, "FieldDiagnostics.txt")
@@ -1799,9 +2296,11 @@ enforce_density_bounds_inplace(rho)
 iter_count = 0
 previous_objective = 0.0
 
-num_mma = mesh.num_cells()
+num_mma = int(ActiveDV.size)
+active_density_lower_values = density_lower_values[ActiveDV]
+active_density_upper_values = density_upper_values[ActiveDV]
 xval = np.zeros((num_mma, 1))
-xval[:, 0] = rho.vector()
+xval[:, 0] = rho.vector().get_local()[ActiveDV]
 xold1 = np.zeros((num_mma, 1))
 xold2 = np.zeros((num_mma, 1))
 low = np.zeros((num_mma, 1))
@@ -1813,8 +2312,8 @@ a = np.zeros((mmma, 1))
 c = 1.0e4 * np.ones((mmma, 1))
 d = np.ones((mmma, 1))
 
-xmin = np.zeros((num_mma, 1))
-xmax = np.ones((num_mma, 1))
+xmin = active_density_lower_values.reshape((num_mma, 1)).copy()
+xmax = active_density_upper_values.reshape((num_mma, 1)).copy()
 
 df0dx = np.zeros((num_mma, 1))
 fval = np.zeros((mmma, 1))
@@ -1836,6 +2335,32 @@ else:
     MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
 
 
+def _schedule_value(name, default_value, stage_idx):
+    raw_schedule = globals().get(name)
+    if raw_schedule is None:
+        return float(default_value)
+    values = [float(value) for value in raw_schedule]
+    if len(values) != len(Q_PENAL_SCHEDULE):
+        raise ValueError("{} must match Q_PENAL_SCHEDULE length.".format(name))
+    return values[stage_idx]
+
+
+def update_stage_penalty_parameters(stage_idx):
+    wall_alpha_now = _schedule_value(
+        "SA_WALL_PENALTY_ALPHA_SCHEDULE",
+        sa_wall_penalty_alpha_base,
+        stage_idx,
+    )
+    nu_tilde_alpha_now = _schedule_value(
+        "SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE",
+        sa_nu_tilde_penalty_alpha_base,
+        stage_idx,
+    )
+    sa_wall_penalty_alpha.assign(wall_alpha_now)
+    sa_nu_tilde_penalty_alpha.assign(nu_tilde_alpha_now)
+    return wall_alpha_now, nu_tilde_alpha_now
+
+
 # ===============================================================
 # Continuation and MMA optimization loop
 # ===============================================================
@@ -1846,12 +2371,15 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     max_iters_now = MAX_INNER_ITERATIONS_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
+    wall_alpha_now, nu_tilde_alpha_now = update_stage_penalty_parameters(stage_idx)
     inner_count = 0
     convergence_history = 0
     objective_converged = False
     root_print(
-        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
+        "Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}, "
+        "SA wall alpha = {:.3e}, SA nu_tilde alpha = {:.3e}".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
+            wall_alpha_now, nu_tilde_alpha_now,
         )
     )
 
@@ -1897,7 +2425,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         nu_tilde_out << w_state.sub(STATE_TURB_IDX)
 
         f0val = assemble(ObjFunctional)
-        dissipation_now = assemble(DissipationFunctional)
+        viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_state.sub(STATE_P_IDX), ds, MARK["inlet"], MARK["outlet"]
         )
@@ -1927,8 +2455,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
-        df0dx[:, 0] = filtered_gradient.vector()[:]
-        dfdx[0, :] = filtered_s_vol.vector()[:]
+        df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
+        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
         append_field_diagnostics(
             {
                 "stage": stage_idx + 1,
@@ -1937,6 +2465,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 "inner_iter": inner_count,
                 "global_iter": iter_count,
             }
+        )
+        run_finite_difference_checks(
+            stage_idx + 1,
+            inner_count,
+            iter_count,
+            f0val,
+            df0dx[:, 0],
         )
 
         mass_flow_status = []
@@ -1950,7 +2485,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             filtered_constraint_gradient = pde_filter(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
-            dfdx[constraint_idx, :] = filtered_constraint_gradient.vector()[:]
+            dfdx[constraint_idx, :] = filtered_constraint_gradient.vector().get_local()[ActiveDV]
 
             marker = constraint_spec["marker"]
             if marker not in mass_flow_status_markers:
@@ -1975,9 +2510,14 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         xold2 = xold1.copy()
         xold1 = xval.copy()
         xval = xmma.copy()
-        rho_values = np.clip(xmma[:, 0].copy(), density_lower_values, density_upper_values)
-        xval[:, 0] = rho_values
-        rho.vector()[:] = rho_values
+        rho_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+        rho_values[ActiveDV] = np.clip(
+            xmma[:, 0].copy(),
+            active_density_lower_values,
+            active_density_upper_values,
+        )
+        xval[:, 0] = rho_values[ActiveDV]
+        rho.vector().set_local(rho_values)
         rho.vector().apply("insert")
 
         append_optimization_log_entry(
@@ -1993,10 +2533,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             vol_fraction_now,
             vol_residual_now,
             pressure_drop_values=(
-                dissipation_now,
+                viscous_dissipation_design_now,
                 pressure_drop_nondesign_now,
                 pressure_drop_design_now,
             ),
+            pressure_drop_columns=optimization_log_quantity_columns,
+            objective_column=objective_log_column,
         )
 
         constraint_status_text = ""
@@ -2006,10 +2548,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
         root_print(
-            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} Dissipation={:.4e} dP_static_nondesign={:.4e} Pa dP_static_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_design={:.4e} W/m dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
                 q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-                inner_count, iteration_elapsed, optimization_elapsed, f0val,
-                dissipation_now, pressure_drop_nondesign_now, pressure_drop_design_now,
+                inner_count, iteration_elapsed, optimization_elapsed,
+                objective_console_label, f0val, objective_console_unit,
+                viscous_dissipation_design_now, pressure_drop_nondesign_now, pressure_drop_design_now,
                 obj_conv, vol_fraction_now,
                 convergence_history, OBJECTIVE_STREAK_TO_STOP,
                 constraint_status_text,

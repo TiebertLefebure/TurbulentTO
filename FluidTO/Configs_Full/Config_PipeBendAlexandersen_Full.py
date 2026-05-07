@@ -16,8 +16,8 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_guided.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_guided.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1

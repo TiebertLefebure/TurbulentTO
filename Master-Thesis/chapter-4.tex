@@ -6,194 +6,184 @@ Building upon the verified Spalart-Allmaras (SA) fluid dynamics solver developed
 
 This chapter details the Fictitious Domain Method and the Brinkman penalization technique used to conceptualize solid boundaries within a continuous fluid mesh. It explicitly outlines how the standard governing equations for fluid momentum, turbulent transport, and wall distance must be mathematically penalized to accommodate the evolving topology. 
 
-To solve this optimization problem in a computationally tractable manner, continuous adjoint sensitivity analysis is required. This chapter presents two distinct adjoint pipelines. First, the "frozen turbulence" (Constant Eddy Viscosity) assumption is established and rigorously justified as the stable baseline optimization engine adopted in this thesis. Subsequently, an advanced, fully coupled "semi-frozen" adjoint formulation is introduced to capture the highly non-linear turbulence production sensitivities. This section details both its physical advantages and its algorithmic limitations.
+To solve this optimization problem in a computationally tractable manner, continuous adjoint sensitivity analysis is required. This chapter presents two distinct adjoint pipelines. First, the "frozen turbulence" (Constant Eddy Viscosity) assumption is established and rigorously justified as the stable baseline optimization engine adopted in this thesis. Subsequently, an advanced, monolithic velocity-pressure-SA adjoint formulation, termed the "semi-frozen" adjoint, is introduced to capture the highly non-linear turbulence production sensitivities. This section details both its physical advantages and its algorithmic limitations.
 
-Following the derivation of these sensitivities, the continuous optimization problem is formally defined, establishing the power dissipation objective function and the strict fluid volume constraints. Finally, the mathematical techniques for density filtering and Heaviside projection, adapted from structural optimization practices, are detailed alongside their FEniCS unified form language (UFL) implementation to ensure the generation of manufacturable designs. All algorithms, penalty formulations, and execution scripts, most notably \texttt{TurbulentTO\_Frozen.py} and \texttt{TurbulentTO\_SemiFrozen.py}, are housed within the \texttt{FluidTO} directory of the public repository.
+Following the derivation of these sensitivities, the continuous optimization problem is formally defined, establishing the power dissipation objective function and the strict fluid volume constraints over explicitly defined design regions. Finally, the mathematical techniques for active-domain density filtering and Heaviside projection are detailed alongside their FEniCS unified form language (UFL) implementation to ensure the generation of manufacturable designs. All algorithms, penalty formulations, and execution scripts, most notably \texttt{TurbulentTO\_Frozen.py} and \texttt{TurbulentTO\_SemiFrozen.py}, are housed within the \texttt{FluidTO} directory of the public repository.
 
 \section{The Fictitious Domain Method and Brinkman Penalization}
 \label{sec:fictitious_domain}
 In standard shape optimization, the solid-fluid boundary is explicitly defined by the mesh, and the nodes are physically moved to improve the design. In density-based topology optimization, however, the computational domain ($\Omega$) remains strictly fixed. To create solid walls and fluid channels within this fixed grid, the Fictitious Domain Method is employed. 
 
-Originally applied to Stokes flow by Borrvall and Petersson \cite{Borrvall2003} and extended to the Navier-Stokes equations by Gersborg-Hansen et al. \cite{Gersborg2005}, this method assigns a continuous design variable, $\gamma(\mathbf{x}) \in [0, 1]$, to every spatial coordinate in the domain. In this specific implementation, \textbf{$\gamma = 1$} represents a pure \textbf{fluid} channel, while \textbf{$\gamma = 0$} represents a \textbf{solid}, impermeable structure. To force the fluid velocity to zero inside the solid regions without mathematically removing the finite elements from the computation, the fluid is treated as a fictitious porous medium. The solid regions are assigned an artificially high flow resistance, mimicking the physical behavior of a dense matrix.
+Originally applied to Stokes flow by Borrvall and Petersson and extended to the Navier-Stokes equations by Gersborg-Hansen et al., this method assigns a continuous design variable to the spatial coordinates in the domain. In this specific implementation convention, a physical topology value of \textbf{$\bar{\gamma} = 1$} represents a pure \textbf{fluid} channel, while \textbf{$\bar{\gamma} = 0$} represents a \textbf{solid}, impermeable structure. To force the fluid velocity to zero inside the solid regions without mathematically removing the finite elements, the fluid is treated as a fictitious porous medium. 
 
-This flow resistance is quantified by an inverse permeability term, or Brinkman penalty function, denoted as $\alpha(\gamma)$. To ensure the optimization algorithm (which relies on continuous gradients) can transition smoothly between fluid and solid states, $\alpha(\gamma)$ must be a continuous, differentiable interpolation function. This solver utilizes a convex Rational Approximation of Material Properties (RAMP) interpolation scaled between a maximum solid penalty ($\alpha_{solid}$) and a minimum fluid penalty ($\alpha_{fluid}$):
+This flow resistance is quantified by an inverse permeability term, or Brinkman penalty function, denoted as $\alpha(\bar{\gamma})$. To ensure the optimization algorithm (which relies on continuous gradients) can transition smoothly between fluid and solid states, $\alpha$ must be a continuous interpolation function. This solver utilizes a convex Rational Approximation of Material Properties (RAMP) interpolation scaled between a maximum solid penalty ($\alpha_{solid}$) and a minimum fluid penalty ($\alpha_{fluid}$):
 \begin{equation}
-	\alpha(\gamma) = \alpha_{solid} + (\alpha_{fluid} - \alpha_{solid}) \frac{\gamma (1 + q)}{\gamma + q}
+	\alpha(\bar{\gamma}) = \alpha_{solid} + (\alpha_{fluid} - \alpha_{solid}) \frac{\bar{\gamma} (1 + q)}{\bar{\gamma} + q}
 	\label{eq:brinkman_interpolation}
 \end{equation}
-where $\alpha_{solid}$ is a sufficiently large penalty factor (e.g., $10^4 \sim 10^5$) that completely stagnates the flow when $\gamma = 0$, and $q$ is a tuning parameter that controls the convexity of the penalization curve \cite{Alexandersen2023}. Unlike traditional structural topology optimization which relies on the Solid Isotropic Material with Penalization (SIMP) power-law, fluid optimization generally avoids SIMP because its derivative vanishes at $\gamma = 0$. This zero-gradient condition can prematurely trap the optimizer in local minima. By utilizing the RAMP formulation, a strictly non-zero gradient is guaranteed across the entire design domain, ensuring stable sensitivity analysis. When $\gamma = 1$ (fluid), the interpolation strictly evaluates to $\alpha_{fluid}$. While $\alpha_{fluid}$ is mathematically non-zero to maintain matrix conditioning, it is several orders of magnitude smaller than $\alpha_{solid}$, meaning the fluid experiences negligible artificial resistance.
+where $\alpha_{solid}$ is a sufficiently large penalty factor that completely stagnates the flow when $\bar{\gamma} = 0$, and $q$ is a tuning parameter that controls the convexity of the penalization curve. Unlike traditional structural optimization which relies on the SIMP power-law, fluid optimization generally avoids SIMP for momentum because its derivative vanishes at $\bar{\gamma} = 0$. By utilizing the RAMP formulation, a strictly non-zero gradient is guaranteed across the entire design domain.
+
+\subsection{The Density Chain and Domain Bounding}
+While conceptually represented by the physical topology field in the governing equations, the computational implementation dictates that the layout is managed through a distinct chain of density representations to manage design and non-design domains. To explicitly avoid mathematical confusion with the fluid mass density ($\rho$) utilized in the Reynolds-Averaged Navier-Stokes equations, this thesis exclusively utilizes the $\gamma$ notation for all topological variables. However, these variables correspond directly to the exact implementation code variables as follows:
+\begin{itemize}
+	\item \textbf{Raw design density} ($\gamma \equiv \rho_{\mathrm{raw}}$): The baseline parameter manipulated by the optimizer.
+	\item \textbf{Filtered density} ($\tilde{\gamma} \equiv \rho_f$): The spatially smoothed design field.
+	\item \textbf{Projected effective density} ($\bar{\gamma} \equiv \rho_{\mathrm{eff}}$): The bounded, physical topology field evaluated by the governing equations.
+\end{itemize}
+
+The raw design density, $\gamma$, is defined as a Discontinuous Galerkin (DG0) function over the entire mesh. The optimization algorithm strictly manipulates the degrees of freedom corresponding to the actively optimized design space (\texttt{ActiveDV}), while passive (non-design) cells are subsequently restored to their prescribed bounding values. 
+
+This raw variable is subjected to a spatial PDE filter to yield a smoothed field $\tilde{\gamma}$. To recover sharp boundaries and strictly preserve required non-design regions, the filtered density is then projected and mapped into the bounded effective density ($\bar{\gamma}$):
+\begin{equation}
+	\bar{\gamma} = \gamma_{\mathrm{lower}} + (\gamma_{\mathrm{upper}} - \gamma_{\mathrm{lower}}) \Pi_\beta(\tilde{\gamma})
+\end{equation}
+where $\Pi_\beta$ is the projection operator, and $\gamma_{\mathrm{lower}}$ and $\gamma_{\mathrm{upper}}$ define the absolute permissible bounds for any given cell. This rigorous bounding guarantees that predefined features, such as non-design fluid inlet extensions ($\gamma_{\mathrm{lower}} = \gamma_{\mathrm{upper}} = 1$) or explicitly constrained structural walls, remain rigidly fixed without interfering with the mathematical behavior of the active optimization space.
 
 \section{Penalization of the Governing Equations}
 \label{sec:penalization_governing}
-To effectively optimize turbulent manifolds, the Brinkman penalty cannot simply be applied to the momentum equations. It must be rigorously integrated into the turbulence model and the wall-distance calculations to ensure the physics remain consistent as the solid boundaries evolve \cite{Yoon2016}.
+To effectively optimize turbulent manifolds, the respective penalties must be rigorously integrated into the turbulence model and the wall-distance calculations to ensure the physics remain consistent as the solid boundaries evolve. All physical penalties strictly utilize the projected effective density, $\bar{\gamma}$.
 
 \subsection{Modified Reynolds-Averaged Navier-Stokes Equations}
-The primary application of the Brinkman penalty is the modification of the steady-state, incompressible RANS momentum equation. The inverse permeability $\alpha(\gamma)$ is added as a linear sink term (Darcy friction) to the momentum conservation equation \cite{Gersborg2005}:
+The primary application of the Brinkman penalty is the modification of the steady-state, incompressible RANS momentum equation. The RAMP-interpolated inverse permeability $\alpha(\bar{\gamma})$ is added as a linear sink term (Darcy friction) to the momentum conservation equation:
 \begin{equation}
-	\rho (\mathbf{u} \cdot \nabla) \mathbf{u} = -\nabla p + \nabla \cdot \left[ (\mu + \mu_t) \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) \right] - \alpha(\gamma) \mathbf{u}
+	\rho (\mathbf{u} \cdot \nabla) \mathbf{u} = -\nabla p + \nabla \cdot \left[ (\mu + \mu_t) \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) \right] - \alpha(\bar{\gamma}) \mathbf{u}
 	\label{eq:penalized_momentum}
 \end{equation}
-It is critical to note the retention of the full symmetric rate-of-strain tensor in this formulation. While the transposed velocity gradient, $(\nabla \mathbf{u})^T$, is frequently simplified out of the governing equations in constant-viscosity laminar solvers due to the divergence-free constraint ($\nabla \cdot \mathbf{u} = 0$), it must be strictly retained here. Because the turbulent eddy viscosity ($\mu_t$) varies drastically across the spatial domain, the effective viscosity is no longer constant, and the transposed term exerts a non-zero physical influence on the momentum balance. 
-
-In regions where the optimizer places solid material ($\gamma \to 0$), the enormous magnitude of $\alpha_{solid} \mathbf{u}$ dominates all inertial and viscous forces, forcing the local velocity $\mathbf{u}$ mathematically to zero. Conversely, in the fluid channels ($\gamma \to 1$), the penalty term vanishes, recovering the standard RANS equations. The continuity equation ($\nabla \cdot \mathbf{u} = 0$) remains unchanged.
+It is critical to note the retention of the full symmetric rate-of-strain tensor. Here, $\rho$ strictly denotes the fluid mass density. Because the turbulent eddy viscosity ($\mu_t$) varies drastically across the spatial domain, the effective fluid viscosity is no longer constant, and the transposed term exerts a non-zero physical influence on the momentum balance. In regions where the optimizer places solid material ($\bar{\gamma} \to 0$), the enormous magnitude of $\alpha_{solid} \mathbf{u}$ dominates all inertial and viscous forces, forcing the local velocity mathematically to zero. 
 
 \subsection{Modified Spalart-Allmaras Transport Equation}
-As the Fictitious Domain Method forces velocity to zero in the solid regions, the turbulence generation inside those regions should theoretically cease. However, due to numerical diffusion and the presence of the convective terms in the surrounding fluid, turbulent eddy viscosity ($\tilde{\nu}$) can inadvertently bleed into the solid regions. This unphysical behavior destabilizes the solver and heavily distorts the adjoint sensitivity analysis.
+As the Fictitious Domain Method forces velocity to zero in the solid regions, the turbulence generation inside those regions should theoretically cease. However, due to numerical diffusion, turbulent eddy viscosity ($\tilde{\nu}$) can inadvertently bleed into the solid regions. This unphysical behavior destabilizes the solver and heavily distorts the adjoint sensitivity analysis.
 
-To strictly enforce a laminar, zero-turbulence state inside the solid structures, Yoon \cite{Yoon2016} proposed adding a corresponding penalty sink term to the Spalart-Allmaras transport equation:
+To strictly enforce a laminar, zero-turbulence state inside the solid structures, a corresponding penalty sink term is added to the Spalart-Allmaras transport equation:
 \begin{equation}
-	\mathbf{u} \cdot \nabla \tilde{\nu} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{y} \right)^2 + \frac{1}{\sigma} \left[ \nabla \cdot \left( (\nu + \tilde{\nu}) \nabla \tilde{\nu} \right) + c_{b2} (\nabla \tilde{\nu})^2 \right] - \alpha_{\tilde{\nu}}(\gamma) \tilde{\nu}
+	\mathbf{u} \cdot \nabla \tilde{\nu} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{y} \right)^2 + \frac{1}{\sigma} \left[ \nabla \cdot \left( (\nu + \tilde{\nu}) \nabla \tilde{\nu} \right) + c_{b2} (\nabla \tilde{\nu})^2 \right] - \alpha_{\tilde{\nu}} [\max(1 - \bar{\gamma}, 0)]^{N_{\tilde{\nu}}} \tilde{\nu}
 	\label{eq:penalized_sa}
 \end{equation}
-Here, $\alpha_{\tilde{\nu}}(\gamma)$ follows a similar RAMP interpolation profile. As $\gamma \to 0$, this massive sink term overwhelmingly destroys any turbulent working variable $\tilde{\nu}$ attempting to cross into the solid domain, effectively isolating the fluid turbulence to the active flow channels.
-
-It must be noted that this formulation intentionally diverges from the exact mathematical notation presented by Yoon. In the original literature, the turbulence penalty was defined using a traditional SIMP power-law interpolation, formatted exactly as $\alpha_{\tilde{\nu}_t} \gamma^{n_{\tilde{\nu}_t}} \tilde{\nu}$, where $n_{\tilde{\nu}_t}$ acts as the penalization exponent and $\gamma = 1$ designates the solid domain (the opposite convention to the one adopted herein). However, this exponent is strictly omitted in Equation~\ref{eq:penalized_sa} to maintain mathematical consistency with the custom framework developed for this thesis. Because the penalty multiplier $\alpha_{\tilde{\nu}}(\gamma)$ is already evaluated using the strictly bounded RAMP function (Equation~\ref{eq:brinkman_interpolation}), applying an additional polynomial exponent would result in a mathematically redundant double penalization. This would artificially distort the carefully tuned convexity of the RAMP curve and reintroduce the zero-gradient issues that the RAMP formulation was chosen to eliminate.
+To achieve this isolation numerically, the implementation intentionally diverges from the RAMP interpolation used for momentum, leveraging a positive-part power-law penalty instead. The penalization magnitude is determined by an active-solid indicator, $[\max(1 - \bar{\gamma}, 0)]^{N_{\tilde{\nu}}}$, where the exponent $N_{\tilde{\nu}}$ strictly scales the sink term exclusively inside the designated solid bounds. By relying on this positive-part formulation and staged penalty amplitudes ($\alpha_{\tilde{\nu}}$) governed by the continuation schedule, the solver strongly suppresses the penalty in near-fluid regions while overwhelmingly destroying spurious turbulence generation in the solids.
 
 \subsection{Modified Relaxed Eikonal Equation}
-The Spalart-Allmaras model is highly sensitive to the wall distance, $y$. While differential equations for wall distance computation are well-established in standard CFD \cite{Tucker2003}, topology optimization introduces a unique challenge: the location of the wall is not a static mesh boundary, but rather the dynamically evolving $\gamma = 0$ contour. Therefore, the relaxed Eikonal equation must also be penalized to recognize the fictitious solid as a physical boundary.
-
-To ensure that the wall distance correctly evaluates to $y = 0$ inside the solid regions, the intermediate field variable $G$ must be forced to its upper boundary limit, $G_0$. This is achieved by adding a third penalty term to the Eikonal formulation:
+The Spalart-Allmaras model is highly sensitive to the wall distance, $y$. While differential equations for wall distance computation are well-established, topology optimization introduces a unique challenge. The location of the wall is not a static mesh boundary, but rather the dynamically evolving $\bar{\gamma} = 0$ contour. Therefore, the relaxed Eikonal equation must be penalized to dynamically recognize the fictitious solid as a physical boundary:
 \begin{equation}
-	\nabla G \cdot \nabla G + \sigma_w G (\nabla \cdot \nabla G) = (1 + 2\sigma_w) G^4 + \alpha_G(\gamma) (G - G_0) 
+	\nabla G \cdot \nabla G + \sigma_w G (\nabla \cdot \nabla G) = (1 + 2\sigma_w) G^4 + \alpha_G I_s^{N_G} (G - G_0) 
 	\label{eq:penalized_eikonal}
 \end{equation}
-In the solid region, the high value of $\alpha_G(\gamma)$ tightly binds the local solution to $G = G_0$. Recalling the algebraic recovery function $y = 1/G - 1/G_0$, this correctly evaluates to an absolute wall distance of $y = 0$ anywhere the optimizer has placed structural material \cite{Yoon2016}.
+Consistent with the SA transport modifications, the Eikonal equation utilizes a staged multiplier $\alpha_G$ paired with a power-law solid indicator. However, to provide further geometric control, the wall distance penalty incorporates an explicit solid threshold parameter ($\theta_s$). The thresholded solid indicator is formulated as $I_s = \max((\theta_s - \bar{\gamma})/\theta_s, 0)$, which effectively tightens the geometric restrictions (forcing $G \to G_0$) only where the physical topology field drops below the designated solid threshold. If no explicit solid threshold below 1.0 is configured, this indicator naturally defaults to $I_s = \max(1 - \bar{\gamma}, 0)$. This allows the algebraic recovery function $y = 1/G - 1/G_0$ to correctly evaluate to an absolute wall distance of $y = 0$ inside the generated structural material.
 
-As with the Spalart-Allmaras model, this boundary sink term structurally diverges from Yoon's original SIMP-based notation. The reference literature explicitly defines this term as $\alpha_G \gamma^{n_G} (G - G_0)$, utilizing both the penalization exponent $n_G$ and the reversed solid convention. However, this exponent is strictly omitted in Equation~\ref{eq:penalized_eikonal}. Consistent with the rationale established in the previous section, applying an additional polynomial over the already bounded RAMP multiplier $\alpha_G(\gamma)$ would result in a mathematically redundant double penalization, artificially distorting the desired convexity of the formulation.
+\section{Boundary Conditions and Turbulence Initialization}
+\label{sec:boundary_conditions}
+To stabilize the topology optimization and ensure physical accuracy, boundary constraints are strictly managed across both fluid and turbulence regimes. Non-design fluid buffer regions are strictly mandated at inlets and outlets to isolate the active optimization domain from artificial numerical shear. The framework robustly handles boundary interactions by incorporating pressure outlets coupled with optional velocity-component constraints, as well as pressure pin controls to fully constrain the discrete PDE problem.
+
+At the domain inlets, establishing accurate turbulent boundary conditions natively bridges physical intent with numerical stability. The prescribed turbulence intensity and the associated turbulence length scale are systematically converted into an intermediate eddy-viscosity ratio. This ratio directly calculates the requisite boundary value for the Spalart-Allmaras working variable $\tilde{\nu}$. Throughout the computation, to protect the solver from chaotic geometric fluctuations during intermediate design cycles, rigorous numerical floors, ceilings, and internal clipping functions are imposed to bind the working variable safely within physical limits.
 
 \section{Sensitivity Analysis and the Frozen Turbulence Assumption}
 \label{sec:frozen_turbulence}
-With the forward state equations fully defined and penalized, the topology optimization algorithm requires the gradient (sensitivity) of the objective function with respect to the design variable $\gamma$. Because evaluating finite differences for every mesh element is computationally impossible, the continuous adjoint method is employed. The adjoint method solves a supplementary set of linear equations to efficiently compute the exact gradient of the objective function \cite{Dilgen2018}.
+With the forward state equations fully defined and penalized, the topology optimization algorithm requires the gradient (sensitivity) of the objective function with respect to the design variable. Because evaluating finite differences for every mesh element is computationally impossible, the continuous adjoint method is employed. 
 
-However, calculating the fully coupled, exact adjoint for turbulent flows is mathematically formidable. As demonstrated by Zymaris et al. \cite{Zymaris2009}, formulating the exact continuous adjoint for the Spalart-Allmaras model requires differentiating the highly non-linear production and destruction terms, accounting for the variations in the distance function, and managing the intense cross-coupling with the momentum equations. The complexity of these exact adjoints frequently introduces severe numerical stiffness and divergence during the iterative optimization process. 
+However, calculating the fully coupled, exact adjoint for turbulent flows is mathematically formidable. As demonstrated by Zymaris et al., formulating the exact continuous adjoint for the Spalart-Allmaras model requires differentiating the highly non-linear production and destruction terms, accounting for the variations in the distance function, and managing the intense cross-coupling with the momentum equations. The complexity of these exact adjoints frequently introduces severe numerical stiffness and divergence.
 
-To make the gradient calculation both numerically robust and computationally feasible, the primary optimization workflows in this implementation rely on the \textbf{Frozen Turbulence Assumption}, frequently referred to in the literature as the Constant Eddy Viscosity (CEV) assumption \cite{Schramm2018, Wu2023}.
+To make the gradient calculation both numerically robust and computationally feasible, the primary optimization workflows in this implementation rely on the \textbf{Frozen Turbulence Assumption}, frequently referred to in the literature as the Constant Eddy Viscosity (CEV) assumption.
 
 \subsection{Mechanism of Frozen Turbulence}
-The frozen turbulence assumption simplifies the sensitivity analysis by decoupling the turbulence transport from the design update. During the adjoint formulation, the turbulent eddy viscosity field ($\nu_t$) generated by the forward SA solver is assumed to be locally independent of infinitesimally small changes in the design variable ($\gamma$). Mathematically, this implies that during the calculation of the adjoint sensitivities:
+The frozen turbulence assumption simplifies the sensitivity analysis by decoupling the turbulence transport from the design update. During the adjoint formulation, the turbulent eddy viscosity field ($\nu_t$) generated by the forward SA solver is assumed to be locally independent of infinitesimally small changes in the physical topology ($\bar{\gamma}$). Mathematically, this implies that during the calculation of the adjoint sensitivities:
 \begin{equation}
-	\frac{\partial \nu_t}{\partial \gamma} \approx 0
+	\frac{\partial \nu_t}{\partial \bar{\gamma}} \approx 0
 \end{equation}
-By treating the eddy viscosity field as frozen (a spatially varying but constant parameter), the complex adjoints of the Spalart-Allmaras and Eikonal equations do not need to be solved. The optimizer only solves the standard fluid adjoint equations (utilizing the effective viscosity $\mu + \mu_t$) to determine how a change in $\gamma$ affects the pressure drop \cite{Yoon2016}. 
+By treating the eddy viscosity field as frozen (a spatially varying but constant parameter), the complex adjoints of the Spalart-Allmaras and Eikonal equations do not need to be solved. The optimizer only solves the standard fluid adjoint equations (utilizing the effective viscosity $\mu + \mu_t$) to determine how a change in topology affects the pressure drop. 
 
 \subsection{Justification and Limitations}
-The primary advantage of the frozen turbulence approach is not that it is universally ``better'', but that it makes the optimization problem solvable within a reasonable numerical and implementation budget. Relative to a fully coupled turbulent adjoint, it offers far greater numerical stability, a far smaller implementation burden, and a materially lower computational cost per design iteration.
+The primary advantage of the frozen turbulence approach is not that it is universally better, but that it makes the optimization problem solvable within a reasonable numerical and implementation budget. Relative to a fully coupled turbulent adjoint, it offers far greater numerical stability, a far smaller implementation burden, and a materially lower computational cost per design iteration.
 
-However, it is crucial to recognize its physical limitations. Because the algorithm ignores how a change in the wall shape will affect future turbulence generation, the gradients provided to the optimizer are approximations rather than exact derivatives. Recent studies have demonstrated that while the frozen assumption performs well in attached flows and moderate pressure gradients, it can alter the accuracy of the sensitivities in regimes characterized by massive flow separation or highly anisotropic shear layers, potentially causing the optimizer to settle into sub-optimal local minima \cite{Wu2023}. In that sense, the frozen adjoint is defended here on tractability grounds rather than on a claim of physical completeness.
+However, it is crucial to recognize its physical limitations. Because the algorithm ignores how a change in the wall shape will affect future turbulence generation, the gradients provided to the optimizer are approximations rather than exact derivatives. Recent studies have demonstrated that while the frozen assumption performs well in attached flows and moderate pressure gradients, it can alter the accuracy of the sensitivities in regimes characterized by massive flow separation or highly anisotropic shear layers. In that sense, the frozen adjoint is defended here on tractability grounds rather than on a claim of physical completeness.
 
-\section{The Coupled "Semi-Frozen" Adjoint Formulation}
+\section{The Coupled Semi-Frozen Adjoint Formulation}
 \label{sec:semifrozen_adjoint}
-In classical turbulent topology optimization, the widely used "frozen turbulence" assumption neglects the variation of turbulent viscosity with respect to the design field to maintain numerical stability \cite{Dilgen2018}. However, literature indicates that overcoming this assumption by differentiating the Spalart-Allmaras equations can yield more physically accurate sensitivity derivatives, particularly in flows dominated by severe separation \cite{Zymaris2009, Papoutsis2016}. 
+In classical turbulent topology optimization, the widely used frozen turbulence assumption neglects the variation of turbulent viscosity with respect to the design field to maintain numerical stability. However, literature indicates that overcoming this assumption by differentiating the Spalart-Allmaras equations can yield more physically accurate sensitivity derivatives. 
 
-To address the physical limitations of the frozen assumption, an advanced "semi-frozen" continuous adjoint formulation was additionally developed for this thesis. Unlike the baseline approach, this formulation explicitly re-couples the Spalart-Allmaras turbulence transport equation into the adjoint sensitivity analysis, allowing the optimizer to mathematically anticipate how topological changes will generate or suppress turbulent kinetic energy.
+To address the physical limitations of the frozen assumption, an advanced monolithic velocity-pressure-SA adjoint formulation, termed the semi-frozen adjoint, was additionally developed for this thesis. Unlike the baseline approach, this formulation explicitly re-couples the Spalart-Allmaras turbulence transport equation into the adjoint sensitivity analysis, allowing the optimizer to mathematically anticipate how topological changes will generate or suppress turbulent kinetic energy.
 
 \subsection{The Monolithic State and Geometric Decoupling}
 Deriving the coupled adjoint requires defining a monolithic forward state vector. While the frozen adjoint only considers the velocity and pressure fields $\mathbf{s} = [\mathbf{u}, p]^T$, the coupled adjoint expands the state vector to include the turbulent working variable: $\mathbf{s} = [\mathbf{u}, p, \tilde{\nu}]^T$. During the adjoint solve, a corresponding monolithic adjoint vector $\mathbf{s}^* = [\mathbf{u}^*, p^*, \tilde{\nu}^*]^T$ is computed simultaneously.
 
-It is critical to note that this formulation seeks a computational middle ground and is termed "semi-frozen" because the geometric wall-distance variable ($G$ from the relaxed Eikonal equation) is intentionally omitted from the monolithic state. While the ultimate mathematical formulation of an exact continuous adjoint requires a fully coupled four-field vector $\mathbf{s} = [\mathbf{u}, p, \tilde{\nu}, G]^T$, directly differentiating the distance field is notoriously difficult and computationally expensive \cite{Margetis2024}. The relaxed Eikonal equation is fundamentally geometric and lacks the convective time-scales of the fluid equations. Attempting to differentiate its highly non-linear $G^4$ source term alongside the Navier-Stokes system frequently results in severe matrix ill-conditioning. Therefore, explicitly decoupling $G$ serves as an intentional stabilization strategy, preserving the condition number of the monolithic system while successfully recovering the dominant convective turbulence sensitivities.
+It is critical to note that this formulation seeks a computational middle ground and is termed semi-frozen because the geometric wall-distance variable ($G$) is intentionally omitted from the monolithic state. Directly differentiating the relaxed Eikonal equation's highly non-linear $G^4$ source term alongside the Navier-Stokes system frequently results in severe matrix ill-conditioning. Therefore, explicitly decoupling $G$ serves as an intentional stabilization strategy, preserving the condition number of the monolithic system while successfully recovering the dominant convective turbulence sensitivities.
 
 \subsection{Physical Advantages}
-By including $\tilde{\nu}$ in the adjoint state, the optimizer is no longer blind to turbulence generation. The adjoint equations actively differentiate the production term ($c_{b1} \tilde{S} \tilde{\nu}$) with respect to the velocity field. Because turbulence production in the Spalart-Allmaras model is directly driven by fluid shear (vorticity) \cite{Spalart1992}, the optimizer mathematically detects that placing a sharp solid boundary in a high-velocity stream will generate massive shear, drastically increasing turbulent dissipation. Consequently, the semi-frozen adjoint actively smooths out geometric profiles to mitigate flow separation \textit{before} it occurs, rather than passively reacting to a pre-calculated, frozen flow field.
+By including $\tilde{\nu}$ in the adjoint state, the optimizer is no longer blind to turbulence generation. The adjoint equations actively differentiate the production term ($c_{b1} \tilde{S} \tilde{\nu}$) with respect to the velocity field. Because turbulence production in the Spalart-Allmaras model is directly driven by fluid shear (vorticity), the optimizer mathematically detects that placing a sharp solid boundary in a high-velocity stream will generate massive shear, drastically increasing turbulent dissipation. Consequently, the semi-frozen adjoint actively smooths out geometric profiles to mitigate flow separation before it occurs.
 
 \subsection{Mathematical Smoothing and FEniCS UFL Limitations}
 Implementing this monolithic adjoint in FEniCS introduces significant mathematical challenges. FEniCS utilizes the Unified Form Language (UFL) to perform automated symbolic differentiation ($\partial J / \partial \mathbf{s}$). However, this requires the weak forms to be strictly continuously differentiable ($C^1$ continuous). 
 
-As widely documented in continuous adjoint literature \cite{Zymaris2009, Papoutsis2016}, the standard Spalart-Allmaras model contains theoretically non-differentiable functions. Specifically, the model relies on absolute values to calculate the vorticity magnitude scalar, and uses strict `min()`/`max()` bounding functions to prevent numerical singularities in the wall destruction terms. If passed directly into the UFL symbolic derivative engine, the Jacobian assembly fails. 
-
-To overcome this, the custom FEniCS implementation utilizes rigorous hyperbolic smoothing approximations. The absolute value function $|x|$ is mathematically replaced by a smoothed hyperbola $\sqrt{x^2 + \epsilon^2}$, where $\epsilon$ is a vanishingly small constant. Similarly, hard `min`/`max` bounds are substituted with smooth, differentiable hyperbolic tangent ($\tanh$) transitions. These mathematical approximations ensure the UFL engine can cleanly invert the monolithic Jacobian matrix without triggering step-function singularities.
-
-\subsection{Theoretical Vulnerability to Boundary Singularities}
-While the semi-frozen adjoint successfully captures complex interior fluid mechanics, exact adjoint formulations for turbulence models are notoriously susceptible to numerical noise at domain boundaries \cite{Dilgen2018, Papoutsis2016}. 
-
-Because the coupled adjoint is hypersensitive to velocity gradients, it can become mathematically fixated on artificial shear generated at physical inlets. When boundary conditions abruptly transition from a prescribed inlet velocity to a stationary solid wall, the resulting step discontinuity in vorticity acts as an artificial, localized source of turbulence production. If left unconstrained, the optimizer may attempt to minimize the objective function by heavily damping these specific boundary nodes rather than resolving the interior routing. The practical manifestation of this mathematical vulnerability, and its subsequent requirement for strict non-design buffer domains ($\bar{\gamma} = 1$), will be evaluated during the benchmark studies in Chapter~\ref{ch:benchmark_results}.
+As widely documented in continuous adjoint literature, the standard Spalart-Allmaras model contains theoretically non-differentiable functions, specifically absolute values for vorticity magnitude and strict bounding functions. To overcome this, the custom FEniCS implementation utilizes rigorous hyperbolic smoothing approximations. The absolute value function $|x|$ is mathematically replaced by a smoothed hyperbola $\sqrt{x^2 + \epsilon^2}$, where $\epsilon$ is a vanishingly small constant. Similarly, hard bounds are substituted with smooth hyperbolic tangent ($\tanh$) transitions, ensuring the UFL engine can cleanly invert the monolithic Jacobian matrix without triggering step-function singularities.
 
 \section{Optimization Problem Formulation}
 \label{sec:optimization_problem}
-Regardless of whether the continuous sensitivities are derived using the baseline frozen assumption or the advanced semi-frozen adjoint, the foundational goal of the optimization remains identical. The topology optimization task is formulated as a mathematical programming problem, where the optimizer must find a spatial distribution of the design variable $\gamma(\mathbf{x})$ that minimizes a specific performance metric subject to physical and geometric constraints.
+Regardless of whether the continuous sensitivities are derived using the baseline frozen assumption or the advanced semi-frozen adjoint, the foundational goal of the optimization remains identical. The topology optimization task is formulated as a mathematical programming problem, where the optimizer must find a spatial distribution that minimizes a specific performance metric subject to physical and geometric constraints.
 
 \subsection{The Objective Function: Power Dissipation}
-For fluid manifolds, the primary engineering goal is to guide the fluid from the inlets to the outlets with the minimum possible pressure drop. In incompressible flow, minimizing the total pressure drop across the boundaries is mathematically equivalent to minimizing the total power dissipated by the fluid within the domain \cite{Borrvall2003, Alexandersen2023}. 
+For fluid manifolds, the primary engineering goal is to guide the fluid from the inlets to the outlets with the minimum possible pressure drop. In incompressible flow, minimizing the total pressure drop across the boundaries is mathematically equivalent to minimizing the total power dissipated by the fluid within the domain. 
 
-The objective function, $J$, is formulated by integrating the internal viscous energy dissipation and the artificial Brinkman friction over the entire computational domain $\Omega$:
+However, it is crucial to explicitly distinguish the algorithmic optimization objective ($J$) from the true physical validation metrics analyzed later in Chapter~\ref{ch:benchmark_results}. The optimization objective $J$ includes artificial Brinkman drag and is integrated exclusively over configured active masks ($\Omega_D$):
 \begin{equation}
-	J(\mathbf{u}, \gamma) = \int_{\Omega} \left[ \frac{1}{2} (\mu + \mu_t) \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) : \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) + \alpha(\gamma) \mathbf{u} \cdot \mathbf{u} \right] d\Omega
+	J(\mathbf{u}, \bar{\gamma}) = \int_{\Omega_D} \left[ \frac{1}{2} (\mu + \mu_t) \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) : \left( \nabla \mathbf{u} + (\nabla \mathbf{u})^T \right) + \alpha(\bar{\gamma}) \mathbf{u} \cdot \mathbf{u} \right] d\Omega
 	\label{eq:objective_function}
 \end{equation}
-The first term in the integral represents the true physical dissipation caused by the effective fluid viscosity (both laminar shear and turbulent eddy interactions). The second term represents the artificial energy lost when the fluid attempts to penetrate the fictitious solid regions defined by $\alpha(\gamma)$. As the optimizer seeks to minimize $J$, it is naturally driven to carve out clear fluid channels ($\gamma \to 1$, where $\alpha \to \alpha_{fluid}$) and avoid pushing flow through "gray" or solid regions ($\gamma \to 0$, where $\alpha \to \alpha_{solid}$), thereby generating a highly efficient topology.
+The first term in the integral represents the physical dissipation caused by the effective fluid viscosity. The second term represents the mathematical energy lost when the fluid attempts to penetrate the fictitious solid regions. 
 
 \subsection{Volume Constraint}
-If the optimizer were allowed to minimize $J$ without restrictions, the trivial and optimal solution would be to set $\gamma = 1$ everywhere, effectively removing all solid material and turning the entire domain into one massive fluid channel. Because the goal is to design a targeted manifold or pipe system, a strict volume constraint must be imposed to limit the amount of fluid allowed in the design space \cite{Borrvall2003}.
-
-Recalling that $\gamma = 1$ represents pure fluid and $\gamma = 0$ represents solid, the total volume of the fluid, $V_f$, can be calculated by simply integrating the design variable over the domain \cite{Alexandersen2023}:
+Because the goal is to design a targeted manifold or pipe system, a strict volume constraint must be imposed. The volume fraction constraint is enforced via a discrete volume region mask ($\Omega_V$), strictly dictating the proportion of material evaluated by the optimizer:
 \begin{equation}
-	V_f(\gamma) = \int_{\Omega} \gamma \, d\Omega
-\end{equation}
-To ensure the final design does not exceed a specified maximum fluid capacity, the volume fraction constraint is enforced as:
-\begin{equation}
-	g(\gamma) = \frac{\int_{\Omega} \gamma \, d\Omega}{V_{domain}} - V_{max} \leq 0
+	g(\bar{\gamma}) = \frac{\int_{\Omega_V} \bar{\gamma} \, d\Omega}{V_{\mathrm{mask}}} - V_{\max} \leq 0
 	\label{eq:volume_constraint}
 \end{equation}
-where $V_{domain}$ is the total volume of the computational space, and $V_{max}$ is the maximum allowable fluid volume fraction (e.g., $V_{max} = 0.3$ strictly limits the fluid channels to occupying only 30\% of the design space).
+where $V_{\mathrm{mask}}$ is the total volume of the designated integration space, and $V_{\max}$ is the maximum allowable fluid volume fraction.
 
 \subsection{The Complete Continuous Optimization Problem}
 Combining the objective function, the governing equations, and the constraints, the continuous topology optimization problem for turbulent flow is formally stated as:
 \begin{equation}
 	\begin{aligned}
 		& \underset{\gamma(\mathbf{x}) \in [0, 1]}{\text{minimize}}
-		& & J(\mathbf{u}, \gamma) \\
+		& & J(\mathbf{u}, \bar{\gamma}) \\
 		& \text{subject to}
 		& & \text{Modified RANS Equations (Eq.~\ref{eq:penalized_momentum})} \\
 		& & & \text{Modified Spalart-Allmaras Equation (Eq.~\ref{eq:penalized_sa})} \\
 		& & & \text{Modified Relaxed Eikonal Equation (Eq.~\ref{eq:penalized_eikonal})} \\
-		& & & g(\gamma) \leq 0
+		& & & g(\bar{\gamma}) \leq 0
 	\end{aligned}
 \end{equation}
 
-To solve this constrained minimization problem, the FEniCS implementation utilizes the Method of Moving Asymptotes (MMA) \cite{Svanberg1987}, an optimization algorithm specifically designed for handling large-scale, gradient-based topology optimization problems. As a gradient-driven optimizer, MMA approximates the highly non-linear design space using convex asymptotes. To maintain solver stability and prevent chaotic oscillations between design iterations, the algorithm relies on strict ``move limits'', which cap the maximum allowable change in the design variable ($\gamma$) during any single optimization step.
+To solve this constrained minimization problem, the FEniCS implementation utilizes the Method of Moving Asymptotes (MMA), an optimization algorithm specifically designed for handling large-scale, gradient-based topology optimization problems. MMA approximates the highly non-linear design space using convex asymptotes, relying on strict move limits which cap the maximum allowable change in the active raw design variable ($\gamma$) during any single optimization step.
 
 \section{Density Filtering and Projection}
 \label{sec:filtering}
-A well-known mathematical complication in density-based topology optimization is the lack of existence of a classical solution. If the design space is left unconstrained, the optimizer will tend to create infinitely thin micro-structures (often appearing as numerical "checkerboarding" in finite element meshes) to maximize performance. To guarantee a mesh-independent and manufacturable design, a minimum length scale must be enforced.
+A well-known mathematical complication in density-based topology optimization is the lack of existence of a classical solution. If the design space is left unconstrained, the optimizer will tend to create infinitely thin micro-structures (checkerboarding). To guarantee a mesh-independent and manufacturable design, a minimum length scale must be enforced.
 
 \subsection{The Discontinuous Galerkin Helmholtz Filter}
-To prevent checkerboarding, a density filter is applied to the raw design variable generated by the optimizer, $\gamma_{raw}$. In standard topology optimization, the design variable is typically defined at the mesh nodes using continuous linear basis functions (Continuous Galerkin, CG1). This allows the filtering process to be governed by the standard continuous Helmholtz partial differential equation \cite{Lazarov2011}:
+To prevent checkerboarding, a density filter is applied to the raw design variable generated by the optimizer. Because a continuous nodal definition causes the Brinkman penalty to interpolate smoothly across the interior of boundary elements, creating a semi-permeable gray gradient that allows mass leakage, this implementation discretizes the density field using piecewise constant elements (Discontinuous Galerkin, DG0). By assigning a single, uniform density value to the entire element, the structural boundaries remain perfectly sharp at the element edges.
+
+Consequently, the standard continuous Helmholtz filter cannot be applied. The filter is mathematically adapted to account for the discontinuous boundaries utilizing an interior penalty method across the element facets ($\Gamma_{int}$). Standard volume diffusion is mathematically replaced by interior facet jump penalties:
 \begin{equation}
-	-r^2 \nabla^2 \tilde{\gamma} + \tilde{\gamma} = \gamma_{raw}
-	\label{eq:standard_helmholtz}
-\end{equation}
-where $\tilde{\gamma}$ is the filtered design variable and $r$ represents the internal Helmholtz PDE coefficient. In classical topology optimization literature \cite{Lazarov2011}, it is well-established that to make the PDE filter approximate a standard spatial convolution filter with a nominal physical radius $R$, this coefficient must be mathematically scaled. Therefore, the internal coefficient is defined as $r = \frac{R}{2\sqrt{3}}$, where $R$ is the explicit physical length scale enforced upon the design.
-
-However, defining the density continuously across elements poses a severe physical problem for fluid topology optimization. A continuous nodal definition causes the design variable (and consequently, the Brinkman penalty) to interpolate smoothly across the interior of boundary elements. This creates a semi-permeable "gray" gradient inside the element, which allows fluid velocity to numerically leak through the structural walls, violating mass conservation. To strictly prevent this mass leakage, this implementation discretizes the density field $\gamma$ using piecewise constant elements (Discontinuous Galerkin, DG0). By assigning a single, uniform density value to the entire element, the structural boundaries remain perfectly sharp at the element edges.
-
-Consequently, the standard continuous Helmholtz filter (Equation~\ref{eq:standard_helmholtz}) can no longer be applied, as it requires continuously differentiable basis functions. The filter must be mathematically adapted to account for the discontinuous boundaries between the DG0 elements. This is achieved using an interior penalty method across the element facets (internal boundaries, $\Gamma_{int}$) \cite{Arnold2002}. 
-
-Unlike the physical governing equations presented previously, the DG0 filter is a strictly numerical finite element construct and must be defined explicitly in its weak integral formulation. Because the density is constant within each element, the continuous spatial gradient ($\nabla \tilde{\gamma}$) strictly vanishes, meaning standard volume diffusion is mathematically replaced by interior facet jump penalties \cite{Hesthaven2007}. As implemented in the custom FEniCS solver, an artificial diffusion term scaled by $\alpha_{dg}$ is applied exclusively to these jumps:
-\begin{equation}
-	\int_{\Gamma_{int}} r^2 \frac{\alpha_{dg}}{h_{avg}} \llbracket \tilde{\gamma} \rrbracket \cdot \llbracket v \rrbracket \, dS + \int_{\Omega} \tilde{\gamma} v \, dx = \int_{\Omega} \gamma_{raw} v \, dx
+	\int_{\Gamma_{int}} r^2 \frac{\alpha_{dg}}{h_{avg}} \llbracket \tilde{\gamma} \rrbracket \cdot \llbracket v \rrbracket \, dS + \int_{\Omega} \tilde{\gamma} v \, dx = \int_{\Omega} \gamma v \, dx
 	\label{eq:dg_helmholtz_filter}
 \end{equation}
-where $v$ is the test function, $\llbracket \cdot \rrbracket$ denotes the jump operator across a facet, and $h_{avg}$ is the average cell size. This formulation, alongside the Lazarov radius scaling factor, is mapped directly into FEniCS Python syntax as demonstrated in Listing~\ref{lst:pde_filter}.
+where $v$ is the test function, $\llbracket \cdot \rrbracket$ denotes the jump operator across a facet, $h_{avg}$ is the average cell size, and $r = \frac{R}{2\sqrt{3}}$ is the scaled filter radius.
 
-\begin{lstlisting}[language=Python, caption={Implementation of the DG0 Helmholtz filter and interior penalty scaling. Python dictionary lookups have been simplified for readability. Extracted from \texttt{TurbulentTO\_Frozen.py}.}, label={lst:pde_filter}]
-	# r_filter corresponds to the nominal physical radius (R).
-	# Dynamically calculated to span across multiple mesh cells.
-	r_filter = compute_filter_base_length_from_config() * FILTER_RADIUS_IN_CELLS
-	
-	# r is the internal PDE coefficient. 
-	# Scaled by 1/(2*sqrt(3)) per the Lazarov et al. (2011) proof.
+\subsubsection{Active-Mask Normalization}
+To appropriately handle the severe boundary interactions near designated inlet and outlet buffers, this filtering is strictly active-mask-normalized. Rather than applying the filter blindly across the entire domain, the filtered output evaluates as:
+\begin{equation}
+	\tilde{\gamma} = \frac{H(M \gamma)}{H(M)}
+\end{equation}
+where $H$ represents the Helmholtz PDE operator and $M$ represents the isolated active design indicator mask. Crucially, during sensitivity analysis, the mathematical transpose of this normalized filter must be explicitly derived and applied to map the calculated objective gradients back into the active DG0 design space. The explicit programmatic integration of this interior penalty filter, active-mask normalization, and the corresponding adjoint transpose logic is demonstrated in Listing~\ref{lst:pde_filter}.
+
+\begin{lstlisting}[language=Python, caption={Schematic pseudocode of the DG0 Helmholtz filter with active-mask normalization and interior facet jump penalties. Extracted from \texttt{TurbulentTO\_Frozen.py}.}, label={lst:pde_filter}]
+	# r is the internal PDE coefficient scaled by 1/(2*sqrt(3))
 	r = r_filter / (2.0 * 3.0**0.5)  
 	
 	u_filter = TrialFunction(DensitySpace)
 	v_filter = TestFunction(DensitySpace)
 	filter_in = Function(DensitySpace)
 	
-	# h_avg represents the average cell diameter at the facet.
-	# Dynamically scales the interior facet jump penalty.
-	h = CellDiameter(mesh)
-	h_avg = (h("+") + h("-")) / 2.0
+	h_avg = (CellDiameter(mesh)("+") + CellDiameter(mesh)("-")) / 2.0
 	
-	def pde_filter(input_field, output_field):
-	"""DG0 Helmholtz filter implementation using interior facet jumps."""
+	def pde_filter_raw(input_field, output_field):
 	alpha_dg = 4.0
 	helmholtz = (
 	r**2 * (alpha_dg / h_avg * dot(jump(v_filter, n), jump(u_filter, n))) * dS
@@ -203,37 +193,61 @@ where $v$ is the test function, $\llbracket \cdot \rrbracket$ denotes the jump o
 	assign(filter_in, input_field)
 	solve(lhs(helmholtz) == rhs(helmholtz), output_field)
 	return output_field
+	
+	def pde_filter_design_density(input_field, output_field):
+	"""Filter active design variables and normalize by the filtered mask."""
+	# Active indicator M is filtered to create the denominator H(M)
+	filter_work.vector()[ActiveDV] = input_field.vector()[ActiveDV]
+	pde_filter_raw(filter_work, output_field)
+	
+	# rho_f = H(M rho) / H(M); passive cells restored after filtering
+	output_field.vector()[:] /= filter_denominator_values
+	output_field.vector()[PassiveDV] = input_field.vector()[PassiveDV]
+	return output_field
+	
+	def pde_filter_design_gradient(input_field, output_field):
+	"""Apply the transpose of the active mask-normalized density filter."""
+	# Adjoint of rho -> H(M rho) / H(M), restricted to active DOFs
+	filter_work.vector()[ActiveDV] = input_field.vector()[ActiveDV] / filter_denominator_values[ActiveDV]
+	pde_filter_raw(filter_work, output_field)
+	
+	output_field.vector()[PassiveDV] = 0.0
+	return output_field
 \end{lstlisting}
 
 \subsection{Heaviside Projection}
-While the Helmholtz filter successfully imposes a minimum length scale, it inherently smooths the design field, resulting in a large "gray" transition zone between the solid ($\gamma = 0$) and fluid ($\gamma = 1$) regions. To recover a crisp, discrete topology, a continuous Heaviside projection is applied to the filtered variable \cite{Andreassen2011}.
-
-This implementation utilizes a hyperbolic tangent ($\tanh$) projection function \cite{Alexandersen2023}:
+While the Helmholtz filter successfully imposes a minimum length scale, it inherently smooths the design field, resulting in a large gray transition zone between the solid and fluid regions. To recover a crisp, discrete topology, a continuous Heaviside projection is applied to the filtered variable:
 \begin{equation}
-	\bar{\gamma} = \frac{\tanh(\beta \eta) + \tanh(\beta (\tilde{\gamma} - \eta))}{\tanh(\beta \eta) + \tanh(\beta (1 - \eta))}
+	\Pi_\beta(\tilde{\gamma}) = \frac{\tanh(\beta \eta) + \tanh(\beta (\tilde{\gamma} - \eta))}{\tanh(\beta \eta) + \tanh(\beta (1 - \eta))}
 	\label{eq:tanh_projection}
 \end{equation}
-where $\bar{\gamma}$ is the projected design variable, $\eta \in [0, 1]$ is the projection threshold (typically 0.5), and $\beta$ is a steepness parameter. As $\beta \to \infty$, the function approaches a strict Heaviside step function.
+where $\eta \in [0, 1]$ is the projection threshold (typically 0.5), and $\beta$ is a steepness parameter. As $\beta \to \infty$, the function approaches a strict Heaviside step function.
 
 \section{Algorithmic Workflow and Solver Implementation}
 \label{sec:algorithmic_workflow}
-While the previous sections define the continuous mathematical problem, executing the optimization requires a highly robust discrete, iterative algorithm. The computational framework developed for this thesis originated from a basic laminar topology optimization template provided by KU Leuven. However, to support the severe non-linearities of the turbulent regime, this architecture was fundamentally restructured. The resulting custom optimization engine natively manages the segregated Spalart-Allmaras turbulence model, explicit physics decoupling via Picard iterations, dual continuous adjoint pipelines, and the discontinuous DG0 interior penalty filter.
+Executing the optimization requires a highly robust discrete, iterative algorithm. To support the severe non-linearities of the turbulent regime, the solver architecture natively manages the segregated Spalart-Allmaras turbulence model, explicit physics decoupling via Picard iterations, and deeply hybridized forward flow routines.
 
-\subsection{Decoupling the Physics: The Picard Iteration Scheme}
-As established in Chapter~\ref{ch:fenics_implementation}, to guarantee solver stability under the severe non-linearities of the turbulence model and Brinkman penalization, the forward governing equations are rigorously decoupled. The pressure and velocity fields are managed via the IPCS algorithm, while the fluid and turbulence transport equations are decoupled via a Picard iteration scheme. 
+\subsection{Boundary Conditions and Turbulence Initialization}
+At the domain inlets, establishing accurate turbulent boundary conditions natively bridges physical intent with numerical stability. The prescribed turbulence intensity and the associated turbulence length scale are systematically converted into an intermediate eddy-viscosity ratio. This ratio directly calculates the requisite boundary value for the Spalart-Allmaras working variable $\tilde{\nu}$. Throughout the computation, to protect the solver from chaotic geometric fluctuations during intermediate design cycles, rigorous numerical floors, ceilings, and internal clipping functions are imposed to bind the working variable safely within physical limits.
 
-During each Picard step within the optimization loop, the IPCS solver advances the flow field using the eddy viscosity from the previous iteration. The updated velocity field is then passed to the SA solver to calculate a new eddy viscosity field. Only after this alternating forward loop has completed its designated sweeps is the flow field considered equilibrated, at which point the continuous adjoint routine is triggered to compute the topological sensitivities. 
+Furthermore, the solver dynamically handles pressure outlets coupled with optional velocity-component constraints, allowing the flow field to organically adapt to the evolving structural pressure drops without artificial boundary blockages.
 
-\subsection{Forward State Convergence and Adjoint Accuracy}
-\label{sec:forward_state_convergence}
-A critical requirement of the frozen turbulence assumption is its reliance on a fully converged forward physical state. Because the frozen adjoint calculates gradient sensitivities based on a static snapshot of the eddy viscosity field ($\nu_t$), any incomplete convergence in the forward flow solver directly corrupts the gradient assembly. During the optimization loop, a single Picard sweep between the IPCS flow solver and the Spalart-Allmaras transport equation is generally insufficient to reach local equilibrium. To prevent unconverged physical states from misleading the optimizer, a strict minimum of three Picard iterations is enforced per design cycle. This ensures that the frozen adjoint sensitivities are derived from an equilibrated velocity and turbulence field before the Method of Moving Asymptotes (MMA) updates the topology.
+\subsection{SA Numerical Stabilization}
+At the equation level, the Spalart-Allmaras transport equation is natively stabilized using Streamline Upwind Petrov-Galerkin (SUPG) methods, which damp non-physical oscillations in advection-dominated zones. Further stabilization is achieved via pseudo-time substeps, tight turbulence under-relaxation factors, and carefully linearized coefficients within the SA construction.
+
+\subsection{Hybrid Forward Flow Recovery and Picard Decoupling}
+Rather than relying solely on simple fixed-point decoupled sweeps, the forward fluid solver utilizes an advanced hybrid architecture integrating both Incremental Pressure Correction Scheme (IPCS) methods and monolithic SNES workflows. 
+
+During the optimization loop, a Picard iteration scheme strictly decouples the fluid and turbulence physics. The flow solver advances the momentum field using the eddy viscosity from the previous iteration, and this updated velocity is then passed back to the SA solver. During volatile intermediate design steps, the fluid framework initiates convection continuation strategies and leverages Stokes-Brinkman warm starts to slowly reintroduce inertial physics. If convergence stalls, the SNES solver autonomously steps through multiple recovery schedules (including dynamic tolerance reductions and altered line-search methods). 
+
+The optimization architecture supports non-converged acceptance, allowing the algorithm to passively absorb intermediate errors and maintain topological momentum. However, prior to the continuous adjoint assembly, optional configured flow solves are executed, becoming strictly bound where enabled. When utilized, these strict solves confirm that the sensitivities, and specifically the frozen turbulent fields, are mathematically derived from a fully equilibrated state. Otherwise, relying on the accepted residual criteria serves as a necessary pragmatic compromise to maintain solver momentum in highly separated regimes.
 
 \subsection{Python Implementation and Continuation Strategy}
 To ensure convergence to a physically meaningful binary design, the algorithm iterates over a strict continuation schedule. As the optimization progresses, the Brinkman penalty parameter ($q$) and the projection steepness ($\beta$) are iteratively increased, while the MMA move limits are proportionally tightened.
 
-While the exact gradient assembly differs between the two frameworks, the overarching algorithmic architecture remains consistent. The global optimization routine, illustrated below via the baseline \texttt{TurbulentTO\_Frozen.py} execution script, is demonstrated in Listing~\ref{lst:to_loop}:
+The global optimization routine, reflecting the hybrid solver calls, explicit gradient filtering, and penalty schedules, is outlined in Listing~\ref{lst:to_loop} as a schematic pseudocode. Note that while the repository source code uses the variable name \texttt{rho} for the design density, it is denoted here as \texttt{rho\_raw} to explicitly avoid confusion with the fluid mass density $\rho$.
 
-\begin{lstlisting}[language=Python, caption={Pseudocode representing the algorithmic architecture of the iterative topology optimization loop using the frozen turbulence assumption. Code structure has been simplified and abstracted to highlight the core physics and adjoint pipelines.}, label={lst:to_loop}]
+\begin{lstlisting}[language=Python, caption={Schematic pseudocode representing the algorithmic architecture of the iterative topology optimization loop using the frozen turbulence assumption. Code structure has been simplified to highlight the core physics, hybrid solvers, and adjoint pipelines.}, label={lst:to_loop}]
 	for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 	# Update continuation parameters for the current stage
 	BETA_PROJ.assign(BETA_PROJ_SCHEDULE[stage_idx])
@@ -241,38 +255,44 @@ While the exact gradient assembly differs between the two frameworks, the overar
 	
 	while inner_count < max_iters_now and not objective_converged:
 	# 1. Spatial Filtering & Penalized Wall-Distance Update
-	rho_f = pde_filter(rho, rho_f)
+	rho_f = pde_filter_design_density(rho_raw, rho_f)
 	update_wall_distance_field()
+	
+	if iter_count == 0:
+	initialize_forward_guess_with_stokes()
 	
 	# 2. Forward Physics (Outer Picard Loop for Decoupling)
 	for picard_idx in range(PICARD_STEPS):
-	solve_forward_with_recovery(...) # IPCS Navier-Stokes solve
+	solve_forward_picard(...) # Robust intermediate flow solve
 	
 	sa_model.construct_forms(w_fwd.sub(0))
+	for sa_substep_idx in range(SA_PSEUDO_TIME_STEPS):
 	sa_model.solve_turbulence_model()
-	sa_model.update_variables(relaxation=NUT_RELAXATION_FACTOR)
+	sa_model.update_variables(relaxation=TURBULENCE_RELAXATION)
 	
 	# Lock in the updated eddy viscosity for the frozen assumption
 	nu_tilde_frozen.assign(sa_model.nu_tilde0)
 	
-	# Final flow solve locking in the converged eddy viscosity
-	solve_forward_with_recovery(...)
+	# Final configured flow solve, strict where enabled
+	solve_forward_snes(...) 
 	
-	# 3. Sensitivity Analysis (Continuous Adjoint)
+	# 3. Sensitivity Analysis (Continuous Frozen Adjoint)
 	solve_adjoint(objective_adjoint_form)
 	
-	# 4. Gradient Assembly & DG0 Filtering
+	# 4. Gradient Assembly & Transpose Filtering
 	unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
-	filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
+	filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
 	
 	# 5. Method of Moving Asymptotes (MMA) Design Update
 	(xmma, ...) = mmasub(mmma, num_mma, iter_count, xval, xmin, xmax, ...)
-	rho.vector()[:] = xmma[:, 0]
+	
+	# Update raw density array with strict bounding
+	rho_raw.vector()[ActiveDV] = xmma[:, 0]
 	
 	inner_count += 1
 \end{lstlisting}
 
 \section{Conclusion}
-This chapter has established the comprehensive mathematical and algorithmic framework required to perform continuous topology optimization in turbulent flows. By employing the Fictitious Domain Method with Brinkman penalization, the evolving structural topology is seamlessly integrated into the fixed computational grid. Furthermore, introducing the mathematically rigorous DG0 Helmholtz interior penalty filter paired with a continuous Heaviside projection guarantees the generation of manufacturable, mesh-independent designs free of numerical artifacts.
+This chapter has established the comprehensive mathematical and algorithmic framework required to perform continuous topology optimization in turbulent flows. By employing the Fictitious Domain Method with Brinkman penalization, the evolving structural topology is seamlessly integrated into the fixed computational grid. Furthermore, introducing the mathematically rigorous DG0 Helmholtz interior penalty filter paired with a continuous Heaviside projection enforces a minimum length scale and reduces mesh-dependent numerical artifacts.
 
-To computationally drive the optimization, two distinct continuous adjoint pipelines were formulated. The baseline frozen turbulence assumption guarantees robust numerical stability and computational tractability, while the advanced semi-frozen formulation explicitly re-couples the Spalart-Allmaras transport equation to proactively detect and penalize turbulence production. Embedded within a deeply stabilized, Picard-decoupled Python architecture, this algorithmic methodology transforms the verified fluid dynamics engine from Chapter~\ref{ch:fenics_implementation} into a powerful, automated design tool. With the mathematical penalizations, adjoint sensitivities, and solver architectures now fully defined, Chapter~\ref{ch:benchmark_results} will deploy this continuous framework to solve rigorous boundary-value benchmark problems, quantifying its ability to minimize total energy dissipation in highly separated turbulent flows.
+To computationally drive the optimization, two distinct continuous adjoint pipelines were formulated. The baseline frozen turbulence assumption guarantees robust numerical stability and computational tractability, while the advanced semi-frozen formulation explicitly re-couples the Spalart-Allmaras transport equation to proactively detect and penalize turbulence production. Embedded within a deeply stabilized, Picard-decoupled Python architecture utilizing advanced hybrid IPCS/SNES recovery schemes, this algorithmic methodology transforms the verified fluid dynamics engine from Chapter~\ref{ch:fenics_implementation} into a powerful, automated design tool. With the mathematical penalizations, adjoint sensitivities, and solver architectures now fully defined, Chapter~\ref{ch:benchmark_results} will deploy this continuous framework to solve rigorous boundary-value benchmark problems, quantifying its ability to minimize total energy dissipation in highly separated turbulent flows.

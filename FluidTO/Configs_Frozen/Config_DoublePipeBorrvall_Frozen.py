@@ -12,10 +12,10 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh path for this benchmark geometry.
-# Generate via: python3 Meshes/generate_borrvall_guided_meshes.py
+# Generate via: python3 Meshes/DoublePipeBorrvall/generate_double_pipe_borrvall_yplus1.py
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/mesh_guided.xdmf'),
-    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/cell_guided.xdmf'),
+    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/mesh_yplus1.xdmf'),
+    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/DoublePipeBorrvall/cell_yplus1.xdmf'),
 }
 
 DESIGN_DOMAIN_TAG = 1

@@ -847,9 +847,14 @@ def build_design_pressure_drop_markers(
     return facet_markers, {"inlet": int(inlet_marker), "outlet": int(outlet_marker)}
 
 
-def _optimization_log_columns(include_ipcs_residuals=False, pressure_drop_columns=None):
+def _optimization_log_columns(
+    include_ipcs_residuals=False,
+    pressure_drop_columns=None,
+    objective_column="Objective",
+):
     if pressure_drop_columns is None:
         pressure_drop_columns = ("DeltaP_Pa",)
+    objective_column = str(objective_column)
 
     columns = [
         ("Stage", 7),
@@ -857,9 +862,9 @@ def _optimization_log_columns(include_ipcs_residuals=False, pressure_drop_column
         ("Beta", 7),
         ("InnerIter", 10),
         ("GlobalIter", 11),
-        ("Objective", 17),
+        (objective_column, max(17, len(objective_column))),
     ]
-    columns.extend((str(name), 17) for name in pressure_drop_columns)
+    columns.extend((str(name), max(17, len(str(name)))) for name in pressure_drop_columns)
     columns.extend([
         ("ObjConv", 17),
         ("VolFrac", 17),
@@ -874,10 +879,16 @@ def _optimization_log_columns(include_ipcs_residuals=False, pressure_drop_column
     return columns
 
 
-def _format_optimization_log_row(values, include_ipcs_residuals=False, pressure_drop_columns=None):
+def _format_optimization_log_row(
+    values,
+    include_ipcs_residuals=False,
+    pressure_drop_columns=None,
+    objective_column="Objective",
+):
     columns = _optimization_log_columns(
         include_ipcs_residuals=include_ipcs_residuals,
         pressure_drop_columns=pressure_drop_columns,
+        objective_column=objective_column,
     )
     if len(values) != len(columns):
         raise ValueError(
@@ -886,10 +897,16 @@ def _format_optimization_log_row(values, include_ipcs_residuals=False, pressure_
     return "   ".join(str(value).ljust(width) for value, (_, width) in zip(values, columns))
 
 
-def initialize_optimization_log(log_path, include_ipcs_residuals=False, pressure_drop_columns=None):
+def initialize_optimization_log(
+    log_path,
+    include_ipcs_residuals=False,
+    pressure_drop_columns=None,
+    objective_column="Objective",
+):
     header_fields = _optimization_log_columns(
         include_ipcs_residuals=include_ipcs_residuals,
         pressure_drop_columns=pressure_drop_columns,
+        objective_column=objective_column,
     )
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "w") as txtout:
@@ -897,6 +914,7 @@ def initialize_optimization_log(log_path, include_ipcs_residuals=False, pressure
                 [label for label, _ in header_fields],
                 include_ipcs_residuals=include_ipcs_residuals,
                 pressure_drop_columns=pressure_drop_columns,
+                objective_column=objective_column,
             ) + "\r\n")
     MPI.barrier(MPI.comm_world)
 
@@ -916,12 +934,16 @@ def append_optimization_log_entry(
     pressure_drop_values=None,
     du_ipcs=None,
     dp_ipcs=None,
+    pressure_drop_columns=None,
+    objective_column="Objective",
 ):
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "a") as txtout:
             if pressure_drop_values is None:
                 pressure_drop_values = [pressure_drop]
             pressure_drop_values = [float(value) for value in pressure_drop_values]
+            if pressure_drop_columns is None:
+                pressure_drop_columns = ["dP"] * len(pressure_drop_values)
             row_values = [
                 "{:d}".format(int(stage_idx)),
                 "{:.3f}".format(float(q_value)),
@@ -948,6 +970,7 @@ def append_optimization_log_entry(
                 _format_optimization_log_row(
                     row_values,
                     include_ipcs_residuals=(du_ipcs is not None or dp_ipcs is not None),
-                    pressure_drop_columns=["dP"] * len(pressure_drop_values),
+                    pressure_drop_columns=pressure_drop_columns,
+                    objective_column=objective_column,
                 ) + "\r\n"
             )

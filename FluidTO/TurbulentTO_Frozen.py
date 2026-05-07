@@ -33,6 +33,8 @@ from Utilities_SharedTO import (
 )
 from Utilities_TurbulentTO_Frozen import (
     build_penalized_wall_distance_solver,
+    build_penalized_poisson_wall_distance_solver,
+    calculate_poisson_wall_distance_field,
     nu_tilde_from_viscosity_ratio,
     positive_part,
 )
@@ -213,25 +215,80 @@ def append_df0dx_log_entry(log_path, stage_idx, q_value, beta_value, inner_iter,
 
 
 CONFIG_MODULE_NAME, CONFIG = load_config_module_from_cli()
+CONFIG_OPTION_NAMES = {
+    _name for _name in vars(CONFIG)
+    if not _name.startswith("_")
+}
 for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
+
+
+def normalize_forward_flow_solver_name(value, setting_name, allow_ipcs_snes_polish=False):
+    token = str(value).strip().lower().replace("-", "_").replace("+", "_").replace(" ", "_")
+    if token in {"newton", "newtonls", "snes"}:
+        return "snes"
+    if token == "ipcs":
+        return "ipcs"
+    if allow_ipcs_snes_polish and token in {
+        "ipcs_snes",
+        "ipcs_snes_polish",
+        "ipcs_then_snes",
+        "ipcs_with_snes_polish",
+    }:
+        return "ipcs_snes_polish"
+    allowed = "'ipcs' or 'snes'"
+    if allow_ipcs_snes_polish:
+        allowed = "'ipcs', 'ipcs_snes_polish', or 'snes'"
+    raise ValueError("{} must be {}.".format(setting_name, allowed))
+
+
+if "FORWARD_IPCS_FINAL_SNES_POLISH" in CONFIG_OPTION_NAMES:
+    raise ValueError(
+        "FORWARD_IPCS_FINAL_SNES_POLISH has been replaced by "
+        "FORWARD_FLOW_SOLVER = 'ipcs_snes_polish'."
+    )
+if "FORWARD_IPCS_SNES_POLISH_ALL" in CONFIG_OPTION_NAMES:
+    raise ValueError(
+        "FORWARD_IPCS_SNES_POLISH_ALL has been removed. Use "
+        "FORWARD_FLOW_SOLVER = 'ipcs_snes_polish' for the final flow solve, "
+        "or FORWARD_PICARD_FLOW_SOLVER = 'snes' for Picard solves."
+    )
+
 
 SHOW_SOLVE_LABELS = bool(globals().get("SHOW_SOLVE_LABELS", True))
 SHOW_DOLFIN_SOLVER_LOGS = bool(globals().get("SHOW_DOLFIN_SOLVER_LOGS", False))
 FORWARD_IPCS_LOG_EVERY = max(1, int(globals().get("FORWARD_IPCS_LOG_EVERY", 25)))
 LINEAR_SOLVER_NAME = str(globals().get("LINEAR_SOLVER", "mumps"))
-FORWARD_FLOW_SOLVER = str(globals().get("FORWARD_FLOW_SOLVER", "snes")).strip().lower()
-if FORWARD_FLOW_SOLVER in {"newton", "newtonls", "snes"}:
-    FORWARD_FLOW_SOLVER = "snes"
-elif FORWARD_FLOW_SOLVER != "ipcs":
-    raise ValueError("FORWARD_FLOW_SOLVER must be either 'ipcs' or 'snes'.")
+FORWARD_FLOW_SOLVER = normalize_forward_flow_solver_name(
+    globals().get("FORWARD_FLOW_SOLVER", "snes"),
+    "FORWARD_FLOW_SOLVER",
+    allow_ipcs_snes_polish=True,
+)
+_default_picard_flow_solver = (
+    "ipcs" if FORWARD_FLOW_SOLVER in {"ipcs", "ipcs_snes_polish"} else FORWARD_FLOW_SOLVER
+)
+FORWARD_PICARD_FLOW_SOLVER = normalize_forward_flow_solver_name(
+    globals().get("FORWARD_PICARD_FLOW_SOLVER", _default_picard_flow_solver),
+    "FORWARD_PICARD_FLOW_SOLVER",
+    allow_ipcs_snes_polish=False,
+)
 
 if not SHOW_DOLFIN_SOLVER_LOGS:
     try:
         set_log_level(LogLevel.WARNING)
     except NameError:
         set_log_level(30)
+
+
+def final_flow_uses_ipcs():
+    return FORWARD_FLOW_SOLVER in {"ipcs", "ipcs_snes_polish"}
+
+
+def format_forward_flow_solver_name(solver_name):
+    if solver_name == "ipcs_snes_polish":
+        return "IPCS + SNES polish"
+    return solver_name.upper()
 
 
 def solver_log(message):
@@ -257,6 +314,8 @@ forward_convection_coupling_weight = Constant(float(globals().get("FORWARD_SNES_
 
 def projection(rho_design, eta_proj):
     """Projection used to sharpen the filtered design."""
+    if not bool(globals().get("USE_HEAVISIDE_PROJECTION", True)):
+        return rho_design
     return (
         tanh(BETA_PROJ * Constant(eta_proj))
         + tanh(BETA_PROJ * (rho_design - Constant(eta_proj)))
@@ -547,7 +606,8 @@ if use_outlet_pressure_bc:
     root_print("Outlet BC type: pressure")
 else:
     root_print("Outlet BC type: velocity")
-root_print("Frozen forward flow solver: {}".format(FORWARD_FLOW_SOLVER.upper()))
+root_print("Frozen final flow solver: {}".format(format_forward_flow_solver_name(FORWARD_FLOW_SOLVER)))
+root_print("Frozen Picard flow solver: {}".format(FORWARD_PICARD_FLOW_SOLVER.upper()))
 
 pressure_outlet_component_bcs = _normalize_velocity_component_bc_specs(
     globals().get("PRESSURE_OUTLET_COMPONENT_BCS"),
@@ -707,8 +767,39 @@ else:
         )
     )
     nu_tilde_inlet_bc_values = [Constant(value) for value in _sa_nu_tilde_targets]
+
+nu_tilde_outlet_bc_values = []
+custom_turbulence_outlet_builder = globals().get("build_turbulence_outlet_profile_sets")
+if callable(custom_turbulence_outlet_builder):
+    nu_tilde_outlet_bc_values = as_list(custom_turbulence_outlet_builder())
+    if len(nu_tilde_outlet_bc_values) != len(outlet_markers):
+        raise ValueError(
+            "Expected {} custom SA outlet profiles, got {}.".format(
+                len(outlet_markers), len(nu_tilde_outlet_bc_values),
+            )
+        )
+    root_print("SA outlet nu_tilde: custom profiles  (nu_lam = {:.3e})".format(_nu_lam))
+elif "SA_NU_TILDE_OUTLETS" in globals() or "SA_NU_TILDE_OUTLET" in globals():
+    outlet_raw = globals().get("SA_NU_TILDE_OUTLETS", globals().get("SA_NU_TILDE_OUTLET"))
+    outlet_values = [float(value) for value in as_list(outlet_raw)]
+    if len(outlet_values) == 1 and len(outlet_markers) > 1:
+        outlet_values = outlet_values * len(outlet_markers)
+    if len(outlet_values) != len(outlet_markers):
+        raise ValueError(
+            "Expected {} SA outlet nu_tilde values, got {}.".format(
+                len(outlet_markers), len(outlet_values),
+            )
+        )
+    nu_tilde_outlet_bc_values = [Constant(value) for value in outlet_values]
+    root_print(
+        "SA outlet nu_tilde: {}  (nu_lam = {:.3e})".format(
+            ", ".join("{:.4e}".format(value) for value in outlet_values),
+            _nu_lam,
+        )
+    )
 bcn_turbulence = (
     [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_inlet_bc_values, inlet_markers)]
+    + [DirichletBC(TurbulenceSpace, bc_val, boundaries, m) for bc_val, m in zip(nu_tilde_outlet_bc_values, outlet_markers)]
     + [DirichletBC(TurbulenceSpace, Constant(0.0), boundaries, m) for m in wall_markers]
 )
 
@@ -857,6 +948,9 @@ sa_wall_g0 = float(globals().get("SA_WALL_G0", 20.0))
 sa_wall_penalty_alpha_base = float(globals().get("SA_WALL_PENALTY_ALPHA", 1.0e3))
 sa_wall_penalty_alpha = Constant(sa_wall_penalty_alpha_base)
 sa_wall_penalty_power = float(globals().get("SA_WALL_PENALTY_N", 3.0))
+sa_wall_penalty_interpolation = str(
+    globals().get("SA_WALL_PENALTY_INTERPOLATION", "power")
+).strip().lower()
 sa_wall_g_floor = float(globals().get("SA_WALL_G_FLOOR", 1.0e-8))
 sa_wall_newton_rtol = float(globals().get("SA_WALL_NEWTON_RTOL", 1.0e-8))
 sa_wall_newton_atol = float(globals().get("SA_WALL_NEWTON_ATOL", 1.0e-10))
@@ -867,28 +961,80 @@ sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS",
 sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
 sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
 sa_wall_prefer_pseudo_time = bool(globals().get("SA_WALL_PREFER_PSEUDO_TIME", False))
+sa_wall_distance_mode = str(globals().get("SA_WALL_DISTANCE_MODE", "reciprocal")).strip().lower()
 if sa_wall_density_source == "passive":
     wall_penalty_fluid_indicator = density_upper_bound
 else:
     wall_penalty_fluid_indicator = rho_effective
+if sa_wall_distance_mode in {"poisson", "poisson_like", "tucker"}:
+    if custom_initial_wall_distance is None:
+        wall_distance = calculate_poisson_wall_distance_field(
+            TurbulenceSpace, boundaries, wall_markers, dx
+        )
+    elif isinstance(custom_initial_wall_distance, Function):
+        wall_distance = Function(TurbulenceSpace)
+        wall_distance.assign(custom_initial_wall_distance)
+    else:
+        wall_distance = project(custom_initial_wall_distance, TurbulenceSpace)
 
-(
-    wall_distance,
-    update_wall_distance_field,
-) = build_penalized_wall_distance_solver(
-    TurbulenceSpace, boundaries, wall_markers, dx, wall_penalty_fluid_indicator,
-    sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power, sa_wall_g_floor,
-    newton_rtol=sa_wall_newton_rtol,
-    newton_atol=sa_wall_newton_atol,
-    newton_max_iters=sa_wall_newton_max_iters,
-    newton_relax=sa_wall_newton_relax,
-    penalty_homotopy=sa_wall_penalty_homotopy,
-    solid_guess_weight=sa_wall_initial_solid_guess,
-    extra_relaxations=sa_wall_extra_relaxations,
-    solid_threshold=sa_wall_solid_threshold,
-    initial_wall_distance=custom_initial_wall_distance,
-    prefer_pseudo_time=sa_wall_prefer_pseudo_time,
-)
+    def update_wall_distance_field():
+        return wall_distance
+
+    root_print("SA wall-distance mode: Tucker Poisson-like static field")
+elif sa_wall_distance_mode in {"poisson_penalized", "penalized_poisson", "dilgen_poisson"}:
+    if sa_wall_penalty_interpolation in {"brinkman", "dilgen", "chi"}:
+        wall_penalty_reaction = (
+            sa_wall_penalty_alpha / max(float(ALPHA_SOLID), 1.0e-300)
+        ) * alpha(wall_penalty_fluid_indicator)
+    elif sa_wall_penalty_interpolation == "power":
+        wall_penalty_reaction = sa_wall_penalty_alpha * (
+            positive_part(Constant(1.0) - wall_penalty_fluid_indicator) ** sa_wall_penalty_power
+        )
+    else:
+        raise ValueError(
+            "SA_WALL_PENALTY_INTERPOLATION must be 'power' or 'brinkman', got {!r}.".format(
+                sa_wall_penalty_interpolation
+            )
+        )
+
+    (
+        wall_distance,
+        update_wall_distance_field,
+    ) = build_penalized_poisson_wall_distance_solver(
+        TurbulenceSpace,
+        boundaries,
+        wall_markers,
+        dx,
+        wall_penalty_reaction,
+        initial_wall_distance=custom_initial_wall_distance,
+        floor_value=float(globals().get("SA_WALL_DISTANCE_SOLVE_FLOOR", 0.0)),
+    )
+    root_print("SA wall-distance mode: Dilgen penalized Poisson-like field")
+else:
+    if sa_wall_distance_mode not in {"reciprocal", "penalized_reciprocal", "yoon"}:
+        raise ValueError(
+            "SA_WALL_DISTANCE_MODE must be 'reciprocal', 'poisson', or 'poisson_penalized', got {!r}.".format(
+                sa_wall_distance_mode
+            )
+        )
+
+    (
+        wall_distance,
+        update_wall_distance_field,
+    ) = build_penalized_wall_distance_solver(
+        TurbulenceSpace, boundaries, wall_markers, dx, wall_penalty_fluid_indicator,
+        sa_wall_sigma, sa_wall_g0, sa_wall_penalty_alpha, sa_wall_penalty_power, sa_wall_g_floor,
+        newton_rtol=sa_wall_newton_rtol,
+        newton_atol=sa_wall_newton_atol,
+        newton_max_iters=sa_wall_newton_max_iters,
+        newton_relax=sa_wall_newton_relax,
+        penalty_homotopy=sa_wall_penalty_homotopy,
+        solid_guess_weight=sa_wall_initial_solid_guess,
+        extra_relaxations=sa_wall_extra_relaxations,
+        solid_threshold=sa_wall_solid_threshold,
+        initial_wall_distance=custom_initial_wall_distance,
+        prefer_pseudo_time=sa_wall_prefer_pseudo_time,
+    )
 # Initial SA field.
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", _sa_nu_tilde_initial_default))
 sa_nu_tilde_floor = float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12))
@@ -908,9 +1054,23 @@ if sa_nu_tilde_ceiling is not None:
 nu_laminar = Constant(MU_FLUID_VALUE / RHO_FLUID_VALUE)
 sa_nu_tilde_penalty_alpha_base = float(globals().get("SA_NU_TILDE_PENALTY_ALPHA", 1.0e3))
 sa_nu_tilde_penalty_alpha = Constant(sa_nu_tilde_penalty_alpha_base)
-sa_nu_tilde_penalty_reaction = sa_nu_tilde_penalty_alpha * (
-    positive_part(Constant(1.0) - rho_effective) ** float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
-)
+sa_nu_tilde_penalty_interpolation = str(
+    globals().get("SA_NU_TILDE_PENALTY_INTERPOLATION", "power")
+).strip().lower()
+if sa_nu_tilde_penalty_interpolation in {"brinkman", "dilgen", "chi"}:
+    sa_nu_tilde_penalty_reaction = (
+        sa_nu_tilde_penalty_alpha / max(float(ALPHA_SOLID), 1.0e-300)
+    ) * alpha(rho_effective)
+elif sa_nu_tilde_penalty_interpolation == "power":
+    sa_nu_tilde_penalty_reaction = sa_nu_tilde_penalty_alpha * (
+        positive_part(Constant(1.0) - rho_effective) ** float(globals().get("SA_NU_TILDE_PENALTY_N", 3.0))
+    )
+else:
+    raise ValueError(
+        "SA_NU_TILDE_PENALTY_INTERPOLATION must be 'power' or 'brinkman', got {!r}.".format(
+            sa_nu_tilde_penalty_interpolation
+        )
+    )
 sa_pseudo_time_stabilization = bool(globals().get("SA_PSEUDO_TIME_STABILIZATION", False))
 sa_pseudo_dt = float(globals().get("SA_PSEUDO_DT", 1.0))
 sa_pseudo_time_steps = max(1, int(globals().get("SA_PSEUDO_TIME_STEPS", 1)))
@@ -1044,12 +1204,52 @@ else:
     deformation = strain_tensor(u)
     dissipation_density = 0.5 * mu_effective * inner(deformation, deformation)
 
-# Objective: dissipation plus Brinkman drag.
-ObjFunctional = ObjectiveRegion * (
-    dissipation_density
-    + alpha(rho_effective) * inner(u, u)
-) * dx
-DissipationFunctional = ObjectiveRegion * dissipation_density * dx
+# Objective:
+#   - dissipation: Dilgen-style volume power loss with Brinkman drag.
+#   - average_inlet_pressure: Alexandersen-style pressure objective with p = 0 outlet.
+objective_type = str(globals().get("OBJECTIVE_TYPE", "dissipation")).strip().lower()
+if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
+    ObjFunctional = ObjectiveRegion * (
+        dissipation_density
+        + alpha(rho_effective) * inner(u, u)
+    ) * dx
+    objective_log_column = "J_dissipation_W_per_m"
+    objective_console_label = "J_dissipation"
+    objective_console_unit = " W/m"
+    root_print(
+        "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
+        "(2D unit-depth power, W/m)."
+    )
+elif objective_type in ("average_inlet_pressure", "inlet_pressure", "mean_inlet_pressure"):
+    inlet_pressure_functional = None
+    inlet_area = 0.0
+    one = Constant(1.0)
+    for inlet_marker in inlet_markers:
+        term = p * ds(inlet_marker)
+        inlet_pressure_functional = (
+            term if inlet_pressure_functional is None else inlet_pressure_functional + term
+        )
+        inlet_area += assemble(one * ds(inlet_marker))
+
+    inlet_area = float(inlet_area)
+    if inlet_pressure_functional is None or inlet_area <= 1.0e-14:
+        raise ValueError("Average inlet pressure objective needs a non-empty inlet boundary.")
+    ObjFunctional = Constant(1.0 / inlet_area) * inlet_pressure_functional
+    objective_log_column = "J_pressure_Pa"
+    objective_console_label = "J_pressure"
+    objective_console_unit = " Pa"
+    root_print(
+        "Objective type: J_pressure = average inlet pressure over inlet measure {:.6e} (Pa).".format(
+            inlet_area
+        )
+    )
+else:
+    raise ValueError(
+        "OBJECTIVE_TYPE must be 'dissipation' or 'average_inlet_pressure', got '{}'.".format(
+            objective_type
+        )
+    )
+ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx, nu_tilde_frozen)
 flow_test_u, flow_test_p = TestFunctions(FlowSpace)
@@ -1806,25 +2006,22 @@ def solve_forward_snes(solve_label=None):
 
 
 def solve_forward(solve_label=None):
-    """Dispatch the forward solve; IPCS final solves get an SNES polish by default."""
+    """Dispatch the final forward solve."""
     if FORWARD_FLOW_SOLVER == "snes":
         return solve_forward_snes(solve_label)
-    ipcs_result = solve_forward_ipcs(solve_label)
-    label_text = "" if solve_label is None else str(solve_label).lower()
-    polish_all = bool(globals().get("FORWARD_IPCS_SNES_POLISH_ALL", False))
-    polish_final = bool(globals().get("FORWARD_IPCS_FINAL_SNES_POLISH", True))
-    if polish_all or (polish_final and "final" in label_text):
-        solver_log("      [IPCS] polishing accepted iterate with monolithic SNES")
-        return solve_forward_snes("{}_snes_polish".format(solve_label))
-    return ipcs_result
+    if FORWARD_FLOW_SOLVER == "ipcs_snes_polish":
+        ipcs_result = solve_forward_ipcs(solve_label, allow_best_without_acceptance=True)
+        solver_log("      [IPCS] polishing best IPCS iterate with monolithic SNES")
+        solve_forward_snes("{}_snes_polish".format(solve_label))
+        return ipcs_result
+    return solve_forward_ipcs(solve_label)
 
 
 def solve_forward_picard(solve_label=None):
     """Use a configurable cheaper solve for frozen-SA Picard updates."""
-    picard_solver = str(globals().get("FORWARD_PICARD_FLOW_SOLVER", FORWARD_FLOW_SOLVER)).strip().lower()
-    if picard_solver in {"newton", "newtonls", "snes"}:
+    if FORWARD_PICARD_FLOW_SOLVER == "snes":
         return solve_forward_snes(solve_label)
-    if picard_solver == "ipcs":
+    if FORWARD_PICARD_FLOW_SOLVER == "ipcs":
         return solve_forward_ipcs(solve_label)
     raise ValueError("FORWARD_PICARD_FLOW_SOLVER must be either 'ipcs' or 'snes'.")
 
@@ -1836,6 +2033,88 @@ def finite_difference_check_iterations():
     elif not isinstance(raw_iterations, (list, tuple, set)):
         raw_iterations = [raw_iterations]
     return {int(value) for value in raw_iterations}
+
+
+def finite_difference_sample_active_positions(global_iter, sample_count):
+    raw_positions = globals().get("FINITE_DIFFERENCE_CHECK_ACTIVE_POSITIONS", None)
+    raw_dofs = globals().get("FINITE_DIFFERENCE_CHECK_DOF_INDICES", None)
+    active_position_by_dof = {int(dof): idx for idx, dof in enumerate(ActiveDV.tolist())}
+
+    if raw_dofs is not None:
+        if isinstance(raw_dofs, np.ndarray):
+            raw_dofs = raw_dofs.tolist()
+        elif not isinstance(raw_dofs, (list, tuple, set)):
+            raw_dofs = [raw_dofs]
+        positions = []
+        for dof in raw_dofs:
+            dof = int(dof)
+            if dof not in active_position_by_dof:
+                raise ValueError(
+                    "FINITE_DIFFERENCE_CHECK_DOF_INDICES contains inactive/unknown dof {}.".format(dof)
+                )
+            positions.append(active_position_by_dof[dof])
+        return np.asarray(positions, dtype=np.int64)
+
+    if raw_positions is not None:
+        if isinstance(raw_positions, np.ndarray):
+            raw_positions = raw_positions.tolist()
+        elif not isinstance(raw_positions, (list, tuple, set)):
+            raw_positions = [raw_positions]
+        positions = np.asarray([int(value) for value in raw_positions], dtype=np.int64)
+        if np.any(positions < 0) or np.any(positions >= int(ActiveDV.size)):
+            raise ValueError("FINITE_DIFFERENCE_CHECK_ACTIVE_POSITIONS contains an out-of-range index.")
+        return positions
+
+    rng = np.random.RandomState(int(globals().get("FINITE_DIFFERENCE_CHECK_SEED", 13)) + int(global_iter))
+    return rng.choice(int(ActiveDV.size), size=sample_count, replace=False)
+
+
+def density_dof_coordinates():
+    try:
+        coords = DensitySpace.tabulate_dof_coordinates()
+        return coords.reshape((DensitySpace.dim(), -1))
+    except RuntimeError:
+        return None
+
+
+def initialize_sensitivity_check_log(log_path):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "w") as handle:
+        handle.write(
+            "\t".join(
+                [
+                    "Stage",
+                    "InnerIter",
+                    "GlobalIter",
+                    "Mode",
+                    "CV",
+                    "ActivePosition",
+                    "DensityDof",
+                    "X",
+                    "Y",
+                    "Step",
+                    "BaseObjective",
+                    "AdjointDerivative",
+                    "FiniteDifferenceDerivative",
+                    "RelativeError",
+                    "PlusObjective",
+                    "MinusObjective",
+                ]
+            )
+            + "\n"
+        )
+
+
+def append_sensitivity_check_log_entry(log_path, values):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "a") as handle:
+        handle.write("\t".join(str(value) for value in values) + "\n")
 
 
 def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_objective, objective_gradient_active):
@@ -1853,9 +2132,10 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
         return
 
     fd_step = float(globals().get("FINITE_DIFFERENCE_CHECK_STEP", 1.0e-3))
-    rng = np.random.RandomState(int(globals().get("FINITE_DIFFERENCE_CHECK_SEED", 13)) + int(global_iter))
-    sampled_active_positions = rng.choice(int(ActiveDV.size), size=sample_count, replace=False)
+    sampled_active_positions = finite_difference_sample_active_positions(global_iter, sample_count)
     check_updated_turbulence = bool(globals().get("FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE", False))
+    clip_to_bounds = bool(globals().get("FINITE_DIFFERENCE_CHECK_CLIP_TO_BOUNDS", True))
+    coords = density_dof_coordinates()
 
     base_rho_values = rho.vector().get_local().copy()
     base_rho_f_values = rho_f.vector().get_local().copy()
@@ -1887,7 +2167,8 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
         perturbed_values = base_rho_values.copy()
         density_dof = ActiveDV[active_position]
         perturbed_values[density_dof] += float(delta)
-        perturbed_values = np.clip(perturbed_values, density_lower_values, density_upper_values)
+        if clip_to_bounds:
+            perturbed_values = np.clip(perturbed_values, density_lower_values, density_upper_values)
         rho.vector().set_local(perturbed_values)
         rho.vector().apply("insert")
         pde_filter_design_density(rho, rho_f)
@@ -1923,13 +2204,16 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
             if update_turbulence and not check_updated_turbulence:
                 continue
             root_print("  [FD check] mode: {}".format(mode_name))
-            for active_position in sampled_active_positions:
+            for cv_idx, active_position in enumerate(sampled_active_positions, start=1):
                 density_dof = ActiveDV[active_position]
-                max_step = min(
-                    base_rho_values[density_dof] - density_lower_values[density_dof],
-                    density_upper_values[density_dof] - base_rho_values[density_dof],
-                )
-                step = min(fd_step, 0.5 * max_step)
+                if clip_to_bounds:
+                    max_step = min(
+                        base_rho_values[density_dof] - density_lower_values[density_dof],
+                        density_upper_values[density_dof] - base_rho_values[density_dof],
+                    )
+                    step = min(fd_step, 0.5 * max_step)
+                else:
+                    step = fd_step
                 if step <= 1.0e-12:
                     root_print(
                         "    dof {} skipped: insufficient bound margin for FD step.".format(
@@ -1959,13 +2243,42 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
                     1.0e-30,
                 )
                 root_print(
-                    "    dof {} adj={:.6e} fd={:.6e} rel_err={:.3e} J0={:.6e}".format(
+                    "    CV{} dof {} adj={:.6e} fd={:.6e} rel_err={:.3e} J0={:.6e}".format(
+                        cv_idx,
                         int(density_dof),
                         adjoint_derivative,
                         fd_derivative,
                         rel_error,
                         float(base_objective),
                     )
+                )
+                if coords is not None and int(density_dof) < coords.shape[0]:
+                    xy = coords[int(density_dof)]
+                    x_coord = "{:.16e}".format(float(xy[0]))
+                    y_coord = "{:.16e}".format(float(xy[1])) if xy.size > 1 else "nan"
+                else:
+                    x_coord = "nan"
+                    y_coord = "nan"
+                append_sensitivity_check_log_entry(
+                    sensitivity_check_log_path,
+                    [
+                        int(stage_idx),
+                        int(inner_iter),
+                        int(global_iter),
+                        mode_name,
+                        "CV{}".format(cv_idx),
+                        int(active_position),
+                        int(density_dof),
+                        x_coord,
+                        y_coord,
+                        "{:.16e}".format(float(step)),
+                        "{:.16e}".format(float(base_objective)),
+                        "{:.16e}".format(float(adjoint_derivative)),
+                        "{:.16e}".format(float(fd_derivative)),
+                        "{:.16e}".format(float(rel_error)),
+                        "{:.16e}".format(float(plus_objective)),
+                        "{:.16e}".format(float(minus_objective)),
+                    ],
                 )
     finally:
         restore_base_state(refresh_wall_distance=check_updated_turbulence)
@@ -1993,7 +2306,7 @@ def summarize_linear_solver_failure(exc):
 # ===============================================================
 # IPCS forward solve
 # ===============================================================
-def solve_forward_ipcs(solve_label=None):
+def solve_forward_ipcs(solve_label=None, allow_best_without_acceptance=False):
     """Run IPCS to a steady state and store the result in w_fwd."""
     global ipcs_solve_counter
     global save_ipcs_residual_plots
@@ -2225,7 +2538,7 @@ def solve_forward_ipcs(solve_label=None):
             )
         )
         return float(best_du), float(best_dp)
-    if error_on_nonconvergence:
+    if error_on_nonconvergence and not allow_best_without_acceptance:
         raise RuntimeError(message)
     root_print("Warning: {}".format(message))
     return float(best_du), float(best_dp)
@@ -2266,7 +2579,11 @@ design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
 save_ipcs_residual_plots = (
     bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
-    and FORWARD_FLOW_SOLVER == "ipcs"
+    and (
+        final_flow_uses_ipcs()
+        or FORWARD_PICARD_FLOW_SOLVER == "ipcs"
+        or bool(globals().get("FORWARD_SNES_WARM_START_WITH_IPCS", False))
+    )
 )
 save_ipcs_residual_svgs = bool(globals().get("SAVE_IPCS_RESIDUAL_SVGS", False))
 ipcs_solve_counter = 0
@@ -2318,17 +2635,21 @@ df0dx_centered_out = ResilientVTKFile(os.path.join(df0dx_centered_dir, "plot_df0
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
+sensitivity_check_log_path = os.path.join(results_root, "SensitivityCheckLog.tsv")
 sa_clipping_log_path = os.path.join(results_root, "NuTildeClippingLog.txt")
+optimization_log_quantity_columns = (
+    "ViscousDissipation_design_W_per_m",
+    "dP_nondesign_Pa",
+    "dP_design_Pa",
+)
 initialize_optimization_log(
     log_path,
-    include_ipcs_residuals=(FORWARD_FLOW_SOLVER == "ipcs"),
-    pressure_drop_columns=(
-        "Dissipation",
-        "dP_static_nondesign",
-        "dP_static_design",
-    ),
+    include_ipcs_residuals=final_flow_uses_ipcs(),
+    pressure_drop_columns=optimization_log_quantity_columns,
+    objective_column=objective_log_column,
 )
 initialize_df0dx_log(df0dx_log_path)
+initialize_sensitivity_check_log(sensitivity_check_log_path)
 if save_sa_clipping_diagnostics:
     initialize_sa_clipping_log(sa_clipping_log_path)
 
@@ -2559,12 +2880,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 sa_model.nu_tilde0.assign(nu_tilde_frozen)
                 sa_model.nu_tilde1.assign(nu_tilde_frozen)
 
-        final_flow_solver_label = FORWARD_FLOW_SOLVER.upper()
-        if (
-            FORWARD_FLOW_SOLVER == "ipcs"
-            and bool(globals().get("FORWARD_IPCS_FINAL_SNES_POLISH", True))
-        ):
-            final_flow_solver_label = "IPCS + SNES polish"
+        final_flow_solver_label = format_forward_flow_solver_name(FORWARD_FLOW_SOLVER)
         solver_log("    [Final flow] {} with updated turbulent viscosity".format(final_flow_solver_label))
         final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward("stage{:02d}_iter{:03d}_final".format(
             stage_idx + 1, inner_count,
@@ -2593,7 +2909,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             root_print("MMA objective scale: initial objective {:.6e}.".format(objective_scale_reference))
         # MMA sees scaled objective values; logs keep physical values.
         f0val_mma = float(f0val) / objective_scale_reference
-        dissipation_now = assemble(DissipationFunctional)
+        viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
         )
@@ -2713,12 +3029,14 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             vol_fraction_now,
             vol_residual_now,
             pressure_drop_values=(
-                dissipation_now,
+                viscous_dissipation_design_now,
                 pressure_drop_nondesign_now,
                 pressure_drop_design_now,
             ),
-            du_ipcs=final_flow_du_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
-            dp_ipcs=final_flow_dp_ipcs if FORWARD_FLOW_SOLVER == "ipcs" else None,
+            pressure_drop_columns=optimization_log_quantity_columns,
+            objective_column=objective_log_column,
+            du_ipcs=final_flow_du_ipcs if final_flow_uses_ipcs() else None,
+            dp_ipcs=final_flow_dp_ipcs if final_flow_uses_ipcs() else None,
         )
 
         constraint_status_text = ""
@@ -2727,10 +3045,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} Dissipation={:.4e} dP_static_nondesign={:.4e} Pa dP_static_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_design={:.4e} W/m dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-            inner_count, iteration_elapsed, optimization_elapsed, f0val,
-            dissipation_now, pressure_drop_nondesign_now, pressure_drop_design_now,
+            inner_count, iteration_elapsed, optimization_elapsed,
+            objective_console_label, f0val, objective_console_unit,
+            viscous_dissipation_design_now, pressure_drop_nondesign_now, pressure_drop_design_now,
             obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
             constraint_status_text,

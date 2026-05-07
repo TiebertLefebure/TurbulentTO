@@ -115,6 +115,88 @@ def calculate_distance_field(space, boundaries_data, wall_markers, custom_dx, re
     return y
 
 
+def calculate_poisson_wall_distance_field(space, boundaries_data, wall_markers, custom_dx):
+    """Compute a Tucker-style Poisson wall-distance field."""
+    wall_bc = [
+        DirichletBC(space, Constant(0.0), boundaries_data, marker)
+        for marker in as_list(wall_markers)
+    ]
+
+    phi = Function(space)
+    phi_trial = TrialFunction(space)
+    z = TestFunction(space)
+
+    poisson_problem = inner(grad(phi_trial), grad(z)) * custom_dx - Constant(1.0) * z * custom_dx
+    solve(lhs(poisson_problem) == rhs(poisson_problem), phi, wall_bc)
+
+    grad_phi_norm = sqrt(inner(grad(phi), grad(phi)) + DOLFIN_EPS)
+    wall_distance = project(
+        sqrt(inner(grad(phi), grad(phi)) + Constant(2.0) * positive_part(phi) + DOLFIN_EPS)
+        - grad_phi_norm,
+        space,
+    )
+    enforce_scalar_floor(wall_distance, 0.0)
+    return wall_distance
+
+
+def build_penalized_poisson_wall_distance_solver(
+    space,
+    boundaries_data,
+    wall_markers,
+    custom_dx,
+    penalty_reaction,
+    initial_wall_distance=None,
+    floor_value=0.0,
+):
+    """
+    Compute Dilgen-style Poisson-like wall distance with porous-material damping.
+
+    Dilgen et al. use a Poisson-like wall-distance equation with homogeneous
+    wall values, penalized in porous/solid material in the same form as the SA
+    nu_tilde equation. The returned Function is updated in-place so existing
+    UFL forms keep seeing the current distance field.
+    """
+    wall_bc = [
+        DirichletBC(space, Constant(0.0), boundaries_data, marker)
+        for marker in as_list(wall_markers)
+    ]
+
+    phi = Function(space)
+    phi_trial = TrialFunction(space)
+    z = TestFunction(space)
+
+    wall_distance = Function(space)
+    if initial_wall_distance is not None:
+        if isinstance(initial_wall_distance, Function):
+            wall_distance.assign(initial_wall_distance)
+        else:
+            wall_distance.assign(project(initial_wall_distance, space))
+
+    a_phi = (
+        inner(grad(phi_trial), grad(z)) * custom_dx
+        + penalty_reaction * phi_trial * z * custom_dx
+    )
+    L_phi = Constant(1.0) * z * custom_dx
+
+    def rebuild_distance():
+        grad_phi_sq = inner(grad(phi), grad(phi))
+        updated_distance = project(
+            sqrt(grad_phi_sq + Constant(2.0) * positive_part(phi) + DOLFIN_EPS)
+            - sqrt(grad_phi_sq + DOLFIN_EPS),
+            space,
+        )
+        wall_distance.assign(updated_distance)
+        enforce_scalar_floor(wall_distance, float(floor_value))
+        return wall_distance
+
+    def update_poisson_distance():
+        solve(a_phi == L_phi, phi, wall_bc)
+        return rebuild_distance()
+
+    update_poisson_distance()
+    return wall_distance, update_poisson_distance
+
+
 def build_penalized_wall_distance_solver(
     space,
     boundaries_data,

@@ -39,7 +39,6 @@ OUTLET_Y_MAX = 2.0 / 3.0
 MU_FLUID_VALUE = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
-U_MAX_OUTLET = 3.0
 
 # ==================================================================================
 # Reynolds number: Re = U_MAX_INLET * L * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1
@@ -70,6 +69,8 @@ SNES_MAX_ITERS = 200
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 
+OUTLET_BC_TYPE = "pressure"
+OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Laminar/Results_DiffuserBorrvall_LaminarTO"
@@ -125,14 +126,4 @@ def build_velocity_profile_sets():
         width=inlet_width,
     )
 
-    outlet_center = 0.5 * (OUTLET_Y_MIN + OUTLET_Y_MAX)
-    outlet_width = OUTLET_Y_MAX - OUTLET_Y_MIN
-    u_outlet = Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=U_MAX_OUTLET,
-        y_c=outlet_center,
-        width=outlet_width,
-    )
-
-    return [u_inlet], [u_outlet]
+    return [u_inlet], []

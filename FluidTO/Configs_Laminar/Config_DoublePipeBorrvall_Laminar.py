@@ -52,7 +52,6 @@ OUTLET_SEGMENTS = [
 MU_FLUID_VALUE = 1.0 / 6.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
-U_MAX_OUTLETS = [1.0, 1.0]
 
 
 # ============================================================================================
@@ -83,7 +82,9 @@ SNES_MAX_ITERS = 200
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0] # Initial value = 0.3
 ETA_I = 0.50
 
-ENABLE_PRESSURE_PIN = True
+OUTLET_BC_TYPE = "pressure"
+OUTLET_PRESSURE_VALUE = 0.0
+ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Laminar/Results_DoublePipeBorrvall_LaminarTO"
 
@@ -145,8 +146,6 @@ def _validate_port_configuration():
         raise ValueError("MARK['outlet'] length must match OUTLET_SEGMENTS length.")
     if len(U_MAX_INLETS) != len(INLET_SEGMENTS):
         raise ValueError("U_MAX_INLETS length must match INLET_SEGMENTS length.")
-    if len(U_MAX_OUTLETS) != len(OUTLET_SEGMENTS):
-        raise ValueError("U_MAX_OUTLETS length must match OUTLET_SEGMENTS length.")
 
 
 _validate_port_configuration()
@@ -190,8 +189,4 @@ def build_velocity_profile_sets():
         _build_horizontal_profile(u_max, segment[0], segment[1])
         for u_max, segment in zip(U_MAX_INLETS, INLET_SEGMENTS)
     ]
-    outlet_profiles = [
-        _build_horizontal_profile(u_max, segment[0], segment[1])
-        for u_max, segment in zip(U_MAX_OUTLETS, OUTLET_SEGMENTS)
-    ]
-    return inlet_profiles, outlet_profiles
+    return inlet_profiles, []

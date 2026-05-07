@@ -27,32 +27,32 @@ where $\partial \Omega$ is the boundary of the domain and $\mathbf{n}$ is the ou
 Solving the full Reynolds-Averaged Navier-Stokes (RANS) equations is numerically challenging due to the non-linear convective terms, the saddle-point nature of the coupled velocity-pressure system, and the intense cross-coupling with the turbulence model. To achieve a stable and efficient steady-state solution in FEniCS that seamlessly translates into the topology optimization framework, the governing equations are rigorously decoupled.
 
 \subsection{Decoupling the Physics: The Picard Iteration Scheme}
-Because the momentum equation relies on the turbulent eddy viscosity ($\nu_t$), and the turbulence transport equation relies on the convective velocity ($\mathbf{u}$), solving the entire fluid-turbulence system simultaneously in a massive monolithic matrix frequently leads to severe ill-conditioning and solver divergence. 
+Because the momentum equation relies on the turbulent eddy viscosity ($\nu_t$), and the turbulence transport equation relies on the convective velocity ($\mathbf{u}$), solving the entire fluid-turbulence system simultaneously in a massive monolithic matrix frequently leads to ill-conditioning and solver divergence. 
 
-To resolve this, the forward physics are decoupled using a \textbf{Picard iteration scheme} (successive substitution), a highly robust approach for segregated RANS solvers \cite{Ferziger2012, Versteeg2007}. During each Picard step, the flow solver advances using the eddy viscosity from the previous iteration. The newly updated velocity field is then passed to the Spalart-Allmaras solver to calculate a new eddy viscosity field. This alternating sequence forms the outer loop of the solver, iteratively updating the decoupled equations until the fully coupled physical system reaches a steady-state equilibrium.
+To resolve this, the forward physics are decoupled using a \textbf{Picard iteration scheme} (successive substitution), a robust approach for segregated RANS solvers \cite{Ferziger2012, Versteeg2007}. During each Picard step, the flow solver advances using the eddy viscosity from the previous iteration. The newly updated velocity field is then passed to the Spalart-Allmaras solver to calculate a new eddy viscosity field. This alternating sequence forms the outer loop of the solver, iteratively updating the decoupled equations until the fully coupled physical system reaches a steady-state equilibrium.
 
 \subsection{Incremental Pressure Correction Scheme (IPCS)}
 Within the Picard loop, the Navier-Stokes equations themselves must be solved. Rather than solving for velocity and pressure simultaneously, this implementation utilizes an Incremental Pressure Correction Scheme (IPCS). This algorithmic splitting is fundamentally based on the fractional-step projection methods originally pioneered by Chorin \cite{Chorin1968} and Temam \cite{Temam1969}. To nurse the non-linear convective momentum terms to a stable steady state, a pseudo-time stepping approach ($\Delta t$) is employed strictly for the flow variables. The IPCS algorithm splits the fluid equations into three sequential steps per pseudo-time step:
 \begin{enumerate}
-	\item \textbf{Tentative Velocity Step:} The momentum equation is solved using the pressure field from the previous iteration ($p^n$) to compute an intermediate, non-divergence-free velocity field ($\mathbf{u}^*$). Because this is a RANS framework, the diffusion term utilizes the effective kinematic viscosity, $(\nu + \nu_t)$. Treating the convective term explicitly and the diffusive term implicitly, the semi-discrete equation is:
+	\item \textbf{Tentative velocity step:} The momentum equation is solved using the pressure field from the previous iteration ($p^n$) to compute an intermediate, non-divergence-free velocity field ($\mathbf{u}^*$). Because this is a RANS framework, the diffusion term utilizes the effective kinematic viscosity, $(\nu + \nu_t)$. Treating the convective term explicitly and the diffusive term implicitly, the semi-discrete equation is:
 	\begin{equation}
 		\frac{\mathbf{u}^* - \mathbf{u}^n}{\Delta t} + (\mathbf{u}^n \cdot \nabla) \mathbf{u}^* - \nabla \cdot \left( (\nu + \nu_t^n) \nabla \mathbf{u}^* \right) = -\nabla p^n
 	\end{equation}
 	
-	\item \textbf{Pressure Correction Step:} A Poisson equation is solved to find the pressure variation that enforces the continuity constraint ($\nabla \cdot \mathbf{u}^{n+1} = 0$). The equation for the new pressure field ($p^{n+1}$) is derived as:
+	\item \textbf{Pressure correction step:} A Poisson equation is solved to find the pressure variation that enforces the continuity constraint ($\nabla \cdot \mathbf{u}^{n+1} = 0$). The equation for the new pressure field ($p^{n+1}$) is derived as:
 	\begin{equation}
 		\nabla^2 p^{n+1} = \nabla^2 p^n + \frac{1}{\Delta t} \nabla \cdot \mathbf{u}^*
 	\end{equation}
 	
-	\item \textbf{Velocity Update Step:} The tentative velocity is strictly corrected using the gradient of the pressure difference to yield a mass-conserving velocity field ($\mathbf{u}^{n+1}$) for the current iteration:
+	\item \textbf{Velocity update step:} The tentative velocity is strictly corrected using the gradient of the pressure difference to yield a mass-conserving velocity field ($\mathbf{u}^{n+1}$) for the current iteration:
 	\begin{equation}
 		\mathbf{u}^{n+1} = \mathbf{u}^* - \Delta t \nabla (p^{n+1} - p^n)
 	\end{equation}
 \end{enumerate}
-The simulation is deemed fully converged to a steady state when the $L_2$ norm of the residual difference between successive Picard iterations falls below a strictly defined tolerance limit ($\epsilon_{tol}$) for both the fluid and turbulence fields.
+The simulation is deemed fully converged to a steady state when the $L_2$ norm of the residual difference between successive Picard iterations falls below a defined tolerance limit ($\epsilon_{tol}$) for both the fluid and turbulence fields.
 
 \section{Detailed Formulation of the Spalart-Allmaras Model}
-As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. Unlike the transient flow equations, the SA transport equation is solved in its purely steady-state form within the Picard loop. The steady transport equation for the working variable $\tilde{\nu}$ is given by:
+As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. Unlike the transient flow equations, the SA transport equation is solved in its purely steady-state form within the Picard loop. The steady transport equation for the continuous nonlinear working variable $\tilde{\nu}$ is given by:
 \begin{equation}
 	\mathbf{u} \cdot \nabla \tilde{\nu} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{y} \right)^2 + \frac{1}{\sigma} \left[ \nabla \cdot \left( (\nu + \tilde{\nu}) \nabla \tilde{\nu} \right) + c_{b2} (\nabla \tilde{\nu})^2 \right]
 	\label{eq:sa_steady_transport}
@@ -81,17 +81,17 @@ The upper bound of $10$ on $r$ ensures numerical stability during solver initial
 
 It should be explicitly noted that the original formulation by Spalart and Allmaras \cite{Spalart1994} includes additional geometric trip functions ($f_{t1}$ and $f_{t2}$) designed to manually trigger the transition from laminar to turbulent flow at specific user-defined coordinates. However, following the topology optimization methodology established by Yoon \cite{Yoon2016}, these transition functions are deliberately omitted from this thesis. Because the topological boundaries are unknown *a priori* and evolve during optimization, tracking discrete trip points is mathematically unfeasible; therefore, the model assumes a fully turbulent flow regime.
 
-To close the system, the standard empirical calibration constants formulated by Spalart and Allmaras are utilized throughout the FEniCS implementation \cite{NasaTurb}:
+To close the system, the standard empirical calibration constants formulated by Spalart and Allmaras are utilized throughout the FEniCS implementation \cite{NasaTurb}. Notably, the von Kármán constant is set to $0.41$ to perfectly align with the standard OpenFOAM and generalized industrial implementations[cite: 3]:
 \begin{align*}
 	c_{b1} &= 0.1355 & \sigma &= 2/3 & c_{b2} &= 0.622 \\
-	\kappa &= 0.4187 & c_{w2} &= 0.3 & c_{w3} &= 2.0 \\
+	\kappa &= 0.41 & c_{w2} &= 0.3 & c_{w3} &= 2.0 \\
 	c_{v1} &= 7.1 & c_{w1} &= \frac{c_{b1}}{\kappa^2} + \frac{1 + c_{b2}}{\sigma}
 \end{align*}
 
 \subsection{Wall-Distance Calculation via the Relaxed Eikonal Equation}
 A major computational challenge in the SA model is the calculation of the wall distance $y$. In a standard static CFD simulation, $y$ is purely geometric and can be pre-computed. However, to ensure this verification solver translates seamlessly into the topology optimization code (where solid boundaries evolve continuously), the implementation abandons discrete geometric searches in favor of a PDE-based approach. 
 
-The true geometric wall distance satisfies the standard Eikonal equation, $|\nabla y| = 1$. However, this formulation contains singularities at the medial axes of the domain. To guarantee continuous differentiability—a strict requirement for later adjoint derivations—a relaxed Eikonal equation proposed by Yoon \cite{Yoon2016} is solved:
+The true geometric wall distance satisfies the standard Eikonal equation, $|\nabla y| = 1$. However, this formulation contains singularities at the medial axes of the domain. To guarantee continuous differentiability—a requirement for later adjoint derivations—a relaxed Eikonal equation proposed by Yoon \cite{Yoon2016} is solved:
 \begin{equation}
 	\nabla G \cdot \nabla G + \sigma_w G (\nabla \cdot \nabla G) = (1 + 2\sigma_w) G^4
 \end{equation}
@@ -122,9 +122,11 @@ This system is implemented in the core solver suite within the \texttt{Utilities
 \end{lstlisting}
 
 \section{Variational Formulation and FEniCS Implementation}
-The standard Galerkin weak formulation is constructed by multiplying the steady transport Equation~\ref{eq:sa_steady_transport} by a test function $\xi$ and applying integration by parts to the diffusive terms. Because the equation is highly non-linear, robust convergence is heavily dependent on the quality of the mesh and the stability of the external velocity field provided by the Picard outer loop.
+The standard Galerkin weak formulation is constructed by multiplying the steady transport Equation~\ref{eq:sa_steady_transport} by a test function $\xi$ and applying integration by parts to the diffusive terms. Because the equation is highly non-linear, robust convergence is dependent on the stability of the external velocity field provided by the Picard outer loop.
 
-The core SA physics, boundary conditions, continuous Eikonal formulations, and the overarching Picard iteration scheme were derived independently for this thesis. However, the underlying FEniCS solver architecture was structurally inspired by an open-source $k-\epsilon$ repository developed by Marcibál \cite{Marcibal2024, joove_keps}, specifically regarding the procedural execution of the variational forms and the implementation of the Incremental Pressure Correction Scheme (IPCS). The explicit translation of the SA mathematical formulation is handled by the \texttt{SpalartAllmarasSteady} class within the \texttt{TurbulenceModel\_SpalartAllmaras.py} script. As demonstrated in Listing~\ref{lst:sa_fenics}, the Unified Form Language (UFL) mirrors the analytical weak form precisely, utilizing the most recent convective velocity field (\texttt{external\_velocity}) passed from the IPCS flow solver.
+To manage this non-linearity, the equation is linearized within the Picard iteration scheme by freezing certain parameters using the most recent value of the working variable, $\tilde{\nu}^0$. Specifically, the turbulence production and cross-diffusion terms are treated as explicit sources evaluated using $\tilde{\nu}^0$[cite: 3]. Conversely, the wall destruction term is linearized into an implicit reaction sink by scaling the continuous $\tilde{\nu}$ against the frozen variable, taking the form $c_{w1} f_w (\tilde{\nu}^0 / y^2) \tilde{\nu}$[cite: 3]. 
+
+The explicit translation of this mathematical formulation is handled by the \texttt{SpalartAllmarasSteadyState} class within the \texttt{TurbulenceModel\_SpalartAllmaras.py} script[cite: 3]. As demonstrated in Listing~\ref{lst:sa_fenics}, the Unified Form Language (UFL) mirrors the analytical weak form utilizing the most recent convective velocity field (\texttt{external\_velocity}) passed from the IPCS flow solver.
 
 \begin{lstlisting}[language=Python, caption={FEniCS implementation of the steady-state SA standard Galerkin weak formulation. Python dictionary lookups have been simplified for readability.}, label={lst:sa_fenics}]
 	def construct_forms(self, external_velocity):
@@ -134,7 +136,7 @@ The core SA physics, boundary conditions, continuous Eikonal formulations, and t
 	# Steady-state SA transport equation weak form
 	FNT = (
 	dot(external_velocity, nabla_grad(self._nu_tilde)) * self._xi * self._dx
-	+ inner((self._nu_laminar + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi)) * self._dx
+	+ inner((self._nu + self._nu_tilde0) / sigma * grad(self._nu_tilde), grad(self._xi)) * self._dx
 	+ self._react_nt * self._nu_tilde * self._xi * self._dx
 	- self._source_nt * self._xi * self._dx
 	)
@@ -146,20 +148,20 @@ The core SA physics, boundary conditions, continuous Eikonal formulations, and t
 \section{General Solver Configuration and Numerical Parameters}
 Before detailing the specific verification benchmarks, it is necessary to establish the general numerical configuration of the FEniCS solver. Both the channel flow and the U-bend verifications were simulated using the segregated algorithmic structure detailed earlier: an outer Picard fixed-point loop couples the fluid momentum equations to the Spalart-Allmaras transport equation, while an inner IPCS resolves the velocity-pressure subsystem via pseudo-time stepping. 
 
-Because the U-bend domain introduces severe geometric curvature, strong convective transport, and adverse pressure gradients, it represents a significantly more demanding numerical challenge than a fully developed, unidirectional channel flow. Consequently, the U-bend simulations necessitated stricter numerical controls to maintain stability, including a heavily refined IPCS pseudo-time step ($\Delta t = 1.0 \times 10^{-4}$ s) and much tighter under-relaxation of the turbulence field updates ($\alpha_{\tilde{\nu}} = 0.01$). To ensure strict scientific reproducibility without disrupting the narrative flow of this verification, the comprehensive matrices detailing all physical boundary conditions, geometric dimensions, and exact numerical solver parameters for both benchmarks have been compiled and are documented extensively in Sections~\ref{sec:app_A_channel} and \ref{sec:app_A_ubend} of Appendix~\ref{app:A_baseline_configurations} (specifically in Tables~\ref{tab:app_A_channel_numerical} and \ref{tab:app_A_ubend_numerical}).
+Because the U-bend domain introduces severe geometric curvature, strong convective transport, and adverse pressure gradients, it represents a significantly more demanding numerical challenge than a fully developed, unidirectional channel flow. Consequently, the U-bend simulations necessitated specific numerical controls to maintain stability, including a heavily refined IPCS pseudo-time step ($\Delta t = 1.0 \times 10^{-4}$ s), a maximum of 400 coupled Picard iterations, up to 800 IPCS steps per Picard update, a pressure relaxation factor of 1.0, and tighter under-relaxation of the turbulence field updates ($\alpha_{\tilde{\nu}} = 0.01$)[cite: 2]. To ensure reproducibility, the comprehensive matrices detailing all physical boundary conditions, geometric dimensions, and exact numerical solver parameters for both benchmarks have been compiled and are documented extensively in Sections~\ref{sec:app_A_channel} and \ref{sec:app_A_ubend} of Appendix~\ref{app:A_baseline_configurations} (specifically in Tables~\ref{tab:app_A_channel_numerical} and \ref{tab:app_A_ubend_numerical}).
 
 \section{Verification Benchmark 1: Channel Flow}
-To verify the fundamental correctness of the custom fluid and turbulence solvers, the code was first tested on a standard 2D turbulent channel flow. To cleanly isolate and verify turbulence production, wall damping, and Picard coupling without the artifacts of a developing boundary layer, this benchmark was strictly formulated as a pressure-driven periodic channel rather than a conventional inlet-outlet duct. 
+To verify the fundamental correctness of the custom fluid and turbulence solvers, the code was first tested on a standard 2D turbulent channel flow. To cleanly isolate and verify turbulence production, wall damping, and Picard coupling without the artifacts of a developing boundary layer, this benchmark was formulated as a pressure-driven periodic channel rather than a conventional inlet-outlet duct. 
 
-The velocity field ($\mathbf{u}$) and Spalart-Allmaras working variable ($\tilde{\nu}$) were constrained periodically between the streamwise boundaries, while the top and bottom boundaries were treated as standard no-slip walls ($\mathbf{u} = 0, \tilde{\nu} = 0$). Flow was driven entirely by a fixed pressure drop from the upstream plane ($p=2$ Pa) to the downstream plane ($p=0$ Pa). Based on a reference bulk velocity of $U_{\mathrm{ref}}=18.5$ m/s and utilizing the full channel height ($H=2.0$ m) as the characteristic length scale, the solver was targeted to resolve a fully turbulent flow regime at a channel Reynolds number of $Re_H \approx 20,300$. By explicitly defining the Reynolds number based on the channel height rather than the mathematical hydraulic diameter, this formulation directly aligns with standard academic conventions for fundamental 2D channel flow verification. The complete definition of the geometric, physical, and boundary-condition parameters can be found in Table~\ref{tab:app_A_channel_physical} of Appendix~\ref{app:A_baseline_configurations}. To rigorously verify the mathematical accuracy of the formulation, the FEniCS results were compared directly against the commercial Ansys Fluent solver operating under identical periodic boundary conditions.
+The velocity field ($\mathbf{u}$) and Spalart-Allmaras working variable ($\tilde{\nu}$) were constrained periodically between the streamwise boundaries, while the top and bottom boundaries were treated as standard no-slip walls ($\mathbf{u} = 0, \tilde{\nu} = 0$). Flow was driven entirely by a fixed pressure drop from the upstream plane ($p=2$ Pa) to the downstream plane ($p=0$ Pa). Based on a reference bulk velocity of $U_{\mathrm{ref}}=18.5$ m/s and utilizing the full channel height ($H=2.0$ m) as the characteristic length scale, the solver was targeted to resolve a fully turbulent flow regime at a channel Reynolds number of $Re_H \approx 20,300$. By explicitly defining the Reynolds number based on the channel height rather than the mathematical hydraulic diameter, this formulation directly aligns with academic conventions for fundamental 2D channel flow verification. The complete definition of the geometric, physical, and boundary-condition parameters can be found in Table~\ref{tab:app_A_channel_physical} of Appendix~\ref{app:A_baseline_configurations}. 
 
 \subsection{Mesh Resolution Requirements}
-Because the SA formulation is a "low-Reynolds" model that does not utilize empirical wall functions, it requires mathematical integration directly through the viscous sublayer. Consequently, standard uniform computational grids are physically insufficient. To satisfy this strict boundary layer requirement, a custom structured inflation mesh was generated for the channel flow. Because the domain is a simple periodic rectangle, this highly anisotropic grid was constructed programmatically utilizing NumPy arrays and converted into a FEniCS-compatible format via the open-source \texttt{meshio} library. Based on the target bulk Reynolds number, this approach explicitly enforced a physical first-cell height of approximately $1.7 \times 10^{-3}$ meters, guaranteeing a non-dimensional wall distance of $y^+ \approx 1$ across the entire domain. 
+Because the SA formulation is a "low-Reynolds" model that does not utilize empirical wall functions, it requires mathematical integration directly through the viscous sublayer. To satisfy this strict boundary layer requirement, a custom structured inflation mesh was generated for the channel flow. Because the domain is a simple periodic rectangle, this highly anisotropic grid was constructed programmatically utilizing NumPy arrays and converted into a FEniCS-compatible format via the \texttt{meshio} library. Based on the target bulk Reynolds number, this approach enforced a physical first-cell height of approximately $1.7 \times 10^{-3}$ meters, aiming for a non-dimensional wall distance of $y^+ \approx 1$ across the entire domain. 
 
-Furthermore, to guarantee that the numerical results were not influenced by spatial discretization, a formal grid independence study was conducted. The full results of this spatial verification, proving convergence, are documented in Appendix~\ref{subsec:app_A_channel_mesh}. Specifically, the geometric properties of the mesh hierarchy are detailed in Table~\ref{tab:app_A_channel_meshes}, and visual confirmation of asymptotic convergence is provided by the velocity profiles in Figure~\ref{fig:app_A_channel_mesh_independence}.
+Furthermore, to verify that the numerical results were not heavily influenced by spatial discretization, a formal grid independence study was conducted. The full results of this spatial verification are documented in Appendix~\ref{subsec:app_A_channel_mesh}. Specifically, the geometric properties of the mesh hierarchy are detailed in Table~\ref{tab:app_A_channel_meshes}, and visual confirmation of asymptotic convergence is provided by the velocity profiles in Figure~\ref{fig:app_A_channel_mesh_independence}.
 
 \subsection{FEniCS vs. Ansys Comparison}
-Prior to this comparative analysis, the Ansys baseline itself was rigorously verified for grid independence to ensure a mathematically robust standard (see Table~\ref{tab:app_A_channel_meshes_ansys} and Figure~\ref{fig:app_A_channel_mesh_indep_ansys} in Appendix~\ref{app:A_baseline_configurations}). The channel flow was then simulated in FEniCS using the decoupled Picard iteration method and compared against the Ansys Fluent baseline. To validate the solver accuracy both qualitatively and quantitatively, velocity contours were compared, and flow data was extracted along a wall-normal line probe spanning the width of the fully developed channel.
+Prior to this comparative analysis, the Ansys baseline itself was verified for grid independence to ensure a robust standard (see Table~\ref{tab:app_A_channel_meshes_ansys} and Figure~\ref{fig:app_A_channel_mesh_indep_ansys} in Appendix~\ref{app:A_baseline_configurations}). The channel flow was then simulated in FEniCS using the decoupled Picard iteration method and compared against the Ansys Fluent baseline. 
 
 \begin{figure}[htpb]
 	\centering
@@ -189,22 +191,42 @@ Prior to this comparative analysis, the Ansys baseline itself was rigorously ver
 	\label{fig:channel_benchmark}
 \end{figure}
 
-As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation visually replicate the Ansys Fluent baseline. More importantly, the quantitative line plots confirm that the velocity profiles generated by the custom FEniCS model match the Ansys reference data impeccably. The custom solver successfully resolves the logarithmic region of the turbulent boundary layer and accurately predicts the turbulent diffusion toward the channel center. This perfect alignment provides strict mathematical proof that the core Navier-Stokes solver, the relaxed Eikonal field, and the highly non-linear SA production/destruction terms are functioning correctly before introducing the geometric complexities of the U-bend.
+As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation show good agreement with the Ansys Fluent baseline. Furthermore, the quantitative line plots confirm that the velocity profiles generated by the custom FEniCS model closely track the Ansys reference data. The custom solver resolves the logarithmic region of the turbulent boundary layer and predicts the turbulent diffusion toward the channel center. To provide a rigorous, objective comparison, the quantitative errors and macroscopic metrics are summarized in Table~\ref{tab:channel_errors}.
+
+\begin{table}[!ht]
+	\centering
+	\small
+	\caption{Quantitative comparison of flow metrics and extracted errors for the 2D channel benchmark.}
+	\label{tab:channel_errors}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabular}{l c c c}
+		\hline
+		\textbf{Metric} & \textbf{Ansys Fluent} & \textbf{Custom FEniCS} & \textbf{Relative Error / Difference} \\
+		\hline
+		Bulk Velocity ($U_\mathrm{bulk}$) [m/s] & [TBD] & [TBD] & [TBD]\% \\
+		Friction Coefficient ($C_f$) & [TBD] & [TBD] & [TBD]\% \\
+		Max Pointwise Velocity Error & -- & -- & [TBD]\% \\
+		Relative $L_2$ Velocity Error & -- & -- & [TBD]\% \\
+		\hline
+	\end{tabular}
+\end{table}
+
+This strong alignment supports the verification that the core Navier-Stokes solver, the relaxed Eikonal field, and the SA production/destruction terms are functioning as intended before introducing the geometric complexities of the U-bend.
 
 \section{Verification Benchmark 2: U-Bend Geometry}
-Following the successful channel flow verification, the solver was tested on the highly convective, separating secondary flows of the U-bend geometry evaluated in Chapter~\ref{ch:turbulence_modeling}. It is important to distinguish the physical scope of this specific verification test from the standard Ansys Verification Manual (VMFL048) case. 
+Following the channel flow verification, the solver was tested on the highly convective separating flows of the U-bend geometry evaluated in Chapter~\ref{ch:turbulence_modeling}. 
 
-As discussed in Appendix~\ref{subsec:app_A_ubend_truncation}, the verification performed here utilized a strictly modified computational domain to ensure efficiency. First, the domain was reduced to a 2D geometry corresponding directly to the symmetry mid-plane of the full 3D case. Second, to reduce unnecessary computational overhead during these high-resolution verification sweeps, the highly extended straight inlet and outlet sections ($1.555$ m) of the standard benchmark were explicitly truncated to strictly $30D$ ($0.840$ m). The mathematical justification for this truncation, proving that it successfully isolates the curvature physics without artificially impacting the boundary layer separation, is explicitly plotted in Figure~\ref{fig:app_A_ubend_truncation_proof} of Appendix~\ref{subsec:app_A_ubend_truncation}.
+As discussed in Appendix~\ref{subsec:app_A_ubend_truncation}, the verification performed here utilized a modified computational domain to ensure efficiency. First, the domain was reduced to a 2D geometry corresponding directly to the symmetry mid-plane of the full 3D case. Since the FEniCS domain is mathematically a 2D planar approximation, it inherently cannot resolve true 3D Dean secondary vortices. Instead, this benchmark serves to validate the 2D symmetry-plane approximation and the solver's ability to capture curvature-induced separation and momentum redistribution. Second, to reduce unnecessary computational overhead during these verification sweeps, the extended straight inlet and outlet sections ($1.555$ m) of the standard benchmark were truncated to $30D$ ($0.840$ m). The mathematical justification for this truncation is plotted in Figure~\ref{fig:app_A_ubend_truncation_proof} of Appendix~\ref{subsec:app_A_ubend_truncation}.
 
-To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the FEniCS domain is mathematically a 2D planar approximation of the symmetry mid-plane, the 3D physical pipe diameter ($D = 0.028$ m) and geometric radius of curvature ($R_c = 0.125$ m) were strictly retained as the characteristic length scales. Conserving these parameters ensures that the computed Reynolds number ($Re_D \approx 44,700$) and Dean number ($De \approx 15,000$) identically match the 3D Ansys reference case, maintaining non-dimensional consistency and correctly governing the internal secondary flows. For a complete overview of the physical setup and boundary conditions applied to this geometry, the reader is referred to Table~\ref{tab:app_A_ubend_physical} in Appendix~\ref{app:A_baseline_configurations}.
+To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the domain is 2D, the 3D physical pipe diameter ($D = 0.028$ m) and geometric radius of curvature ($R_c = 0.125$ m) were retained as the characteristic length scales. Conserving these parameters ensures that the computed Reynolds number ($Re_D \approx 44,700$) and Dean number ($De \approx 15,000$) match the 3D Ansys reference case. For an overview of the physical setup and boundary conditions applied to this geometry, the reader is referred to Table~\ref{tab:app_A_ubend_physical} in Appendix~\ref{app:A_baseline_configurations}.
 
 \subsection{Mesh Resolution Requirements}
-Because this formulation utilizes a standard Galerkin weak form without spatial upwind stabilization, numerical stability in highly convective flows is strictly dependent on adequate grid resolution. As established in the channel flow benchmark, the SA model requires integration entirely through the viscous sublayer. 
+Because this formulation utilizes a standard Galerkin weak form without spatial upwind stabilization, numerical stability in highly convective flows relies on adequate grid resolution. 
 
-Unlike the simple rectangular channel where a programmatic NumPy script was sufficient, the U-bend geometry features curved inner and outer arcs, complex corner transitions, and anisotropic boundary-layer inflation around non-orthogonal walls. To manage this severe geometric complexity while satisfying the $y^+ \approx 1$ resolution requirement, a custom mesh was generated using the advanced open-source mesh generator \textbf{Gmsh} \cite{Geuzaine2009}. The first element height adjacent to the wall was strictly controlled to $1.20 \times 10^{-5}$ meters across the entire domain. As documented comprehensively in Appendix~\ref{subsec:app_A_ubend_mesh}, strict independence studies were conducted. The strict inflation parameters and element densities of the unstructured Gmsh hierarchy are listed in Table~\ref{tab:app_A_ubend_meshes}, and the extracted velocity profiles confirming grid convergence at the bend exit are illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}.
+The U-bend geometry features curved inner and outer arcs, complex corner transitions, and anisotropic boundary-layer inflation around non-orthogonal walls. To manage this geometric complexity while satisfying the $y^+ \approx 1$ resolution requirement, a custom mesh was generated using \textbf{Gmsh} \cite{Geuzaine2009}. The first element height adjacent to the wall was controlled to $1.20 \times 10^{-5}$ meters across the entire domain. As documented in Appendix~\ref{subsec:app_A_ubend_mesh}, independence studies were conducted. The inflation parameters and element densities of the Gmsh hierarchy are listed in Table~\ref{tab:app_A_ubend_meshes}, and the extracted velocity profiles confirming grid convergence at the bend exit are illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}.
 
 \subsection{FEniCS vs. Ansys Comparison}
-Having mathematically validated the spatial resolution of the FEniCS mesh, an equivalent grid independence study was simultaneously executed for the commercial Ansys Fluent baseline (detailed in Table~\ref{tab:app_A_ubend_meshes_ansys} and Figure~\ref{fig:app_A_ubend_mesh_indep_ansys} of Appendix~\ref{subsec:app_A_ubend_mesh}). With both solvers operating on spatially converged grids, an independent Ansys Fluent simulation was executed on the exact shortened 2D domain. This served as a strict 1:1 baseline to verify the accuracy of the custom FEniCS implementation. 
+Having validated the spatial resolution of the FEniCS mesh, an equivalent grid independence study was simultaneously executed for the commercial Ansys Fluent baseline (detailed in Table~\ref{tab:app_A_ubend_meshes_ansys} and Figure~\ref{fig:app_A_ubend_mesh_indep_ansys} of Appendix~\ref{subsec:app_A_ubend_mesh}). With both solvers operating on spatially converged grids, an independent Ansys Fluent simulation was executed on the shortened 2D domain. 
 
 \begin{figure}[htpb]
 	\centering
@@ -230,37 +252,36 @@ Having mathematically validated the spatial resolution of the FEniCS mesh, an eq
 		\caption{Velocity Profiles}
 		\label{fig:ubend_profiles}
 	\end{subfigure}
-	\caption{Verification of the 2D U-Bend Flow ($Re_D \approx 44,700$, $De \approx 15,000$). Comparison of the qualitative velocity contours between the Ansys Fluent baseline (a) and the custom FEniCS implementation (b), showing successful capture of the separation bubble, alongside the quantitative velocity profiles extracted at the bend exit (c).}
+	\caption{Verification of the 2D U-Bend Flow ($Re_D \approx 44,700$, $De \approx 15,000$). Comparison of the qualitative velocity contours between the Ansys Fluent baseline (a) and the custom FEniCS implementation (b), showing separation characteristics, alongside the quantitative velocity profiles extracted at the bend exit (c).}
 	\label{fig:ubend_verification}
 \end{figure}
 
-As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and secondary flow separation bubbles observed in the qualitative velocity contours demonstrate excellent visual agreement. However, Research Question 2 strictly demands \textit{quantitative} validation. To satisfy this requirement, velocity data was extracted along a cross-sectional line probe positioned directly at the bend exit, marking the exact transition from the end of the curvature to the start of the straight outlet section. 
+As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and flow separation regions observed in the qualitative velocity contours demonstrate visual agreement. To provide a more robust assessment, velocity data was extracted along a cross-sectional line probe positioned directly at the bend exit. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary layer growth and the momentum shift toward the outer wall. 
 
-The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely. The FEniCS implementation accurately replicates the boundary layer growth, the momentum shift toward the outer wall, and the turbulent diffusion predicted by the commercial solver, thereby confirming the mathematical integrity of the code.
-
-Furthermore, accurately resolving these localized secondary flow structures and separation bubbles is a prerequisite for correctly predicting the overall energy lost by the fluid. To verify this macroscopic behavior, the total pressure drop ($\Delta p$) across the entire U-bend domain was extracted and compared in Table~\ref{tab:ubend_pressure_drop}.
+Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers.
 
 \begin{table}[!ht]
 	\centering
 	\small
-	\caption{Comparison of the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain.}
-	\label{tab:ubend_pressure_drop}
+	\caption{Quantitative comparison of flow metrics and extracted errors for the 2D U-bend benchmark.}
+	\label{tab:ubend_errors}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabular}{l c c}
+	\begin{tabular}{l c c c}
 		\hline
-		\textbf{Solver} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative Difference} \\
+		\textbf{Metric} & \textbf{Ansys Fluent} & \textbf{Custom FEniCS} & \textbf{Relative Error / Difference} \\
 		\hline
-		Ansys Fluent (Baseline) & [TBD] & -- \\
-		Custom FEniCS & [TBD] & [TBD]\% \\
+		Pressure Drop ($\Delta p$) [Pa] & [TBD] & [TBD] & [TBD]\% \\
+		Max Pointwise Velocity Error & -- & -- & [TBD]\% \\
+		Relative $L_2$ Velocity Error & -- & -- & [TBD]\% \\
 		\hline
 	\end{tabular}
 \end{table}
 
-As demonstrated in the table, the custom FEniCS solver matches the commercial Ansys baseline to within a relative difference of [TBD]\%. This strong agreement confirms that the solver accurately captures both the localized boundary layer physics and the global energy dissipation, establishing a highly reliable foundation for the pressure-drop minimization objectives in the subsequent topology optimization campaigns.
+This general agreement in both localized velocity gradients and global energy dissipation indicates that the framework provides a credible foundation for the pressure-drop minimization objectives in the subsequent topology optimization campaigns.
 
 \section{Conclusion}
-This chapter has detailed the mathematical formulation, stabilization strategy, and rigorous verification of the steady-state Spalart-Allmaras model within the FEniCS framework. By successfully replicating the benchmark results of Ansys Fluent, this implementation directly answers the second research question of this thesis: achieving numerical stability and quantitative agreement in a custom finite element solver, laying a fully consistent foundation for the topology optimization routines developed in the subsequent chapters. 
+This chapter has detailed the mathematical formulation, stabilization strategy, and verification of the steady-state Spalart-Allmaras model within the FEniCS framework. By evaluating the solver against Ansys Fluent benchmarks, this implementation addresses the second research question of this thesis: achieving numerical stability and establishing reasonable quantitative agreement in a custom finite element solver to support topology optimization routines. 
 
-First, numerical stability was successfully achieved without the need for complex mathematical stabilization artifacts. By decoupling the Navier-Stokes and Spalart-Allmaras equations via a rigorous Picard iteration scheme, and utilizing an Incremental Pressure Correction Scheme (IPCS) to manage the convective fluid terms, the highly non-linear system was robustly driven to equilibrium. Supported by high-density mesh resolution and Yoon's relaxed Eikonal equation, this standard Galerkin formulation completely avoided the numerical oscillations that typically plague turbulent finite-element solvers. 
+First, numerical stability was achieved without the need for complex mathematical stabilization artifacts. By decoupling the Navier-Stokes and Spalart-Allmaras equations via a Picard iteration scheme, and utilizing an Incremental Pressure Correction Scheme (IPCS) to manage the convective fluid terms, the highly non-linear system was driven to equilibrium. Supported by high-density mesh resolution and Yoon's relaxed Eikonal equation, this standard Galerkin formulation effectively mitigated numerical oscillations. 
 
-Second, quantitative agreement was thoroughly verified. The solver produced velocity and eddy viscosity profiles that perfectly matched the commercial Ansys Fluent baseline in both simple periodic channel flows ($Re_H \approx 20,300$) and the highly convective, geometrically complex U-bend ($Re_D \approx 44,700$, $De \approx 15,000$). Consequently, this decoupled Picard FEniCS solver is proven to be a mathematically sound and reliable fluid dynamics engine, specifically structured to support the continuous adjoint topology optimization campaigns presented in Chapters~\ref{ch:topology_optimization_methodology} and \ref{ch:benchmark_results}.
+Second, quantitative agreement was assessed. The solver produced velocity profiles that showed good agreement with the commercial Ansys Fluent baseline in simple periodic channel flows ($Re_H \approx 20,300$) and adequately captured the 2D boundary layer features in a curved U-bend ($Re_D \approx 44,700$, $De \approx 15,000$). While approximations inherent to 2D domains limit the direct translation to true 3D Dean vortices, this decoupled Picard FEniCS solver demonstrates sufficient accuracy in capturing curvature-induced momentum shifts. This suggests that the implementation is suitable for driving the continuous adjoint topology optimization campaigns presented in Chapters~\ref{ch:topology_optimization_methodology} and \ref{ch:benchmark_results}.

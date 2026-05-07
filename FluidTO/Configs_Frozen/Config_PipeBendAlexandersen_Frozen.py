@@ -9,15 +9,16 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 # Configuration: Alexandersen 2026 Pipe-Bend - Turbulent Frozen (SA)
 #
 # Geometry, mesh size, and boundary conditions follow Figure 10 and
-# Table 3 of Bayat, Li, and Alexandersen (2026), while the turbulence
-# closure remains the in-house frozen Spalart-Allmaras implementation.
+# Table 3 of Alexandersen (2026). The turbulence closure deliberately
+# remains the in-house frozen Spalart-Allmaras implementation for the
+# thesis comparison.
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_guided.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_guided.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
@@ -59,13 +60,17 @@ REYNOLDS_NUMBER = 5000.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
+ALPHA_FLUID = 0.0
+ALPHA_SOLID = 100.0
 
 # ==============================================================================================
-# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
+# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5000
 # ==============================================================================================
 
+# SA inlet data are modelling choices for this solver, not values from Alexandersen's k-epsilon paper.
 SA_TURBULENCE_INTENSITY = 0.075
 SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.05
+SA_REFERENCE_VELOCITY = U_MAX_INLET
 SA_REFERENCE_LENGTH = INLET_HEIGHT
 SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
@@ -73,41 +78,49 @@ SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
-SA_SUPG_STABILIZATION = True
+SA_SUPG_STABILIZATION = False
 SA_SUPG_TAU_SCALE = 1.0
-
 SA_PSEUDO_TIME_STABILIZATION = False
 SA_PSEUDO_DT = 1.0e-4
 SA_PSEUDO_TIME_STEPS = 3
 
-SAVE_SA_CLIPPING_DIAGNOSTICS = True
+SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
-# Topology-created solids act as walls for the reciprocal wall-distance solve
+# Topology-created solids act as walls for the reciprocal wall-distance solve.
+# The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
+# P_con=4 are used here as the closest SA analogues: wall penalty amplitude
+# and solid-indicator exponent.
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [10.0, 30.0, 100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3] # Start gently, then force eddy viscosity out of solid material
-SA_NU_TILDE_PENALTY_N = 3.0
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [1.0e3] * 4
+SA_NU_TILDE_PENALTY_N = 4.0
 
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
-SA_WALL_PENALTY_ALPHA_SCHEDULE = [100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3, 1.0e3, 1.0e3] # Same continuation idea for design-induced wall distance
-SA_WALL_PENALTY_N = 3.0
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [1.0e3] * 4
+SA_WALL_PENALTY_N = 4.0
 SA_WALL_G_FLOOR = 1.0e-8
 
 SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_SOLID_THRESHOLD = 0.10
+SA_WALL_SOLID_THRESHOLD = 0.50
 SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
 # ================================================================== #
 # MMA Objective and Continuation Parameters
 VOL_FRAC = 0.25
+OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-Q_PENAL_SCHEDULE = [0.05, 0.20, 0.50, 1.00, 1.50, 2.50, 3.00, 3.00]
-BETA_PROJ_SCHEDULE = [0.10, 0.50, 1.00, 2.00, 4.00, 8.00, 16.00, 24.00]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.045, 0.03, 0.02, 0.01, 0.005, 0.002]
-MAX_INNER_ITERATIONS_SCHEDULE = [12, 20, 35, 50, 70, 80, 90, 90]
+# Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
+# Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
+# when ALPHA_FLUID = 0, so q_penal = 1 / q_a.
+PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 30.0, 15.0]
+Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
+BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
+# Alexandersen reports the continuation values but not the MMA move limit.
+MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
+MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
 # ================================================================== #
 
 LINEAR_SOLVER = "mumps"
@@ -115,10 +128,11 @@ LINEAR_SOLVER = "mumps"
 # FORWARD_FLOW_SOLVER = "snes" or FORWARD_FLOW_SOLVER = "ipcs".
 # Use IPCS for frozen-SA Picard updates, then use SNES for the final flow state
 # that feeds the adjoint. This avoids high-Re Newton failures during Picard.
-FORWARD_FLOW_SOLVER = "snes"
-FORWARD_PICARD_FLOW_SOLVER = "ipcs"
+
+FORWARD_FLOW_SOLVER = "snes"        # Solver for [Final Flow]
+FORWARD_PICARD_FLOW_SOLVER = "ipcs" # Solver for [Picard] flow
 FORWARD_SNES_WARM_START_WITH_IPCS = True
-FORWARD_SNES_IPCS_WARM_START_MODE = "initial"
+FORWARD_SNES_IPCS_WARM_START_MODE = "final" # "initial" or "final"
 FORWARD_SNES_STRICT_FINAL_SOLVE = False
 
 # =========================================================================== #
@@ -131,6 +145,10 @@ FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 220
 
 FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
+
+FORWARD_SNES_ADAPTIVE_CONVECTION = True
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 16
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
@@ -209,7 +227,8 @@ FORWARD_IPCS_RELAXATION_REDUCTION_FACTOR = 0.7
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
-FILTER_RADIUS_IN_CELLS = 3.0
+FILTER_BASE_LENGTH = H_MAX
+FILTER_RADIUS_IN_CELLS = 4.0
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
@@ -262,37 +281,3 @@ def mark_boundaries(mesh):
 def build_velocity_profile_sets():
     u_inlet = Expression(("u_max", "0.0"), degree=0, u_max=U_MAX_INLET)
     return [u_inlet], []
-
-# ================================================
-# === Diagnostic tests for Frozen Turbulent TO ===
-# ================================================
-# --- Step 3: restore real design, reintroduce TO turbulence coupling gently ---
-
-Q_PENAL_SCHEDULE = [0.05, 0.20, 0.50]
-BETA_PROJ_SCHEDULE = [0.10, 0.50, 1.00]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.045]
-MAX_INNER_ITERATIONS_SCHEDULE = [3, 3, 3]
-
-INITIAL_DENSITY_VALUE = VOL_FRAC
-INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
-
-SA_SUPG_STABILIZATION = True
-SA_SUPG_TAU_SCALE = 0.2
-SA_PSEUDO_TIME_STABILIZATION = False
-
-SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_SOLID_THRESHOLD = 0.25
-SA_WALL_PENALTY_N = 6.0
-SA_WALL_PENALTY_ALPHA_SCHEDULE = [0.0, 0.0, 10.0]
-
-SA_NU_TILDE_PENALTY_N = 6.0
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [0.0, 0.0, 1.0]
-
-PICARD_STEPS = 3
-TURBULENCE_RELAXATION = 0.20
-SAVE_SA_CLIPPING_DIAGNOSTICS = True
-
-FORWARD_FLOW_SOLVER = "ipcs"
-FORWARD_PICARD_FLOW_SOLVER = "ipcs"
-FORWARD_IPCS_FINAL_SNES_POLISH = False
-FORWARD_IPCS_ERROR_ON_NONCONVERGENCE = True

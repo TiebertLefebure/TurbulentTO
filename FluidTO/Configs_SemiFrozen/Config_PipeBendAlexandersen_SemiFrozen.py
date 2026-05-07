@@ -16,8 +16,8 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_guided.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_guided.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
@@ -106,17 +106,28 @@ STATE_LINE_SEARCH = "bt"
 STATE_RTOL = 1.0e-6
 STATE_ATOL = 1.0e-8
 STATE_MAX_ITERS = 120
+
 STATE_ACCEPTED_RESIDUAL_FACTOR = 1.5
 STATE_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
+STATE_ADAPTIVE_COUPLING = True
+STATE_MIN_COUPLING_STEP = 0.01
+STATE_MAX_ADAPTIVE_COUPLING_STEPS = 16
 
 STATE_TURBULENCE_COUPLING_SCHEDULE = [
-    {"convection_weight": 0.00, "weight": 0.00, "max_iters": 80, "atol": 1.5e-3, "accept_norm": 1.5e-3},
+    {"convection_weight": 0.00, "weight": 0.00, "max_iters": 80,  "atol": 1.5e-3, "accept_norm": 1.5e-3},
     {"convection_weight": 0.25, "weight": 0.00, "max_iters": 120, "atol": 1.2e-3, "accept_norm": 1.2e-3},
-    {"convection_weight": 0.50, "weight": 0.00, "max_iters": 140, "atol": 1.0e-3, "accept_norm": 1.0e-3},
-    {"convection_weight": 0.75, "weight": 0.15, "max_iters": 180, "atol": 9.0e-4, "accept_norm": 9.0e-4},
-    {"convection_weight": 1.00, "weight": 0.50, "max_iters": 220, "atol": 8.0e-4, "accept_norm": 8.0e-4},
-    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 300, "atol": 7.5e-4, "accept_norm": 7.5e-4},
+    {"convection_weight": 0.50, "weight": 0.00, "max_iters": 160, "atol": 1.0e-3, "accept_norm": 1.5e-3},
+    {"convection_weight": 0.65, "weight": 0.00, "max_iters": 180, "atol": 1.0e-3, "accept_norm": 1.8e-3},
+    {"convection_weight": 0.80, "weight": 0.00, "max_iters": 200, "atol": 1.0e-3, "accept_norm": 2.0e-3},
+    {"convection_weight": 1.00, "weight": 0.00, "max_iters": 220, "atol": 1.0e-3, "accept_norm": 2.0e-3},
+
+    {"convection_weight": 1.00, "weight": 0.10, "max_iters": 180, "atol": 9.0e-4, "accept_norm": 2.0e-3},
+    {"convection_weight": 1.00, "weight": 0.25, "max_iters": 200, "atol": 8.0e-4, "accept_norm": 1.8e-3},
+    {"convection_weight": 1.00, "weight": 0.50, "max_iters": 240, "atol": 7.5e-4, "accept_norm": 1.5e-3},
+    {"convection_weight": 1.00, "weight": 0.75, "max_iters": 280, "atol": 7.5e-4, "accept_norm": 1.2e-3},
+    {"convection_weight": 1.00, "weight": 1.00, "max_iters": 320},
 ]
+
 STATE_RECOVERY_ATTEMPTS = [
     {
         "label": "current-iterate line-search retry",

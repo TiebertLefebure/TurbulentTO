@@ -77,10 +77,10 @@ The boundary layer is traditionally divided into three distinct regions based on
 where $y$ is the absolute distance from the wall, $\nu$ is the kinematic viscosity ($\mu/\rho$), and $u_\tau = \sqrt{\tau_w/\rho}$ is the friction velocity derived from the wall shear stress ($\tau_w$) \cite{Pope2000}.
 
 \begin{enumerate}
-	\item \textbf{The Viscous Sublayer ($y^+ < 5$):} Immediately adjacent to the wall, turbulent fluctuations are damped out by kinematic constraints.
+	\item \textbf{The viscous sublayer ($y^+ < 5$):} Immediately adjacent to the wall, turbulent fluctuations are damped out by kinematic constraints.
 	Viscous shear dominates, and the velocity profile is strictly linear ($u^+ = y^+$).
-	\item \textbf{The Buffer Layer ($5 < y^+ < 30$):} A transition region where both viscous and turbulent shear stresses are of equal magnitude.
-	\item \textbf{The Log-Law Region ($y^+ > 30$):} Farther from the wall, turbulence dominates, and the velocity follows a logarithmic distribution predicted by the von Kármán constant \cite{Versteeg2007}.
+	\item \textbf{The buffer layer ($5 < y^+ < 30$):} A transition region where both viscous and turbulent shear stresses are of equal magnitude.
+	\item \textbf{The log-law region ($y^+ > 30$):} Farther from the wall, turbulence dominates, and the velocity follows a logarithmic distribution predicted by the von Kármán constant \cite{Versteeg2007}.
 \end{enumerate}
 
 High-Reynolds models (like the standard $k-\epsilon$ model) use empirical "wall functions" to bridge the gap between the wall and the log-law region, requiring the first computational mesh element to be placed at $y^+ > 30$.
@@ -109,7 +109,7 @@ Detailed derivations of the model constants and wall damping functions are defer
 
 \section{Evaluation of Curvature Effects and the Dean Number}
 \label{sec:curvature_effects}
-Despite its computational advantages for topology optimization, the standard SA model relies on a single length scale tied to the nearest wall distance, making it mathematically blind to the anisotropic physics of streamline curvature.
+Despite its computational advantages for topology optimization, the standard SA model relies on a single length scale tied to the nearest wall distance. As it lacks an explicit rotation/curvature correction and remains constrained by the Boussinesq eddy-viscosity assumption, it struggles to capture the anisotropic physics of streamline curvature.
 When fluid passes through a bend, centrifugal forces induce secondary flows perpendicular to the main flow direction.
 To quantify the strength of these secondary flows, the dimensionless Dean number ($De$) is utilized:
 \begin{equation}
@@ -146,12 +146,12 @@ This confirms that the failure is not attributed to inertial scaling, but is str
 	\label{fig:abuhatira_bend}
 \end{figure}
 
-While the literature clearly establishes that the SA model is viable at $De \approx 9,000$ and fails to capture inner-wall physics at $De \approx 30,000$, the specific operational threshold between these states must be defined to justify its use in topology optimization.
-Therefore, to explicitly isolate the threshold where the model breaks down, rigorous benchmark studies were subsequently conducted within Ansys Fluent.
+While the literature clearly establishes that the SA model is viable at $De \approx 9,000$ and fails to capture inner-wall physics at $De \approx 30,000$, a bracketed or case-specific threshold between these states must be estimated to justify its use in topology optimization.
+Therefore, to better evaluate where the model begins to break down, rigorous benchmark studies were subsequently conducted within Ansys Fluent.
 
 \section{Benchmark Studies in Ansys Fluent}
 \label{sec:ansys_benchmarks}
-To investigate the exact physical breaking point of the SA model, benchmark simulations were performed using \textbf{Ansys Fluent}.
+To investigate where the SA model's accuracy deteriorates, benchmark simulations were performed using \textbf{Ansys Fluent}.
 The study focused on two distinct, fully three-dimensional (3D) internal flow geometries: a $180^\circ$ U-bend and a tighter $90^\circ$ pipe bend.
 To ensure a standardized and rigorously tested numerical baseline, the computational meshes, fluid properties, and boundary conditions for these simulations were adopted directly from the official Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}.
 Specifically, the $90^\circ$ bend corresponds to verification case VMFL030, while the 3D U-bend corresponds to case VMFL048.
@@ -162,20 +162,20 @@ To evaluate the accuracy of the one-equation model, the results were compared di
 The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$.
 Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$.
 Consistent with the findings of Apalowo for moderate bends, the SA model performed well under these conditions.
-As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model accurately replicate the bulk flow distribution of the $k-\omega$ SST model. Furthermore, the quantitative velocity profiles perfectly match the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
+As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model accurately replicate the bulk flow distribution of the $k-\omega$ SST model. Furthermore, the quantitative velocity profiles agree well with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
 
 \begin{figure}[htpb]
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with actual k-omega contour file
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{$k-\omega$ SST Contour}
 		\label{fig:ubend_komega}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with actual SA contour file
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{Spalart-Allmaras Contour}
 		\label{fig:ubend_sa}
 	\end{subfigure}
@@ -186,7 +186,7 @@ As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity co
 		\centering
 		\includegraphics[width=\textwidth]{VMFL048-velocity-profiles.png}
 		\caption{Velocity Profiles}
-		\label{fig:ubend_profiles}
+		\label{fig:ch2_ubend_profiles}
 	\end{subfigure}
 	\caption{Flow predictions for a $180^\circ$ U-bend ($R_c \approx 4.46D$, $Re_D \approx 44,700$, $De \approx 15,000$). The SA model accurately matches the higher-fidelity $k-\omega$ SST contours and directly aligns with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.}
 	\label{fig:ansys_ubend_comparison}
@@ -197,20 +197,20 @@ The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by a
 Despite operating at a very similar bulk Reynolds number of $Re_D \approx 43,000$ compared to the U-bend, this significantly tighter bend radius pushed the Dean number up to $De \approx 18,000$.
 Because the bulk flow speed and Reynolds number remain effectively constant between these two benchmark cases, this comparison successfully isolates the geometric effect of streamline curvature.
 
-As shown in Figure~\ref{fig:ansys_90bend_comparison}, examining the quantitative velocity profile at the bend exit ($\theta = 90^\circ$) clearly demonstrates the breakdown of the SA model. Driven purely by the tighter bend radius and amplified anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall ($y/D = 0$) when compared against both the $k-\omega$ SST prediction and the experimental data from Enayet et al. \cite{Enayet1982}. This failure is also visually apparent when comparing the side-by-side velocity contours.
+As shown in Figure~\ref{fig:ansys_90bend_comparison}, examining the quantitative velocity profile at the bend exit ($\theta = 90^\circ$) clearly demonstrates the breakdown of the SA model. Driven primarily by the tighter bend radius and amplified anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall ($y/D = 0$) when compared against both the $k-\omega$ SST prediction and the experimental data from Enayet et al. \cite{Enayet1982}. This failure is also visually apparent when comparing the side-by-side velocity contours.
 
 \begin{figure}[htpb]
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with actual k-omega contour file
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{$k-\omega$ SST Contour}
 		\label{fig:90bend_komega}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with actual SA contour file
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{Spalart-Allmaras Contour}
 		\label{fig:90bend_sa}
 	\end{subfigure}
@@ -232,6 +232,6 @@ This chapter directly addresses the first research question regarding the predic
 The theoretical breakdown and Ansys benchmark studies confirm that for internal geometries with moderate curvature (up to $De \approx 15,000$), the SA model performs accurately and successfully captures the primary flow physics.
 Furthermore, because it is a wall-resolved model, it avoids the numerical pitfalls of empirical wall functions, making it exceptionally well-suited for boundary-evolving topology optimization.
 However, its physical limitation lies in the isotropic Boussinesq assumption.
-When streamline curvature induces strong anisotropic secondary flows (heuristically observed to cause model breakdown beyond a threshold of $De \approx 18,000$), the uncompensated SA model systematically overpredicts eddy viscosity and fails to capture flow separation.
+When streamline curvature induces strong anisotropic secondary flows (heuristically observed to cause model breakdown in this case beyond a threshold of $De \approx 18,000$), the uncompensated SA model systematically overpredicts eddy viscosity and fails to capture flow separation.
 Consequently, while the SA model provides the necessary numerical stability to drive the optimization algorithms in FEniCS, the final topological designs must be critically verified.
 Any complex manifold generated by the SA optimizer must be subsequently evaluated in commercial software using a higher-fidelity two-equation model to confirm its true aerodynamic performance.

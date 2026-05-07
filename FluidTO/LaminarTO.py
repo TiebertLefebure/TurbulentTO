@@ -178,12 +178,43 @@ inlet_profiles = as_list(inlet_profiles)
 outlet_profiles = as_list(outlet_profiles)
 
 u_noslip = Constant((0.0, 0.0))
+outlet_bc_type = str(globals().get("OUTLET_BC_TYPE", "velocity")).strip().lower()
+if outlet_bc_type not in ("velocity", "pressure"):
+    raise ValueError("OUTLET_BC_TYPE must be either 'velocity' or 'pressure'.")
+use_outlet_velocity_bc = outlet_bc_type == "velocity"
+use_outlet_pressure_bc = outlet_bc_type == "pressure"
+use_pressure_pin = bool(globals().get("ENABLE_PRESSURE_PIN", True))
+if use_outlet_pressure_bc and use_pressure_pin:
+    use_pressure_pin = False
+outlet_pressure_value = Constant(float(globals().get("OUTLET_PRESSURE_VALUE", 0.0)))
+
+if len(inlet_profiles) != len(inlet_markers):
+    raise ValueError(
+        "Expected {} inlet velocity profiles, got {}.".format(
+            len(inlet_markers), len(inlet_profiles),
+        )
+    )
+if use_outlet_velocity_bc and len(outlet_profiles) != len(outlet_markers):
+    raise ValueError(
+        "Expected {} outlet velocity profiles, got {}.".format(
+            len(outlet_markers), len(outlet_profiles),
+        )
+    )
+
+root_print("Outlet BC type: {}".format(outlet_bc_type))
 
 bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
-bcu_outlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
-bc_NS = bcu_walls + bcu_inlet + bcu_outlet
-if globals().get("ENABLE_PRESSURE_PIN", True):
+bcu_outlet = (
+    [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
+    if use_outlet_velocity_bc else []
+)
+bcp_outlet = (
+    [DirichletBC(FlowSpace.sub(1), outlet_pressure_value, boundaries, m) for m in outlet_markers]
+    if use_outlet_pressure_bc else []
+)
+bc_NS = bcu_walls + bcu_inlet + bcu_outlet + bcp_outlet
+if use_pressure_pin:
     bcp_pin = DirichletBC(
         FlowSpace.sub(1), Constant(0.0),
         build_pressure_pin_expression_from_config(globals()), "pointwise",
@@ -199,9 +230,12 @@ if callable(adjoint_velocity_bc_builder):
 else:
     bcu_walls_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in wall_markers]
     bcu_inlet_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in inlet_markers]
-    bcu_outlet_adj = [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in outlet_markers]
-    bc_NS_adj = bcu_walls_adj + bcu_inlet_adj + bcu_outlet_adj
-if globals().get("ENABLE_PRESSURE_PIN", True):
+    bc_NS_adj = bcu_walls_adj + bcu_inlet_adj
+    if use_outlet_velocity_bc:
+        bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in outlet_markers]
+if use_outlet_pressure_bc:
+    bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(1), Constant(0.0), boundaries, m) for m in outlet_markers]
+if use_pressure_pin:
     bcp_pin_adj = DirichletBC(
         FlowSpaceAdj.sub(1), Constant(0.0),
         build_pressure_pin_expression_from_config(globals()), "pointwise",
@@ -254,7 +288,14 @@ else:
 ObjFunctional = AreaOfInterest * (
     dissipation_density + alpha(rho_effective) * inner(u, u)
 ) * dx
-DissipationFunctional = AreaOfInterest * dissipation_density * dx
+objective_log_column = "J_dissipation_W_per_m"
+objective_console_label = "J_dissipation"
+objective_console_unit = " W/m"
+root_print(
+    "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
+    "(2D unit-depth power, W/m)."
+)
+ViscousDissipationFunctional = AreaOfInterest * dissipation_density * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx)
 lagrangian_form = ObjFunctional + state_form
@@ -290,9 +331,14 @@ u_out = File(reset_vtk_series(os.path.join(u_dir, "plot_u.pvd"), COMM))
 p_out = File(reset_vtk_series(os.path.join(p_dir, "plot_p.pvd"), COMM))
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
+optimization_log_quantity_columns = (
+    "ViscousDissipation_design_W_per_m",
+    "dP_design_Pa",
+)
 initialize_optimization_log(
     log_path,
-    pressure_drop_columns=("Dissipation", "dP_static_design"),
+    pressure_drop_columns=optimization_log_quantity_columns,
+    objective_column=objective_log_column,
 )
 
 
@@ -447,7 +493,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         p_out << w_fwd.sub(1)
 
         f0val = assemble(ObjFunctional)
-        dissipation_now = assemble(DissipationFunctional)
+        viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         pressure_drop_static_design_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
         )
@@ -503,17 +549,20 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             vol_fraction_now,
             vol_residual_now,
             pressure_drop_values=(
-                dissipation_now,
+                viscous_dissipation_design_now,
                 pressure_drop_static_design_now,
             ),
+            pressure_drop_columns=optimization_log_quantity_columns,
+            objective_column=objective_log_column,
         )
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s J={:.4e} Dissipation={:.4e} dP_static_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_design={:.4e} W/m dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
-            inner_count, iteration_elapsed, optimization_elapsed, f0val,
-            dissipation_now, pressure_drop_static_design_now,
+            inner_count, iteration_elapsed, optimization_elapsed,
+            objective_console_label, f0val, objective_console_unit,
+            viscous_dissipation_design_now, pressure_drop_static_design_now,
             obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
         ))

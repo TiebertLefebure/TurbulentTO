@@ -1,0 +1,13 @@
+{
+  "bulk_velocity_target": 5.0,
+  "bulk_velocity_integrated": 5.0,
+  "half_height": 0.1,
+  "height": 0.2,
+  "kinematic_viscosity": 5e-05,
+  "reynolds_number_half_height": 10000.0,
+  "point_count": 513,
+  "iterations": 57,
+  "residual": 8.633397670203733e-09,
+  "pressure_gradient_over_density": 0.7395900411313509,
+  "model": "1D fully developed plane-channel Spalart-Allmaras no-ft2 precursor"
+}

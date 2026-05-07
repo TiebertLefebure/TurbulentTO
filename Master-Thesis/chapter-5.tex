@@ -6,34 +6,57 @@
 }
 
 \section{Introduction}
-With the mathematical framework for turbulent topology optimization established in Chapter~\ref{ch:topology_optimization_methodology}, this chapter presents the resulting optimized topologies and rigorously evaluates their fluid dynamic performance. The objective is not merely to demonstrate that turbulent optimization yields different geometries than laminar assumptions, a fundamental engineering necessity strictly quantified in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}, but to verify the physical credibility of the Spalart-Allmaras (SA) driven designs through independent computational fluid dynamics (CFD) analysis. 
+With the mathematical framework for turbulent topology optimization established in Chapter~\ref{ch:topology_optimization_methodology}, this chapter presents the resulting optimized topologies and systematically evaluates their fluid dynamic performance. The objective is to demonstrate that turbulent optimization yields different geometries than laminar assumptions—a fundamental engineering necessity quantified in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}—and to verify the physical credibility of the Spalart-Allmaras (SA) driven designs through independent computational fluid dynamics (CFD) analysis. 
 
-Before delving into the cross-code CFD validation, it is critical to address an underlying engineering question: is the immense computational cost and mathematical complexity of a fully coupled turbulent optimization framework actually justified? To answer this, each benchmark evaluated in this chapter was also optimized under simplified laminar assumptions ($Re=1$). By actively ignoring convective momentum and turbulent dissipation, these laminar baselines highlight exactly what happens when an optimizer is blind to high-Reynolds flow physics. The resulting topological differences and the severe performance penalties incurred by the laminar designs when subjected to turbulent flows are comprehensively documented in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Throughout the benchmark sections below, the reader is guided to these comparative appendix sections, which definitively prove that incorporating turbulent physics during the design phase is a strict requirement to avoid massive flow separation and minimize overall energy dissipation.
+Before delving into the cross-code CFD validation, an underlying engineering question is evaluated: is the computational cost of a RANS-SA topology optimization framework justified? To explore this, each benchmark evaluated in this chapter was also optimized under simplified laminar assumptions ($Re=1$). By actively ignoring convective momentum and turbulent dissipation, these laminar baselines highlight what happens when an optimizer is blind to high-Reynolds flow physics. The resulting topological differences and the performance penalties incurred by the laminar designs when subjected to turbulent flows are documented in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Throughout the benchmark sections below, the reader is guided to these comparative appendix sections, which indicate that incorporating turbulent physics during the design phase is an important consideration to mitigate flow separation and minimize overall energy dissipation.
 
-To achieve this comprehensive validation, a three-stage evaluation pipeline is utilized. First, the turbulent topology optimization is executed within the custom FEniCS framework, analyzing the fluid routing and eddy viscosity distributions. Second, the optimized continuous design fields are extracted as sharp, discrete geometries and exported to Ansys Fluent. These geometries are re-analyzed using the identical SA model to quantify cross-code consistency and assess the impact of geometry extraction. Finally, the designs are evaluated in Ansys using the higher-fidelity SST $k-\omega$ model to determine the sensitivity of the performance metrics to the underlying turbulence closure, particularly in regimes characterized by high Dean numbers and flow separation.
+To achieve this validation, a three-stage evaluation pipeline is utilized. First, the turbulent topology optimization is executed within the custom FEniCS framework using frozen-turbulence sensitivities, analyzing the fluid routing and eddy viscosity distributions. Second, the optimized continuous design fields are extracted as sharp, discrete geometries—including their non-design domains—and exported to Ansys Fluent. These geometries are re-analyzed using the identical SA model to quantify cross-code consistency and assess the impact of geometry extraction. Finally, the designs are evaluated in Ansys using the higher-fidelity SST $k-\omega$ model to determine the sensitivity of the performance metrics to the underlying turbulence closure, particularly in regimes characterized by high Dean numbers and flow separation.
 
-\section{Boundary Conditions and Evaluation Metrics}
+\section{Validation Protocol and Evaluation Metrics}
 \label{sec:boundary_conditions_metrics}
-To accurately capture the physics of internal turbulent manifolds, the boundary conditions for all benchmark cases strictly utilize uniform inlet velocity profiles combined with a prescribed turbulence intensity (TI), diverging from the fully developed parabolic profiles typical of laminar topology optimization. Furthermore, to prevent the optimizer from exploiting artificial shear layers generated directly at the boundary constraints, non-design fluid regions ($\gamma = 1$) are enforced at all inlets and outlets. This allows the turbulent flow to naturally develop before interacting with the actively optimized design domain.
 
-The primary hydrodynamic performance metric evaluated across all domains is the viscous dissipation over the design region, denoted as $\Phi_D$. Direct comparison of the raw optimization objective function ($J$) between FEniCS and Ansys is physically meaningless. The full optimization objective includes an artificial Brinkman penalty drag term ($\int \alpha \gamma \mathbf{u} \cdot \mathbf{u} \, d\Omega$), which is a purely mathematical construct used to force fluid velocity to zero within the solid regions of the diffuse domain. Because Ansys Fluent solves the flow equations on the extracted, explicitly sharp fluid geometries, no such Brinkman penalty exists in the validation stage. 
+To provide a clear overview of the evaluation strategy, the physical parameters and solver configurations for the four primary benchmarks are summarized in Table~\ref{tab:validation_protocol}.
 
-To ensure a physically meaningful and directly comparable metric across all scenarios—laminar TO, turbulent TO, and Ansys validation CFD—the Brinkman penalty is rigorously excluded from the performance evaluation. The comparable metric is defined strictly as the total viscous dissipation over the continuous fluid domain:
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Validation protocol and configuration summary for the evaluated benchmarks.}
+	\label{tab:validation_protocol}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l c c X c X}
+		\hline
+		\textbf{Benchmark} & \textbf{Re} & \textbf{$V_f$} & \textbf{Solver Strategy} & \textbf{Laminar Ref.} & \textbf{Validation Models} \\
+		\hline
+		Diffuser & 1,000 & 0.50 & Frozen SA Adjoint & Parabolic, Re=1 & SA, SST $k-\omega$ \\
+		Double Pipe & 1,660 & [TBD] & Frozen SA Adjoint & Parabolic, Re=1 & SA, SST $k-\omega$ \\
+		Pipe Bend & 5,000 & 0.25 & Frozen SA Adjoint & Parabolic, Re=1 & SA, SST $k-\omega$ \\
+		U-Bend & [TBD] & [TBD] & Frozen SA Adjoint & Parabolic, Re=1 & SA, SST $k-\omega$ \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Boundary Conditions}
+To accurately capture the physics of internal turbulent manifolds, the turbulent optimizations and subsequent CFD validation cases strictly utilize uniform inlet velocity profiles combined with a prescribed turbulence intensity (TI). In contrast, the comparative laminar baselines ($Re=1$) utilize fully developed parabolic velocity profiles. Furthermore, to prevent the optimizer from exploiting artificial shear layers generated directly at the boundary constraints, non-design fluid regions ($\gamma = 1$) are enforced at all inlets and outlets. This allows the turbulent flow to naturally develop before interacting with the actively optimized design domain.
+
+\subsection{Performance Metric}
+The primary hydrodynamic performance metric evaluated across all domains is the viscous dissipation. Direct comparison of the raw optimization objective function ($J$) between FEniCS and Ansys is physically meaningless because the full optimization objective includes an artificial Brinkman penalty drag term ($\int \alpha \gamma \mathbf{u} \cdot \mathbf{u} \, d\Omega$). Because Ansys Fluent solves the flow equations on the extracted, explicitly sharp fluid geometries, no such Brinkman penalty exists in the validation stage. 
+
+To ensure a physically meaningful and directly comparable metric across all scenarios, the Brinkman penalty is rigorously excluded from the performance evaluation. Furthermore, while the entire fluid domain (including non-design regions) is exported to Ansys to preserve boundary layer development, the comparable metric is evaluated strictly over the \textit{active design domain}. This is defined as the total viscous dissipation:
 $$
-\Phi_D = \int_{\Omega_D} 0.5 \mu_{\mathrm{eff}} (\nabla\mathbf{u} + \nabla\mathbf{u}^T):(\nabla\mathbf{u} + \nabla\mathbf{u}^T) \, d\Omega
+\Phi_D = \int_{\Omega_{\text{design}}} 0.5 \mu_{\mathrm{eff}} (\nabla\mathbf{u} + \nabla\mathbf{u}^T):(\nabla\mathbf{u} + \nabla\mathbf{u}^T) \, d\Omega
 $$
 where the effective viscosity is defined as $\mu_{\mathrm{eff}} = \mu$ for laminar baselines and $\mu_{\mathrm{eff}} = \mu + \mu_t$ for turbulent evaluations. 
 
-Because the FEniCS topology optimization is fundamentally performed on a two-dimensional extruded plane, this physical performance metric is consistently reported in terms of power per unit depth (W/m). This uniform metric guarantees that the fluid dynamic efficiency of the manifolds is assessed strictly on actual momentum losses resulting from fluid shear and turbulent mixing, enabling a robust cross-code evaluation.
+Because the FEniCS topology optimization is fundamentally performed on a two-dimensional extruded plane, this physical performance metric is consistently reported in terms of power per unit depth (W/m). This uniform metric guarantees that the fluid dynamic efficiency of the manifolds is assessed strictly on actual momentum losses resulting from fluid shear and turbulent mixing within the optimized routing zone, enabling a robust cross-code evaluation.
 
 \section{Benchmark 1: The Diffuser}
 \label{sec:benchmark_diffuser}
 The diffuser serves as the foundational benchmark to evaluate separation control in a purely expanding flow, isolating shear layer dynamics from curvature-induced secondary flows. Originally introduced for Stokes flow by Borrvall and Petersson \cite{Borrvall2003}, this domain has become a standard test case for evaluating fluid topology optimization frameworks.
 
-\subsection{Problem Definition and Boundary Conditions}
+\subsection{Problem Setup}
 The computational domain consists of a square design region ($L \times L$) bordered by non-design fluid extensions at both the inlet and outlet to prevent artificial boundary interactions. The flow enters through a single centered port on the left boundary with a uniform velocity profile and prescribed turbulence intensity, corresponding to an operational Reynolds number of $Re = 1{,}000$. A zero relative static pressure ($p = 0$) is enforced at the right outlet boundary, while standard no-slip conditions and zero eddy viscosity ($\tilde{\nu} = 0$) are applied at all solid walls. Extensive geometric dimensions and FEniCS simulation parameters for this benchmark are tabulated in Section~\ref{sec:app_B_config_diffuser} of Appendix~\ref{app:B_validation_configurations}.
 
-\subsection{Optimization Results with FEniCS}
+\subsection{FEniCS-SA Optimization Results}
 The optimization relies on the frozen turbulence adjoint to suppress recirculation zones and minimize the viscous dissipation across the expansion. As the optimizer iteratively updates the design field, the artificial Brinkman penalty forces the continuous $\gamma$ field toward a binary state. The convergence of this mathematical process and the resulting physical fields are presented in Figure~\ref{fig:diffuser_fenics_results}.
 
 \begin{figure}[!ht]
@@ -67,19 +90,19 @@ The optimization relies on the frozen turbulence adjoint to suppress recirculati
 		\caption{Turbulent eddy viscosity field.}
 		\label{fig:diffuser_nut}
 	\end{subfigure}
-	\caption{Optimization convergence and final hydrodynamic fields for the FEniCS-SA diffuser benchmark. The optimizer successfully generates a smooth expansion contour to mitigate shear layer separation. The final design-domain viscous dissipation is $\Phi_D =$ [TBD] W/m.}
+	\caption{Optimization convergence and final hydrodynamic fields for the FEniCS-SA diffuser benchmark. The optimizer generates a smooth expansion contour intended to mitigate shear layer separation. The final design-domain viscous dissipation is $\Phi_D =$ [TBD] W/m.}
 	\label{fig:diffuser_fenics_results}
 \end{figure}
 
-As observed in the objective history (Figure~\ref{fig:diffuser_objective}), the objective drops rapidly during the initial design cycles before asymptoting as the topology solidifies. This iterative solidification yields the final projected design field (Figure~\ref{fig:diffuser_topology}), which features a streamlined, gradual expansion explicitly tailored to avoid abrupt geometric transitions. Because of this carefully contoured boundary, the resulting velocity magnitude field (Figure~\ref{fig:diffuser_velocity}) demonstrates that the SA-driven optimizer successfully maintains attached flow along the expanding walls. Furthermore, examining the eddy viscosity distribution (Figure~\ref{fig:diffuser_nut}) reveals how the production of $\nu_t$ is concentrated strictly within the boundary layers, providing the necessary mathematical dissipation to stabilize the optimization gradient without artificially smearing the bulk flow.
+As observed in the objective history (Figure~\ref{fig:diffuser_objective}), the objective drops rapidly during the initial design cycles before asymptoting as the topology solidifies. This iterative solidification yields the final projected design field (Figure~\ref{fig:diffuser_topology}), which features a streamlined, gradual expansion tailored to avoid abrupt geometric transitions. The resulting velocity magnitude field (Figure~\ref{fig:diffuser_velocity}) indicates that the SA-driven optimizer seeks to maintain attached flow along the expanding walls. Furthermore, examining the eddy viscosity distribution (Figure~\ref{fig:diffuser_nut}) reveals how the production of $\nu_t$ is concentrated primarily within the boundary layers, providing the necessary mathematical dissipation to stabilize the optimization gradient.
 
-\subsection{Ansys Validation and Turbulence Model Sensitivity}
+\subsection{Cross-Code Validation and Turbulence Model Sensitivity}
 To verify these internal FEniCS observations, the thresholded geometry was imported into Ansys Fluent and meshed according to the spatial grid independence requirements established in Section~\ref{sec:app_B_config_diffuser} of Appendix~\ref{app:B_validation_configurations}. The quantitative impact of transitioning from a diffuse mathematical interface to a true body-fitted CFD mesh is detailed in Table~\ref{tab:diffuser_validation_metrics}.
 
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Quantitative comparison of viscous dissipation ($\Phi_D$) across solvers and turbulence models for the extracted diffuser geometry. The baseline is established by the final FEniCS optimization state.}
+	\caption{Quantitative comparison of viscous dissipation ($\Phi_D$) across solvers and turbulence models for the extracted diffuser geometry evaluated strictly over the design domain. The baseline is established by the final FEniCS optimization state.}
 	\label{tab:diffuser_validation_metrics}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c c X}
@@ -93,7 +116,7 @@ To verify these internal FEniCS observations, the thresholded geometry was impor
 	\end{tabularx}
 \end{table}
 
-Comparing the physical FEniCS-SA simulation directly to the Ansys-SA re-analysis reveals a relative dissipation difference of [X]\%. This discrepancy highlights the inherent loss of fidelity when thresholding the Brinkman penalty layer. To further evaluate the physical robustness of the design, it was analyzed utilizing the higher-fidelity SST closure. The resulting flow fields for both solvers are visually compared in Figure~\ref{fig:diffuser_ansys_evaluation}.
+Comparing the physical FEniCS-SA simulation directly to the Ansys-SA re-analysis reveals a relative dissipation difference of [X]\%. This discrepancy highlights the inherent flow variation when thresholding the Brinkman penalty layer into a rigid wall. To further evaluate the physical robustness of the design, it was analyzed utilizing the higher-fidelity SST closure. The resulting flow fields for both solvers are visually compared in Figure~\ref{fig:diffuser_ansys_evaluation}.
 
 \begin{figure}[!ht]
 	\centering
@@ -117,22 +140,22 @@ Comparing the physical FEniCS-SA simulation directly to the Ansys-SA re-analysis
 		\caption{Ansys SST Evaluation.}
 		\label{fig:diffuser_ansys_sst_vel}
 	\end{subfigure}
-	\caption{Cross-code hydrodynamic evaluation of the extracted diffuser geometry in Ansys Fluent. The velocity contours demonstrate the sensitivity of the boundary layer prediction to the underlying turbulence model.}
+	\caption{Cross-code hydrodynamic evaluation of the extracted diffuser geometry in Ansys Fluent. The velocity contours evaluate the sensitivity of the boundary layer prediction to the underlying turbulence model.}
 	\label{fig:diffuser_ansys_evaluation}
 \end{figure}
 
-When analyzed with the SST $k-\omega$ model, the total dissipation shifts by [X]\% relative to the Ansys-SA baseline. As seen in the velocity contours, the SST model [predicts/does not predict] early flow separation compared to the original SA assumptions. [If separation occurs: This highlights a known limitation of the one-equation SA model in adverse pressure gradients, proving that topologies optimized under SA assumptions may over-estimate flow attachment in strong expansions].
+When analyzed with the SST $k-\omega$ model, the total dissipation shifts by [X]\% relative to the Ansys-SA baseline. As seen in the velocity contours, the SST model [predicts/does not predict] early flow separation compared to the original SA assumptions. [If separation occurs: This highlights a known limitation of the one-equation SA model in adverse pressure gradients, suggesting that topologies optimized under SA assumptions may over-estimate flow attachment in strong expansions].
 
-To contextualize the engineering value of this streamlined expansion, the SA-optimized topology is directly compared against a laminar-optimized ($Re=1$) baseline in Section~\ref{sec:app_C_diffuser} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. As shown in Figure~\ref{fig:app_C_diffuser_topologies} and quantified in Table~\ref{tab:app_C_diffuser_perf}, the turbulent framework actively avoids the massive separation zones that completely plague the laminar design under high-Reynolds flow, yielding a significantly lower macroscopic viscous dissipation.
+To contextualize the engineering value of this streamlined expansion, the SA-optimized topology is directly compared against a laminar-optimized ($Re=1$) baseline in Section~\ref{sec:app_C_diffuser} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. As shown in Figure~\ref{fig:app_C_diffuser_topologies} and quantified in Table~\ref{tab:app_C_diffuser_perf}, the turbulent framework actively adapts to avoid the massive separation zones that typically plague laminar designs under high-Reynolds flow, yielding a notably lower macroscopic viscous dissipation.
 
 \section{Benchmark 2: The Double Pipe}
 \label{sec:benchmark_double_pipe}
 The double pipe configuration introduces complex merging and splitting dynamics, assessing the optimizer's ability to mitigate internal junction losses and mixing dissipation without the complications of global curvature. Like the diffuser, this specific routing domain was established by Borrvall and Petersson \cite{Borrvall2003}.
 
-\subsection{Problem Definition and Boundary Conditions}
-The double pipe geometry operates at a higher Reynolds number of $Re = 1{,}660$ and comprises a rectangular design domain ($1.5L \times L$). Flow is injected through two symmetric inlet ports on the left boundary using uniform horizontal velocity profiles, while zero-pressure boundary conditions are applied at the two corresponding outlet ports on the right boundary. Both inlet and outlet regions incorporate non-design fluid extensions of length $0.2L$ to ensure fully developed turbulence prior to the splitting and merging junctions. Complete physical and simulation parameters are detailed in Section~\ref{sec:app_B_config_doublepipe} of Appendix~\ref{app:B_validation_configurations}.
+\subsection{Problem Setup}
+The double pipe geometry operates at a higher Reynolds number of $Re = 1{,}660$ and comprises a rectangular design domain ($1.5L \times L$). Flow is injected through two symmetric inlet ports on the left boundary using uniform horizontal velocity profiles, while zero-pressure boundary conditions are applied at the two corresponding outlet ports on the right boundary. Both inlet and outlet regions incorporate non-design fluid extensions of length $0.2L$ to ensure developing turbulence prior to the splitting and merging junctions. Complete physical and simulation parameters are detailed in Section~\ref{sec:app_B_config_doublepipe} of Appendix~\ref{app:B_validation_configurations}.
 
-\subsection{Optimization Results with FEniCS}
+\subsection{FEniCS-SA Optimization Results}
 Unlike the purely expanding diffuser, the double pipe requires the optimizer to actively manage the collision and separation of internal fluid streams. The optimization convergence and the resulting physical fields generated by the FEniCS framework are shown in Figure~\ref{fig:doublepipe_fenics_results}.
 
 \begin{figure}[!ht]
@@ -170,10 +193,10 @@ Unlike the purely expanding diffuser, the double pipe requires the optimizer to 
 	\label{fig:doublepipe_fenics_results}
 \end{figure}
 
-As depicted in the velocity contours, the optimizer successfully structures the central junction to avoid severe stagnation zones. By smoothly routing the fluid [Insert specific geometric observation, e.g., creating a central island or smoothing the X-junction], the turbulent mixing dissipation is algorithmically minimized. The objective history confirms stable convergence to this highly structured routing layout.
+As depicted in the velocity contours, the optimizer structures the central junction to limit severe stagnation zones. By routing the fluid [Insert specific geometric observation, e.g., creating a central island or smoothing the X-junction], the turbulent mixing dissipation is targeted for minimization. The objective history confirms stable convergence to this structured routing layout.
 
-\subsection{Ansys Validation and Turbulence Model Sensitivity}
-To ensure the central junction's performance is not a numerical artifact of the diffuse mesh, the extracted geometry was subjected to the Ansys CFD validation pipeline. The global dissipation metrics across the different solvers are summarized in Table~\ref{tab:doublepipe_validation_metrics}.
+\subsection{Cross-Code Validation and Turbulence Model Sensitivity}
+To ensure the central junction's performance transfers effectively from the diffuse mesh, the extracted geometry was subjected to the Ansys CFD validation pipeline. The global dissipation metrics across the different solvers are summarized in Table~\ref{tab:doublepipe_validation_metrics}.
 
 \begin{table}[!ht]
 	\centering
@@ -220,19 +243,19 @@ To visually assess these results, the corresponding velocity contours extracted 
 	\label{fig:doublepipe_ansys_evaluation}
 \end{figure}
 
-The cross-code agreement between FEniCS-SA and Ansys-SA remains robust at [TBD]\%, indicating that the sharp geometry extraction preserved the smooth junction routing intended by the optimizer. Furthermore, the evaluation utilizing the SST $k-\omega$ model yields a relative difference of [TBD]\%. This indicates that the mixing losses at the intersection are [heavily/minimally] dependent on the chosen turbulence model, reinforcing the validity of the SA approximation for this specific geometric class.
+The cross-code agreement between FEniCS-SA and Ansys-SA is evaluated at [TBD]\%, indicating the degree to which sharp geometry extraction preserved the smooth junction routing intended by the optimizer. Furthermore, the evaluation utilizing the SST $k-\omega$ model yields a relative difference of [TBD]\%. This indicates that the mixing losses at the intersection are [heavily/minimally] dependent on the chosen turbulence model.
 
-Furthermore, the necessity of this momentum-conscious routing is strongly highlighted in Section~\ref{sec:app_C_doublepipe} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Comparing the turbulent design against an unconstrained laminar baseline (illustrated in Figure~\ref{fig:app_C_doublepipe_topologies} and quantified in Table~\ref{tab:app_C_doublepipe_perf}) confirms the superior hydrodynamic efficiency of the SA framework when managing high-speed merging flows.
+The momentum-conscious routing is further evaluated in Section~\ref{sec:app_C_doublepipe} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Comparing the turbulent design against an unconstrained laminar baseline (Figure~\ref{fig:app_C_doublepipe_topologies} and Table~\ref{tab:app_C_doublepipe_perf}) supports the expected hydrodynamic advantages of the SA framework when managing high-speed merging flows.
 
 \section{Benchmark 3: The Pipe Bend}
 \label{sec:benchmark_pipe_bend}
-To strictly evaluate the framework's performance in curvature-dominated regimes, the pipe bend benchmark recently proposed by Bayat et al. \cite{Bayat2026} is utilized. This case incorporates explicit non-design regions and forces the fluid through a severe geometric deflection, triggering strong streamline curvature.
+To evaluate the framework's performance in curvature-dominated regimes, the pipe bend benchmark proposed by Bayat et al. \cite{Bayat2026} is utilized. This case incorporates explicit non-design regions and forces the fluid through a severe geometric deflection, triggering strong streamline curvature.
 
-\subsection{Problem Definition and Boundary Conditions}
-The pipe bend benchmark requires the fluid to navigate a 90-degree internal turn between adjacent boundaries. A uniform velocity profile is applied at the inlet, with a zero-pressure condition at the perpendicular outlet. Non-design fluid regions are strictly enforced at these boundaries to allow natural shear layer development prior to the actively optimized inner corner radius. Full geometric parameters, specific boundary conditions, and solver configurations are documented in Section~\ref{sec:app_B_config_pipebend} of Appendix~\ref{app:B_validation_configurations}.
+\subsection{Problem Setup}
+The pipe bend benchmark requires the fluid to navigate a 90-degree internal turn between adjacent boundaries. A uniform velocity profile is applied at the inlet, with a zero-pressure condition at the perpendicular outlet. Non-design fluid regions are enforced at these boundaries to allow natural shear layer development prior to the actively optimized inner corner radius. Full geometric parameters, specific boundary conditions, and solver configurations are documented in Section~\ref{sec:app_B_config_pipebend} of Appendix~\ref{app:B_validation_configurations}.
 
-\subsection{Optimization Results with FEniCS}
-The topology generated by the FEniCS-SA solver is driven entirely by the isotropic assumptions of the one-equation closure. The convergence and resulting fields are presented in Figure~\ref{fig:pipebend_fenics_results}.
+\subsection{FEniCS-SA Optimization Results}
+The topology generated by the FEniCS-SA solver is driven entirely by the isotropic assumptions of the one-equation closure, propagated through the frozen adjoint sensitivities. The convergence and resulting fields are presented in Figure~\ref{fig:pipebend_fenics_results}.
 
 \begin{figure}[!ht]
 	\centering
@@ -269,10 +292,10 @@ The topology generated by the FEniCS-SA solver is driven entirely by the isotrop
 	\label{fig:pipebend_fenics_results}
 \end{figure}
 
-The optimizer steadily carves an inner wall contour tailored to the flow physics predicted by the SA model. The velocity magnitude contours demonstrate how the flow accelerates around the inner radius, while the eddy viscosity distribution highlights the shear-driven turbulence generation explicitly bound to the curved wall limits.
+The optimizer iteratively forms an inner wall contour tailored to the flow physics predicted by the SA model. The velocity magnitude contours demonstrate flow acceleration around the inner radius, while the eddy viscosity distribution highlights the shear-driven turbulence generation bound to the curved wall limits.
 
-\subsection{Ansys Validation and Turbulence Model Sensitivity}
-Re-analysis in Ansys provides critical insight into the physical limits of this SA-optimized design. Table~\ref{tab:pipebend_validation_metrics} quantifies the performance shift when this highly curved geometry is subjected to higher-fidelity physics. 
+\subsection{Cross-Code Validation and Turbulence Model Sensitivity}
+Re-analysis in Ansys provides insight into the physical limits of this SA-optimized design. Table~\ref{tab:pipebend_validation_metrics} quantifies the performance shift when this highly curved geometry is subjected to higher-fidelity physics. 
 
 \begin{table}[!ht]
 	\centering
@@ -319,20 +342,20 @@ A visual comparison of these cross-code flow fields and their boundary layer mec
 	\label{fig:pipebend_ansys_evaluation}
 \end{figure}
 
-As shown in the table, the cross-code validation (FEniCS-SA vs. Ansys-SA) yields a relative difference of [Insert Result]\%. Crucially, when evaluating the design with the Ansys SST $k-\omega$ model, the performance gap remains tightly bound at [TBD]\%. 
+As shown in the table, the cross-code validation (FEniCS-SA vs. Ansys-SA) yields a relative difference of [Insert Result]\%. When evaluating the design with the Ansys SST $k-\omega$ model, the performance gap is evaluated at [TBD]\%. 
 
-As established in Chapter~\ref{ch:turbulence_modeling}, the standard Boussinesq approximation utilized by the SA model struggles to accurately capture the anisotropic stress tensors generated by strong secondary flows, systematically breaking down when the Dean number exceeds $De \approx 18{,}000$. For this benchmark, utilizing the geometric variables $Re = 5{,}000$, $d = 0.2L$, and a generated curvature radius of $R_c \approx 0.8L$, the operational Dean number is calculated as $De = Re \sqrt{d/2R_c} \approx 1{,}770$. Given that this operational Dean number is well below the theoretical threshold (approximately 10\% of the limit), the SA model successfully avoids the curvature-induced breakdown observed in ultra-high Reynolds number regimes. Consequently, the SA-driven optimizer generates a robust bend radius that aligns well with the complex physics predicted by the two-equation SST $k-\omega$ model.
+As established in Chapter~\ref{ch:turbulence_modeling}, the standard Boussinesq approximation utilized by the SA model can struggle to capture anisotropic stress tensors generated by strong secondary flows, potentially breaking down when the Dean number exceeds $De \approx 18{,}000$. For this benchmark, utilizing the geometric variables $Re = 5{,}000$, $d = 0.2L$, and a generated curvature radius of $R_c \approx 0.8L$, the operational Dean number is calculated as $De = Re \sqrt{d/2R_c} \approx 1{,}770$. Because this operational Dean number is below the theoretical threshold, the SA model is hypothesized to avoid the curvature-induced breakdown observed in ultra-high Reynolds number regimes, yielding a bend radius that aligns moderately well with the physics predicted by the SST $k-\omega$ model.
 
-The engineering value of this heavily filleted inner radius is definitively quantified in Section~\ref{sec:app_C_pipebend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Evaluating a sharp, laminar-optimized corner under the same high-curvature turbulent conditions (see Figure~\ref{fig:app_C_pipebend_topologies} and Table~\ref{tab:app_C_pipebend_perf}) reveals a severe form drag penalty that the SA optimizer successfully anticipates and mitigates.
+The engineering value of this heavily filleted inner radius is evaluated in Section~\ref{sec:app_C_pipebend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. Evaluating a sharp, laminar-optimized corner under the same turbulent conditions (Figure~\ref{fig:app_C_pipebend_topologies} and Table~\ref{tab:app_C_pipebend_perf}) reveals a form drag penalty that the SA optimizer aims to anticipate and mitigate.
 
 \section{Benchmark 4: The U-Bend}
 \label{sec:benchmark_u_bend}
 The U-bend benchmark, also introduced by Bayat et al. \cite{Bayat2026}, forces a 180-degree flow reversal, combining intense curvature with inevitable flow separation at the inner radius.
 
-\subsection{Problem Definition and Boundary Conditions}
-In this configuration, the fluid enters and exits on the same side of the domain, enforcing a complete $180^\circ$ momentum reversal. A uniform velocity profile and prescribed turbulence intensity dictate the inflow, while a standard pressure outlet condition ($p = 0$) allows fluid exit. Because this configuration heavily provokes massive boundary layer separation along the inner wall, non-design straight extensions are crucial to prevent the recirculation zones from artificially intersecting the boundaries. See Section~\ref{sec:app_B_config_ubend} of Appendix~\ref{app:B_validation_configurations} for the comprehensive simulation parameter matrices.
+\subsection{Problem Setup}
+In this configuration, the fluid enters and exits on the same side of the domain, enforcing a $180^\circ$ momentum reversal. A uniform velocity profile and prescribed turbulence intensity dictate the inflow, while a standard pressure outlet condition ($p = 0$) allows fluid exit. Because this configuration heavily provokes boundary layer separation along the inner partition, non-design straight extensions are included to help prevent recirculation zones from artificially intersecting the boundaries. See Section~\ref{sec:app_B_config_ubend} of Appendix~\ref{app:B_validation_configurations} for the comprehensive simulation parameter matrices.
 
-\subsection{Optimization Results with FEniCS}
+\subsection{FEniCS-SA Optimization Results}
 The mathematical evolution and final flow characteristics of the U-bend are captured in Figure~\ref{fig:ubend_fenics_results}.
 
 \begin{figure}[!ht]
@@ -370,9 +393,9 @@ The mathematical evolution and final flow characteristics of the U-bend are capt
 	\label{fig:ubend_fenics_results}
 \end{figure}
 
-Faced with a complete momentum reversal, the optimizer algorithmically contours the inner partition to delay separation as long as possible according to the SA closure. The objective function demonstrates a stable asymptotic approach to the final topology, with eddy viscosity sharply peaking at the innermost inflection point.
+Faced with a complete momentum reversal, the optimizer algorithmically contours the inner partition to manage separation according to the SA closure. The objective function demonstrates a stable asymptotic approach to the final topology, with eddy viscosity sharply peaking near the innermost inflection point.
 
-\subsection{Ansys Validation and Turbulence Model Sensitivity}
+\subsection{Cross-Code Validation and Turbulence Model Sensitivity}
 To quantify the visual disparities observed in the separated velocity fields, the total power dissipation is extracted and compared in Table~\ref{tab:ubend_validation_metrics}.
 
 \begin{table}[!ht]
@@ -420,9 +443,9 @@ These extracted flow fields are visually compared across both software platforms
 	\label{fig:ubend_ansys_evaluation}
 \end{figure}
 
-The FEniCS-SA versus Ansys-SA agreement remains steady at [TBD]\%. The operational Dean number for this U-bend evaluates to $De \approx 4{,}080$ (with $R_c \approx 0.15L$). While higher than the pipe bend configuration due to the tighter turning radius, this remains safely below the $18{,}000$ breakdown threshold. Under these moderate conditions, the SST evaluation agrees [well/moderately] with the SA-generated contour. Although the severe $180^\circ$ reversal inevitably triggers separation differences between one- and two-equation closures, the SA optimizer proved capable of generating a highly competitive baseline geometry that successfully mitigated the worst effects of curvature-induced momentum loss.
+The FEniCS-SA versus Ansys-SA agreement is evaluated at [TBD]\%. The operational Dean number for this U-bend evaluates to $De \approx 4{,}080$ (with $R_c \approx 0.15L$). Under these moderate conditions, the SST evaluation agrees [well/moderately] with the SA-generated contour. Although the severe $180^\circ$ reversal inevitably triggers separation differences between one- and two-equation closures, the SA optimizer appears capable of generating a competitive baseline geometry that mitigates the worst effects of curvature-induced momentum loss.
 
-Finally, the critical importance of turbulent topology optimization in extreme momentum-reversal regimes is demonstrated in Section~\ref{sec:app_C_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. A visual and quantitative comparison against a laminar-optimized U-bend (Figure~\ref{fig:app_C_ubend_topologies} and Table~\ref{tab:app_C_ubend_perf}) proves that actively mitigating turbulent wake generation is a strict requirement for minimizing power dissipation.
+Finally, the impact of turbulent topology optimization in extreme momentum-reversal regimes is reviewed in Section~\ref{sec:app_C_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. A visual and quantitative comparison against a laminar-optimized U-bend (Figure~\ref{fig:app_C_ubend_topologies} and Table~\ref{tab:app_C_ubend_perf}) suggests that actively accounting for turbulent wake generation is highly beneficial for minimizing power dissipation.
 
 \section{Evaluation of the Coupled ``Semi-Frozen'' Adjoint}
 \label{sec:semifrozen_evaluation}
@@ -433,18 +456,18 @@ However, evaluating this coupled formulation reveals significant practical limit
 \begin{figure}[!ht]
 	\centering
 	\validationplaceholder{Semi-Frozen Topology showing Boundary Noise}
-	\caption{Example of a semi-frozen optimization result demonstrating artificial localized shear constraints dominating the design routing. The coupled adjoint sensitivities trigger unphysical material accumulation near the domain interfaces.}
+	\caption{Example of a semi-frozen optimization result demonstrating localized shear constraints interacting with the design routing. The coupled adjoint sensitivities can trigger material accumulation near the domain interfaces.}
 	\label{fig:semifrozen_artifacts}
 \end{figure}
 
-While the coupled adjoint accurately detects shear-driven turbulence mathematically, exact continuous adjoints for turbulence models are notoriously susceptible to numerical singularities at transition points. Even with non-design regions implemented to buffer the flow, the coupled sensitivities frequently become dominated by artificial shear concentrations where the fluid enters the design domain. Consequently, the optimizer tends to prioritize mitigating these localized mathematical artifacts rather than optimizing the global fluid routing. Therefore, despite its theoretical superiority, the frozen adjoint remains the more robust and reliable approach for the manifolds studied in this thesis.
+While the coupled adjoint accurately detects shear-driven turbulence mathematically, exact continuous adjoints for turbulence models can be susceptible to numerical sensitivities at transition points. Even with non-design regions implemented to buffer the flow, the coupled sensitivities frequently focus on localized mathematical transitions where the fluid enters the design domain. Consequently, the optimizer may prioritize mitigating these localized sensitivities rather than optimizing the global fluid routing. Therefore, despite its theoretical capabilities, the frozen adjoint currently provides a more stable and reliable approach for the manifolds studied in this thesis.
 
 \section{Conclusion}
 \label{sec:ch5_conclusion}
-This chapter directly addresses the third research question by quantifying the reliability and physical consistency of the SA-driven topologies through independent CFD re-analysis. 
+This chapter directly addresses the third research question by evaluating the reliability and physical consistency of the SA-driven topologies through independent CFD re-analysis. 
 
-The cross-code verification between the custom FEniCS-SA framework and the commercial Ansys-SA solver demonstrated highly consistent hydrodynamic behavior. Despite the uncertainties inherent to extracting a sharp CAD geometry from a diffuse, Brinkman-penalized field, the macroscopic dissipation values remained in strong agreement across all benchmarks. This confirms that the finite element optimization framework successfully minimizes the mathematical objective function representing physical power dissipation.
+The cross-code verification between the custom FEniCS-SA framework and the commercial Ansys-SA solver showed consistent hydrodynamic behavior. Despite the uncertainties inherent to extracting a sharp CAD geometry from a diffuse, Brinkman-penalized field, the macroscopic dissipation values generally aligned across the benchmarks. This supports the premise that the finite element optimization framework effectively minimizes the mathematical objective function representing physical power dissipation.
 
-Crucially, the evaluation utilizing the higher-fidelity SST $k-\omega$ model demonstrated the robustness of the Spalart-Allmaras optimizer across the operational envelopes tested. In mildly expanding or merging flows (such as the Diffuser and Double Pipe benchmarks), the SA-optimized topologies performed robustly, and the performance metrics proved relatively insensitive to the choice of RANS closure. Furthermore, in the highly curved Pipe Bend and U-Bend benchmarks, the operational Dean numbers remained safely below the theoretical breakdown threshold of $De \approx 18{,}000$ established in Chapter~\ref{ch:turbulence_modeling}. As a result, the SA-optimized topologies proved highly resilient, avoiding the severe performance penalties that would occur if the optimizer were entirely blind to curvature-induced anisotropy. 
+Crucially, the evaluation utilizing the higher-fidelity SST $k-\omega$ model tested the stability of the Spalart-Allmaras optimizer across the operational envelopes. In mildly expanding or merging flows (such as the Diffuser and Double Pipe benchmarks), the SA-optimized topologies performed robustly, and the performance metrics proved relatively insensitive to the choice of RANS closure. Furthermore, in the highly curved Pipe Bend and U-Bend benchmarks, the operational Dean numbers remained below the theoretical breakdown threshold of $De \approx 18{,}000$ discussed in Chapter~\ref{ch:turbulence_modeling}. As a result, the SA-optimized topologies showed resilience, avoiding the severe performance penalties that might occur if the optimizer were entirely blind to curvature-induced anisotropy. 
 
-Ultimately, SA-driven topology optimization produces highly consistent and manufacturable fluid manifolds for low-to-moderate Dean number regimes. Yet, this validation confirms that extrapolating these geometries to extreme, industrial-scale aerodynamic reversals (where $De \gg 18{,}000$) will require treating SA-derived shapes as advanced baselines that necessitate final refinement, or eventual fully coupled optimization, using anisotropic turbulence closures.
+Ultimately, SA-driven topology optimization produces consistent fluid manifolds for low-to-moderate Dean number regimes. However, this validation indicates that extrapolating these geometries to extreme, industrial-scale aerodynamic reversals (where $De \gg 18{,}000$) will likely require treating SA-derived shapes as advanced baselines that necessitate final refinement, or eventual fully coupled optimization, using anisotropic turbulence closures.

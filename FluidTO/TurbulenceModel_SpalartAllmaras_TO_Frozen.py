@@ -74,7 +74,7 @@ def sa_transport_terms(
     chi = nu_tilde_safe / (nu_laminar + DOLFIN_EPS)
     f_v1 = chi**3 / (chi**3 + Constant(7.1)**3)
     f_v2 = Constant(1.0) - chi / (Constant(1.0) + chi * f_v1)
-    # Yoon 2016 uses the no-ft2 SA form in Eqs. (10)-(15).
+    # Dilgen uses the no-ft2 SA form.
     f_t2 = Constant(0.0)
 
     omega_sq = Constant(2.0) * inner(skew(nabla_grad(external_velocity)), skew(nabla_grad(external_velocity)))
@@ -147,7 +147,7 @@ class SpalartAllmarasSteadyState:
         )
         penalty_react = self._nu_tilde_penalty_reaction if self._nu_tilde_penalty_reaction is not None else Constant(0.0)
 
-        # Steady-state SA transport equation (Yoon 2016 Eq. 27 for TO penalization).
+        # Steady-state SA transport equation with topology penalization.
         # Nonlinear coefficients are frozen from nu_tilde_safe.
         FNT = (
             dot(external_velocity, nabla_grad(self._nu_tilde)) * self._xi * self._dx

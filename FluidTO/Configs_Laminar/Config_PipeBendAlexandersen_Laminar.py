@@ -11,9 +11,9 @@ from Utilities_SharedTO import load_mesh_from_xdmf
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Mesh files
-# Generate via: cd Meshes/PipeBendAlexandersen && python3 pipe_bend_gmsh.py && python3 gmsh_to_xdmf.py
+# Generate via: python3 Meshes/PipeBendAlexandersen/generate_pipe_bend_alexandersen_sa_yplus1.py
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendAlexandersen/mesh.xdmf'),
+    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/PipeBendAlexandersen/mesh_yplus1.xdmf'),
 }
 
 
@@ -38,16 +38,15 @@ OUTLET_RIGHT_OFFSET = 0.1
 MU_FLUID_VALUE = 0.2
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
-U_MAX_OUTLET = 1.0
 
 
 # =============================================================================================
-# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1
+# Reynolds number: Re = U_MAX_INLET * INLET_WIDTH * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.0
 # =============================================================================================
 
 
 # Topology optimization settings
-VOL_FRAC = 0.08 * pi  # Existing laminar benchmark volume fraction
+VOL_FRAC = 0.25  # Existing laminar benchmark volume fraction
 MAX_INNER_ITERATIONS = 80
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
@@ -69,7 +68,9 @@ SNES_MAX_ITERS = 200
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 
-ENABLE_PRESSURE_PIN = True
+OUTLET_BC_TYPE = "pressure"
+OUTLET_PRESSURE_VALUE = 0.0
+ENABLE_PRESSURE_PIN = False
 PRESSURE_PIN_POINT = (0.0, 0.0)
 RESULTS_ROOT_NAME = "Results_Laminar/Results_PipeBendAlexandersen_LaminarTO"
 
@@ -151,7 +152,7 @@ def mark_boundaries(mesh):
 
 
 def build_velocity_profile_sets():
-    inlet_y_min, inlet_y_max, outlet_x_min, outlet_x_max = compute_port_extents(
+    inlet_y_min, inlet_y_max, _outlet_x_min, _outlet_x_max = compute_port_extents(
         L, INLET_TOP_OFFSET, INLET_WIDTH, OUTLET_RIGHT_OFFSET, OUTLET_WIDTH
     )
     y_inlet_center = 0.5 * (inlet_y_min + inlet_y_max)
@@ -159,9 +160,4 @@ def build_velocity_profile_sets():
         ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
         degree=2, u_max=U_MAX_INLET, y_c=y_inlet_center, width=INLET_WIDTH,
     )
-    x_outlet_center = 0.5 * (outlet_x_min + outlet_x_max)
-    u_outlet = Expression(
-        ("0.0", "-u_max * (1 - pow(2.0 * (x[0] - x_c) / width, 2))"),
-        degree=2, u_max=U_MAX_OUTLET, x_c=x_outlet_center, width=OUTLET_WIDTH,
-    )
-    return [u_inlet], [u_outlet]
+    return [u_inlet], []

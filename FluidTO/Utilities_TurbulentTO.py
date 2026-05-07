@@ -67,6 +67,18 @@ def positive_part(expr):
     return conditional(gt(expr, zero), expr, zero)
 
 
+def _scalar_value(value):
+    """Return the current scalar value of a Python float or dolfin Constant."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value.values()[0])
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return float(np.asarray(value.values(), dtype=float).ravel()[0])
+
+
 def _smooth_abs(value, smooth_abs_eps):
     return sqrt(value**2 + Constant(float(smooth_abs_eps)))
 
@@ -113,6 +125,88 @@ def calculate_distance_field(space, boundaries_data, wall_markers, custom_dx, re
     solver.parameters["newton_solver"]["report"] = False
     solver.solve()
     return y
+
+
+def calculate_poisson_wall_distance_field(space, boundaries_data, wall_markers, custom_dx):
+    """Compute a Tucker-style Poisson wall-distance field."""
+    wall_bc = [
+        DirichletBC(space, Constant(0.0), boundaries_data, marker)
+        for marker in as_list(wall_markers)
+    ]
+
+    phi = Function(space)
+    phi_trial = TrialFunction(space)
+    z = TestFunction(space)
+
+    poisson_problem = inner(grad(phi_trial), grad(z)) * custom_dx - Constant(1.0) * z * custom_dx
+    solve(lhs(poisson_problem) == rhs(poisson_problem), phi, wall_bc)
+
+    grad_phi_sq = inner(grad(phi), grad(phi))
+    wall_distance = project(
+        sqrt(grad_phi_sq + Constant(2.0) * positive_part(phi) + DOLFIN_EPS)
+        - sqrt(grad_phi_sq + DOLFIN_EPS),
+        space,
+    )
+    enforce_scalar_floor(wall_distance, 0.0)
+    return wall_distance
+
+
+def build_penalized_poisson_wall_distance_solver(
+    space,
+    boundaries_data,
+    wall_markers,
+    custom_dx,
+    penalty_reaction,
+    initial_wall_distance=None,
+    floor_value=0.0,
+):
+    """
+    Compute Dilgen-style Poisson-like wall distance with porous-material damping.
+
+    Dilgen et al. use a Poisson-like wall-distance equation with homogeneous
+    wall values, penalized in porous material in the same form as the SA
+    nu_tilde equation. The returned Function is updated in-place so existing
+    UFL forms keep seeing the current distance field.
+    """
+    wall_bc = [
+        DirichletBC(space, Constant(0.0), boundaries_data, marker)
+        for marker in as_list(wall_markers)
+    ]
+
+    phi = Function(space)
+    phi_trial = TrialFunction(space)
+    z = TestFunction(space)
+
+    wall_distance = Function(space)
+    if initial_wall_distance is not None:
+        if isinstance(initial_wall_distance, Function):
+            wall_distance.assign(initial_wall_distance)
+        else:
+            wall_distance.assign(project(initial_wall_distance, space))
+
+    a_phi = (
+        inner(grad(phi_trial), grad(z)) * custom_dx
+        + penalty_reaction * phi_trial * z * custom_dx
+    )
+    L_phi = Constant(1.0) * z * custom_dx
+
+    def rebuild_distance():
+        grad_phi_sq = inner(grad(phi), grad(phi))
+        updated_distance = project(
+            sqrt(grad_phi_sq + Constant(2.0) * positive_part(phi) + DOLFIN_EPS)
+            - sqrt(grad_phi_sq + DOLFIN_EPS),
+            space,
+        )
+        wall_distance.assign(updated_distance)
+        enforce_scalar_floor(wall_distance, float(floor_value))
+        return wall_distance
+
+    def update_poisson_distance():
+        solve(a_phi == L_phi, phi, wall_bc)
+        return rebuild_distance()
+
+    update_poisson_distance()
+    return wall_distance, update_poisson_distance
 
 
 def initialize_penalized_reciprocal_distance(
@@ -180,7 +274,11 @@ def build_penalized_reciprocal_distance_residual(
     """Return the weak residual for the penalized reciprocal wall-distance state G."""
     sigma_w_constant = Constant(float(sigma_w))
     g0_constant = Constant(float(g0_value))
-    alpha_g_constant = Constant(float(alpha_g_value))
+    alpha_g_constant = (
+        alpha_g_value
+        if hasattr(alpha_g_value, "assign") and hasattr(alpha_g_value, "values")
+        else Constant(float(alpha_g_value))
+    )
     n_g_constant = Constant(float(n_g_value))
     solid_threshold_value = float(solid_threshold)
     solid_threshold_constant = Constant(solid_threshold_value)
@@ -238,7 +336,13 @@ def build_penalized_wall_distance_solver(
     """
     g0_constant = Constant(g0_value)
     sigma_w_constant = Constant(sigma_w)
-    alpha_g_constant = Constant(alpha_g_value)
+    # Keep a mutable base so outer continuation can change wall penalty strength.
+    alpha_g_base = (
+        alpha_g_value
+        if hasattr(alpha_g_value, "assign") and hasattr(alpha_g_value, "values")
+        else Constant(alpha_g_value)
+    )
+    alpha_g_constant = Constant(_scalar_value(alpha_g_base))
     n_g_constant = Constant(n_g_value)
     solid_threshold_value = float(solid_threshold)
     solid_threshold_constant = Constant(solid_threshold_value)
@@ -324,7 +428,7 @@ def build_penalized_wall_distance_solver(
         scale = float(scale)
         if 0.0 <= scale <= 1.0 and scale not in homotopy_scales:
             homotopy_scales.append(scale)
-    if alpha_g_value > 0.0:
+    if _scalar_value(alpha_g_base) > 0.0:
         if not homotopy_scales:
             homotopy_scales = [0.0, 1.0]
         if homotopy_scales[0] != 0.0:
@@ -365,7 +469,7 @@ def build_penalized_wall_distance_solver(
     has_successful_update = False
 
     def solve_with_pseudo_time(scale):
-        alpha_stage_constant = Constant(float(scale) * float(alpha_g_value))
+        alpha_stage_constant = Constant(float(scale) * _scalar_value(alpha_g_base))
         stage_start_values = reciprocal_distance.vector().get_local().copy()
         last_error = None
         last_finite_values = None
@@ -478,7 +582,7 @@ def build_penalized_wall_distance_solver(
                 reciprocal_distance.vector().apply("insert")
             sequence_solved = True
             for scale in scales:
-                alpha_g_constant.assign(float(scale) * float(alpha_g_value))
+                alpha_g_constant.assign(float(scale) * _scalar_value(alpha_g_base))
                 stage_start_values = reciprocal_distance.vector().get_local().copy()
                 stage_solved = False
                 if not prefer_pseudo_time:
@@ -502,13 +606,13 @@ def build_penalized_wall_distance_solver(
                         sequence_solved = False
                         break
             if sequence_solved:
-                alpha_g_constant.assign(float(alpha_g_value))
+                alpha_g_constant.assign(_scalar_value(alpha_g_base))
                 has_successful_update = True
                 return
 
         reciprocal_distance.vector().set_local(previous_values)
         reciprocal_distance.vector().apply("insert")
-        alpha_g_constant.assign(float(alpha_g_value))
+        alpha_g_constant.assign(_scalar_value(alpha_g_base))
         if MPI.rank(space.mesh().mpi_comm()) == 0:
             print(
                 "Warning: penalized wall-distance update did not converge; reusing previous wall-distance field."
