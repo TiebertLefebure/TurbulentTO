@@ -7,34 +7,53 @@ import numpy as np
 
 
 WALL_TAG = 1
-INLET_TAG = 2
-OUTLET_TAG = 3
+INLET_TOP_TAG = 2
+INLET_BOTTOM_TAG = 3
+OUTLET_TOP_TAG = 4
+OUTLET_BOTTOM_TAG = 5
 DESIGN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
-L = 1.0
-N = 120
-LEAD_WIDTH = 0.2 * L
-OUTLET_Y_MIN = L / 3.0
-OUTLET_Y_MAX = 2.0 * L / 3.0
+L1 = 3.0
+L2 = 2.0
+H1 = 5.0
+H2 = 1.0
+H3 = 1.0
 
-U_WALL_RESOLUTION = 3.0
-NU = 1.0e-3
-RE_WALL = U_WALL_RESOLUTION * L / NU
+X_MIN = -L2
+DESIGN_X_MIN = 0.0
+DESIGN_X_MAX = L1
+X_MAX = L1 + L2
+Y_MIN = 0.0
+Y_MAX = H1
+
+BOTTOM_INLET_Y_MIN = 1.0
+BOTTOM_INLET_Y_MAX = BOTTOM_INLET_Y_MIN + H2
+TOP_INLET_Y_MIN = 3.0
+TOP_INLET_Y_MAX = TOP_INLET_Y_MIN + H2
+
+BOTTOM_OUTLET_Y_MIN = 1.0
+BOTTOM_OUTLET_Y_MAX = BOTTOM_OUTLET_Y_MIN + H3
+TOP_OUTLET_Y_MIN = 3.0
+TOP_OUTLET_Y_MAX = TOP_OUTLET_Y_MIN + H3
+
+RHO = 1.0
+MU = 1.0
+NU = MU / RHO
+U_MAX = 3000.0
+PORT_HEIGHT = H2
+
+RE_WALL = RHO * U_MAX * PORT_HEIGHT / MU
 SKIN_FRICTION_COEFFICIENT = 0.073 * RE_WALL ** (-0.25)
-FRICTION_VELOCITY = U_WALL_RESOLUTION * np.sqrt(SKIN_FRICTION_COEFFICIENT / 2.0)
+FRICTION_VELOCITY = U_MAX * np.sqrt(SKIN_FRICTION_COEFFICIENT / 2.0)
 Y_PLUS_ONE_DISTANCE = NU / FRICTION_VELOCITY
 
-H_FAR = L / N
-FIRST_CELL_WIDTH = min(H_FAR, 1.5 * Y_PLUS_ONE_DISTANCE)
-BOUNDARY_LAYER_THICKNESS = 0.02
-BOUNDARY_LAYER_RATIO = 1.2
+N = 50
+H_FAR = 1.0 / N
+FIRST_CELL_WIDTH = min(H_FAR, Y_PLUS_ONE_DISTANCE)
+BOUNDARY_LAYER_THICKNESS = 0.10
+BOUNDARY_LAYER_RATIO = 1.20
 TOL = 1.0e-12
-
-X_MIN = -LEAD_WIDTH
-X_MAX = L + LEAD_WIDTH
-Y_MIN = 0.0
-Y_MAX = L
 
 
 def unique_sorted(values: list[float], tol: float = TOL) -> np.ndarray:
@@ -89,35 +108,72 @@ def between(value: float, lower: float, upper: float) -> bool:
     return lower - TOL <= value <= upper + TOL
 
 
+def in_segment(value: float, segment: tuple[float, float]) -> bool:
+    return between(value, segment[0], segment[1])
+
+
+INLET_SEGMENTS = (
+    (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX),
+    (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX),
+)
+OUTLET_SEGMENTS = (
+    (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX),
+    (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX),
+)
+
+
+def in_inlet_port(y: float) -> bool:
+    return any(in_segment(y, segment) for segment in INLET_SEGMENTS)
+
+
+def in_outlet_port(y: float) -> bool:
+    return any(in_segment(y, segment) for segment in OUTLET_SEGMENTS)
+
+
 def in_design(x: float, y: float) -> bool:
-    return between(x, 0.0, L) and between(y, Y_MIN, Y_MAX)
+    return between(x, DESIGN_X_MIN, DESIGN_X_MAX) and between(y, Y_MIN, Y_MAX)
 
 
-def in_inlet_extension(x: float, y: float) -> bool:
-    return between(x, X_MIN, 0.0) and between(y, Y_MIN, Y_MAX)
+def in_left_extension(x: float, y: float) -> bool:
+    return between(x, X_MIN, DESIGN_X_MIN) and in_inlet_port(y)
 
 
-def in_outlet_extension(x: float, y: float) -> bool:
-    return between(x, L, X_MAX) and between(y, OUTLET_Y_MIN, OUTLET_Y_MAX)
+def in_right_extension(x: float, y: float) -> bool:
+    return between(x, DESIGN_X_MAX, X_MAX) and in_outlet_port(y)
 
 
 def in_fluid_domain(x: float, y: float) -> bool:
-    return in_design(x, y) or in_inlet_extension(x, y) or in_outlet_extension(x, y)
+    return in_design(x, y) or in_left_extension(x, y) or in_right_extension(x, y)
 
 
 def classify_boundary_edge(p0: np.ndarray, p1: np.ndarray) -> int:
     midpoint = 0.5 * (p0 + p1)
     x, y = midpoint[:2]
-    if abs(x - X_MIN) <= 1.0e-10 and between(y, Y_MIN, Y_MAX):
-        return INLET_TAG
-    if abs(x - X_MAX) <= 1.0e-10 and between(y, OUTLET_Y_MIN, OUTLET_Y_MAX):
-        return OUTLET_TAG
+    if abs(x - X_MIN) <= 1.0e-10:
+        if in_segment(y, (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX)):
+            return INLET_TOP_TAG
+        if in_segment(y, (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX)):
+            return INLET_BOTTOM_TAG
+    if abs(x - X_MAX) <= 1.0e-10:
+        if in_segment(y, (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX)):
+            return OUTLET_TOP_TAG
+        if in_segment(y, (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX)):
+            return OUTLET_BOTTOM_TAG
     return WALL_TAG
 
 
 def build_mesh() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    x_coords = clustered_coordinates((X_MIN, 0.0, L, X_MAX))
-    y_coords = clustered_coordinates((Y_MIN, OUTLET_Y_MIN, OUTLET_Y_MAX, Y_MAX))
+    x_coords = clustered_coordinates((X_MIN, DESIGN_X_MIN, DESIGN_X_MAX, X_MAX))
+    y_coords = clustered_coordinates(
+        (
+            Y_MIN,
+            BOTTOM_INLET_Y_MIN,
+            BOTTOM_INLET_Y_MAX,
+            TOP_INLET_Y_MIN,
+            TOP_INLET_Y_MAX,
+            Y_MAX,
+        )
+    )
     nx = len(x_coords)
     ny = len(y_coords)
 
@@ -190,25 +246,24 @@ def write_mesh(output_dir: Path | str = Path(__file__).resolve().parent) -> None
         cell_data={"name_to_read": [line_tags]},
     )
 
-    mesh_path = output_dir / "mesh_yplus1.xdmf"
-    cell_path = output_dir / "cell_yplus1.xdmf"
-    facet_path = output_dir / "facet_yplus1.xdmf"
+    mesh_path = output_dir / "mesh_yoon_yplus1.xdmf"
+    cell_path = output_dir / "cell_yoon_yplus1.xdmf"
+    facet_path = output_dir / "facet_yoon_yplus1.xdmf"
     meshio.write(mesh_path, mesh)
     meshio.write(cell_path, mesh)
     meshio.write(facet_path, facets)
 
     unique_tags, counts = np.unique(triangle_tags, return_counts=True)
-    tag_counts = dict(zip(unique_tags.tolist(), counts.tolist()))
     marker_tags, marker_counts = np.unique(line_tags, return_counts=True)
-    marker_count_map = dict(zip(marker_tags.tolist(), marker_counts.tolist()))
     print("Wrote {}".format(mesh_path))
     print("Wrote {}".format(cell_path))
     print("Wrote {}".format(facet_path))
     print("Points: {}".format(points.shape[0]))
     print("Triangles: {}".format(triangles.shape[0]))
     print("Boundary facets: {}".format(lines.shape[0]))
-    print("Cell tags: {}".format(tag_counts))
-    print("Boundary tags: {}".format(marker_count_map))
+    print("Cell tags: {}".format(dict(zip(unique_tags.tolist(), counts.tolist()))))
+    print("Boundary tags: {}".format(dict(zip(marker_tags.tolist(), marker_counts.tolist()))))
+    print("Re_wall: {:.6e}".format(RE_WALL))
     print("Estimated y+=1 distance: {:.6e} m".format(Y_PLUS_ONE_DISTANCE))
     print("First cell width: {:.6e} m".format(FIRST_CELL_WIDTH))
 
