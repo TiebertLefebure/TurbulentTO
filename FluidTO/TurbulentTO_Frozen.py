@@ -31,6 +31,11 @@ from Utilities_SharedTO import (
     pressure_drop_between_internal_facets,
     ResilientVTKFile,
 )
+from Utilities_DilgenPostprocess import (
+    build_velocity_magnitude_field,
+    copy_scalar_field,
+    write_dilgen_paper_data,
+)
 from Utilities_TurbulentTO_Frozen import (
     build_penalized_wall_distance_solver,
     build_penalized_poisson_wall_distance_solver,
@@ -273,6 +278,26 @@ FORWARD_PICARD_FLOW_SOLVER = normalize_forward_flow_solver_name(
     "FORWARD_PICARD_FLOW_SOLVER",
     allow_ipcs_snes_polish=False,
 )
+_fd_flow_solver_raw = str(globals().get("FINITE_DIFFERENCE_CHECK_FLOW_SOLVER", "same")).strip().lower()
+if _fd_flow_solver_raw in {"same", "configured", "forward"}:
+    FINITE_DIFFERENCE_CHECK_FLOW_SOLVER = FORWARD_FLOW_SOLVER
+else:
+    FINITE_DIFFERENCE_CHECK_FLOW_SOLVER = normalize_forward_flow_solver_name(
+        _fd_flow_solver_raw,
+        "FINITE_DIFFERENCE_CHECK_FLOW_SOLVER",
+        allow_ipcs_snes_polish=True,
+    )
+_fd_picard_flow_solver_raw = str(
+    globals().get("FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER", "same")
+).strip().lower()
+if _fd_picard_flow_solver_raw in {"same", "configured", "picard"}:
+    FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER = FORWARD_PICARD_FLOW_SOLVER
+else:
+    FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER = normalize_forward_flow_solver_name(
+        _fd_picard_flow_solver_raw,
+        "FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER",
+        allow_ipcs_snes_polish=False,
+    )
 
 if not SHOW_DOLFIN_SOLVER_LOGS:
     try:
@@ -404,6 +429,7 @@ nu_tilde_frozen = Function(TurbulenceSpace)  # SA working variable, frozen durin
 rho_proj_plot = Function(DensitySpace)    # projected rho for visualisation only
 unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
+df0dx_plot = Function(DensitySpace)
 df0dx_centered_plot = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
@@ -961,7 +987,7 @@ sa_wall_initial_solid_guess = float(globals().get("SA_WALL_INITIAL_SOLID_GUESS",
 sa_wall_extra_relaxations = globals().get("SA_WALL_NEWTON_RELAXATION_CANDIDATES", None)
 sa_wall_solid_threshold = float(globals().get("SA_WALL_SOLID_THRESHOLD", 1.0))
 sa_wall_prefer_pseudo_time = bool(globals().get("SA_WALL_PREFER_PSEUDO_TIME", False))
-sa_wall_distance_mode = str(globals().get("SA_WALL_DISTANCE_MODE", "reciprocal")).strip().lower()
+sa_wall_distance_mode = str(globals().get("SA_WALL_DISTANCE_MODE", "reciprocal_penalized")).strip().lower()
 if sa_wall_density_source == "passive":
     wall_penalty_fluid_indicator = density_upper_bound
 else:
@@ -1011,9 +1037,9 @@ elif sa_wall_distance_mode in {"poisson_penalized", "penalized_poisson", "dilgen
     )
     root_print("SA wall-distance mode: Dilgen penalized Poisson-like field")
 else:
-    if sa_wall_distance_mode not in {"reciprocal", "penalized_reciprocal", "yoon"}:
+    if sa_wall_distance_mode not in {"reciprocal_penalized", "reciprocal", "penalized_reciprocal", "yoon"}:
         raise ValueError(
-            "SA_WALL_DISTANCE_MODE must be 'reciprocal', 'poisson', or 'poisson_penalized', got {!r}.".format(
+            "SA_WALL_DISTANCE_MODE must be 'reciprocal_penalized', 'poisson', or 'poisson_penalized', got {!r}.".format(
                 sa_wall_distance_mode
             )
         )
@@ -1035,6 +1061,7 @@ else:
         initial_wall_distance=custom_initial_wall_distance,
         prefer_pseudo_time=sa_wall_prefer_pseudo_time,
     )
+    root_print("SA wall-distance mode: reciprocal_penalized wall-distance field")
 # Initial SA field.
 sa_nu_tilde_init = float(globals().get("SA_NU_TILDE_INITIAL", _sa_nu_tilde_initial_default))
 sa_nu_tilde_floor = float(globals().get("SA_NU_TILDE_FLOOR", 1.0e-12))
@@ -2026,6 +2053,25 @@ def solve_forward_picard(solve_label=None):
     raise ValueError("FORWARD_PICARD_FLOW_SOLVER must be either 'ipcs' or 'snes'.")
 
 
+def solve_forward_finite_difference(solve_label=None):
+    """Use a configurable forward solve for finite-difference validation."""
+    if FINITE_DIFFERENCE_CHECK_FLOW_SOLVER == "snes":
+        return solve_forward_snes(solve_label)
+    if FINITE_DIFFERENCE_CHECK_FLOW_SOLVER == "ipcs_snes_polish":
+        ipcs_result = solve_forward_ipcs(solve_label, allow_best_without_acceptance=True)
+        solver_log("      [IPCS] polishing best FD IPCS iterate with monolithic SNES")
+        solve_forward_snes("{}_snes_polish".format(solve_label))
+        return ipcs_result
+    return solve_forward_ipcs(solve_label)
+
+
+def solve_forward_finite_difference_picard(solve_label=None):
+    """Use a configurable Picard solve for finite-difference updated-SA checks."""
+    if FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER == "snes":
+        return solve_forward_snes(solve_label)
+    return solve_forward_ipcs(solve_label)
+
+
 def finite_difference_check_iterations():
     raw_iterations = globals().get("FINITE_DIFFERENCE_CHECK_ITERATIONS", (0,))
     if isinstance(raw_iterations, np.ndarray):
@@ -2177,7 +2223,7 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
             update_wall_distance_field()
             fd_picard_steps = max(1, int(globals().get("FINITE_DIFFERENCE_CHECK_PICARD_STEPS", 1)))
             for fd_picard_idx in range(fd_picard_steps):
-                solve_forward_snes("{}_picard{:02d}".format(label, fd_picard_idx + 1))
+                solve_forward_finite_difference_picard("{}_picard{:02d}".format(label, fd_picard_idx + 1))
                 velocity_for_sa = w_fwd.sub(0, deepcopy=True)
                 sa_model.construct_forms(velocity_for_sa)
                 sa_model.solve_turbulence_model()
@@ -2188,7 +2234,7 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
                 enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
                 sa_model.nu_tilde0.assign(nu_tilde_frozen)
                 sa_model.nu_tilde1.assign(nu_tilde_frozen)
-        solve_forward_snes(label)
+        solve_forward_finite_difference(label)
         return float(assemble(ObjFunctional))
 
     root_print(
@@ -2566,6 +2612,7 @@ results_root = os.path.join(THIS_DIR, globals().get("RESULTS_ROOT_NAME", "Result
 rho_dir = os.path.join(results_root, "rho")
 rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
+u_magnitude_dir = os.path.join(results_root, "u_magnitude")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
 nu_tilde_raw_dir = os.path.join(results_root, "nu_tilde_raw_sa_solve")
@@ -2574,9 +2621,12 @@ nu_tilde_clip_floor_dir = os.path.join(results_root, "nu_tilde_floor_clip_mask")
 nu_tilde_clip_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_clip_mask")
 nu_tilde_bound_floor_dir = os.path.join(results_root, "nu_tilde_floor_bound_mask")
 nu_tilde_bound_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_bound_mask")
+df0dx_dir = os.path.join(results_root, "df0dx")
 df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
+paper_data_dir = os.path.join(results_root, "paper_data")
+save_dilgen_paper_data = bool(globals().get("SAVE_DILGEN_PAPER_DATA", False))
 save_ipcs_residual_plots = (
     bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
     and (
@@ -2593,6 +2643,8 @@ ensure_clean_dir(results_root)
 ensure_clean_dir(rho_dir)
 ensure_clean_dir(rho_p_dir)
 ensure_clean_dir(u_dir)
+if save_dilgen_paper_data:
+    ensure_clean_dir(u_magnitude_dir)
 ensure_clean_dir(p_dir)
 ensure_clean_dir(nu_tilde_dir)
 if save_sa_clipping_diagnostics:
@@ -2602,14 +2654,20 @@ if save_sa_clipping_diagnostics:
     ensure_clean_dir(nu_tilde_clip_ceiling_dir)
     ensure_clean_dir(nu_tilde_bound_floor_dir)
     ensure_clean_dir(nu_tilde_bound_ceiling_dir)
+if save_dilgen_paper_data:
+    ensure_clean_dir(df0dx_dir)
 ensure_clean_dir(df0dx_centered_dir)
 ensure_clean_dir(design_dir)
+if save_dilgen_paper_data:
+    ensure_clean_dir(paper_data_dir)
 if save_ipcs_residual_plots:
     ensure_clean_dir(ipcs_residual_dir)
 
 rho_out = ResilientVTKFile(os.path.join(rho_dir, "plot_rho.pvd"), COMM)
 rhop_out = ResilientVTKFile(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), COMM)
 u_out = ResilientVTKFile(os.path.join(u_dir, "plot_u.pvd"), COMM)
+if save_dilgen_paper_data:
+    u_magnitude_out = ResilientVTKFile(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd"), COMM)
 p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 if save_sa_clipping_diagnostics:
@@ -2631,6 +2689,8 @@ if save_sa_clipping_diagnostics:
     nu_tilde_ceiling_bound_mask_out = ResilientVTKFile(
         os.path.join(nu_tilde_bound_ceiling_dir, "plot_nu_tilde_ceiling_bound_mask.pvd"), COMM
     )
+if save_dilgen_paper_data:
+    df0dx_out = ResilientVTKFile(os.path.join(df0dx_dir, "plot_df0dx.pvd"), COMM)
 df0dx_centered_out = ResilientVTKFile(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
@@ -2642,12 +2702,33 @@ optimization_log_quantity_columns = (
     "dP_nondesign_Pa",
     "dP_design_Pa",
 )
+optimization_log_extra_columns = (
+    ("VolumeConstraint_Dilgen", "Objective_Normalized_Dilgen")
+    if bool(globals().get("LOG_DILGEN_FIG8_COLUMNS", False))
+    else ()
+)
+dilgen_volume_constraint_log_path = os.path.join(results_root, "VolumeConstraint_Dilgen.txt")
+dilgen_objective_normalized_log_path = os.path.join(results_root, "Objective_Normalized_Dilgen.txt")
+
+
+def initialize_dilgen_fig8_metric_logs():
+    if not optimization_log_extra_columns:
+        return
+    if IS_ROOT:
+        with open(dilgen_volume_constraint_log_path, "w") as handle:
+            handle.write("VolumeConstraint_Dilgen\tGlobalIter\n")
+        with open(dilgen_objective_normalized_log_path, "w") as handle:
+            handle.write("Objective_Normalized_Dilgen\tGlobalIter\n")
+    MPI.barrier(COMM)
+
+
 initialize_optimization_log(
     log_path,
-    include_ipcs_residuals=final_flow_uses_ipcs(),
     pressure_drop_columns=optimization_log_quantity_columns,
     objective_column=objective_log_column,
+    extra_columns=optimization_log_extra_columns,
 )
+initialize_dilgen_fig8_metric_logs()
 initialize_df0dx_log(df0dx_log_path)
 initialize_sensitivity_check_log(sensitivity_check_log_path)
 if save_sa_clipping_diagnostics:
@@ -2690,6 +2771,56 @@ dfdx = np.zeros((mmma, num_mma))
 volume = assemble(VolumeRegion * dx)
 if volume <= 0.0:
     raise ValueError("The volume-constrained design region has zero measure.")
+
+
+def dilgen_objective_normalization_scale():
+    """Return the dimensional scale used for the Dilgen Fig. 8 comparison column."""
+    if "DILGEN_OBJECTIVE_NORMALIZATION_SCALE" in globals():
+        return float(globals()["DILGEN_OBJECTIVE_NORMALIZATION_SCALE"])
+
+    reference_density = float(globals().get("DILGEN_OBJECTIVE_REFERENCE_DENSITY", RHO_FLUID_VALUE))
+    reference_velocity = float(globals().get("DILGEN_OBJECTIVE_REFERENCE_VELOCITY", U_BULK_INLET))
+    reference_length = float(
+        globals().get(
+            "DILGEN_OBJECTIVE_REFERENCE_LENGTH",
+            globals().get("H", globals().get("INLET_HALF_HEIGHT", 1.0)),
+        )
+    )
+    if reference_density <= 0.0 or reference_velocity <= 0.0 or reference_length <= 0.0:
+        raise ValueError("Dilgen objective normalization needs positive rho, U, and length scales.")
+
+    # Eq. (42) is logged as 2D unit-depth power. For Dilgen's plotted
+    # nondimensional objective, scale by rho * U_b^3 * V_design / H.
+    return reference_density * reference_velocity**3.0 * float(volume) / reference_length
+
+
+def dilgen_optimization_log_extra_values(objective_value, volume_fraction):
+    if not optimization_log_extra_columns:
+        return ()
+
+    volume_target = float(VOL_FRAC)
+    if volume_target <= 0.0:
+        raise ValueError("Dilgen volume-constraint logging needs VOL_FRAC > 0.")
+
+    objective_scale = dilgen_objective_normalization_scale()
+    if objective_scale <= 0.0:
+        raise ValueError("Dilgen objective normalization scale must be positive.")
+
+    volume_constraint = float(volume_fraction) / volume_target - 1.0
+    objective_normalized = float(objective_value) / objective_scale
+    return volume_constraint, objective_normalized
+
+
+def append_dilgen_fig8_metric_logs(metric_values, global_iter):
+    if not optimization_log_extra_columns:
+        return
+
+    volume_constraint, objective_normalized = metric_values
+    if IS_ROOT:
+        with open(dilgen_volume_constraint_log_path, "a") as handle:
+            handle.write("{:.16e}\t{:d}\n".format(float(volume_constraint), int(global_iter)))
+        with open(dilgen_objective_normalized_log_path, "a") as handle:
+            handle.write("{:.16e}\t{:d}\n".format(float(objective_normalized), int(global_iter)))
 
 
 def _assign_scalar_active_density(active_density_value):
@@ -2893,6 +3024,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         u_out << w_fwd.sub(0)
         p_out << w_fwd.sub(1)
         nu_tilde_out << nu_tilde_frozen
+        velocity_magnitude_plot = None
+        if save_dilgen_paper_data:
+            velocity_magnitude_plot = build_velocity_magnitude_field(w_fwd.sub(0, deepcopy=True), DensitySpace)
+            u_magnitude_out << velocity_magnitude_plot
         if save_sa_clipping_diagnostics:
             nu_tilde_raw_out << nu_tilde_raw_diagnostic
             nu_tilde_preclip_out << nu_tilde_preclip_diagnostic
@@ -2933,6 +3068,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
+        if save_dilgen_paper_data:
+            df0dx_plot = copy_scalar_field(filtered_gradient, "df0dx")
+            df0dx_out << df0dx_plot
 
         fval[0, 0] = assemble(vol_constraint) / volume
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
@@ -2953,7 +3091,24 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         df0dx_centered_out << df0dx_centered_plot
         if bool(globals().get("SAVE_DF0DX_VECTOR", True)):
             np.savetxt(os.path.join(design_dir, "df0dx_{:03}.txt".format(iter_count)), df0dx[:, 0])
+            if save_dilgen_paper_data:
+                np.savetxt(
+                    os.path.join(design_dir, "df0dx_unscaled_{:03}.txt".format(iter_count)),
+                    objective_gradient_active_unscaled,
+                )
             np.savetxt(os.path.join(design_dir, "df0dx_centered_{:03}.txt".format(iter_count)), df0dx_centered)
+        if save_dilgen_paper_data:
+            write_dilgen_paper_data(
+                paper_data_dir,
+                iter_count,
+                velocity_magnitude_plot,
+                df0dx_plot,
+                DensitySpace,
+                ActiveDV,
+                globals(),
+                COMM,
+                include_g_state=False,
+            )
         append_df0dx_log_entry(
             df0dx_log_path,
             stage_idx + 1,
@@ -3016,6 +3171,9 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         rho.vector().set_local(rho_values)
         rho.vector().apply("insert")
 
+        dilgen_fig8_metric_values = dilgen_optimization_log_extra_values(f0val, vol_fraction_now)
+        append_dilgen_fig8_metric_logs(dilgen_fig8_metric_values, iter_count)
+
         append_optimization_log_entry(
             log_path,
             stage_idx + 1,
@@ -3035,8 +3193,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             ),
             pressure_drop_columns=optimization_log_quantity_columns,
             objective_column=objective_log_column,
-            du_ipcs=final_flow_du_ipcs if final_flow_uses_ipcs() else None,
-            dp_ipcs=final_flow_dp_ipcs if final_flow_uses_ipcs() else None,
+            extra_values=dilgen_fig8_metric_values,
+            extra_columns=optimization_log_extra_columns,
         )
 
         constraint_status_text = ""

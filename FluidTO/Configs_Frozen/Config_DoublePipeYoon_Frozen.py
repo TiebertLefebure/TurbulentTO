@@ -21,7 +21,6 @@ mesh_files = {
 }
 
 DESIGN_DOMAIN_TAG = 1
-NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
@@ -31,7 +30,6 @@ def create_design_mesh():
 build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
     mesh_files["CELL_DIRECTORY"],
     design_tags=(DESIGN_DOMAIN_TAG,),
-    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
 )
 
 
@@ -91,7 +89,7 @@ SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 # Yoon relaxed reciprocal wall-distance equation, Eq. (25).
-SA_WALL_DISTANCE_MODE = "yoon"
+SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SIGMA = 0.1
 SA_WALL_G0 = 20.0

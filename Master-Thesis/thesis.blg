@@ -7,50 +7,50 @@ A level-1 auxiliary file: chapter-3.aux
 A level-1 auxiliary file: chapter-4.aux
 A level-1 auxiliary file: chapter-5.aux
 A level-1 auxiliary file: chapter-6-conclusion.aux
-A level-1 auxiliary file: appendix-1-SA-Verification.aux
-A level-1 auxiliary file: appendix-2-CFD-Mesh-Independence.aux
-A level-1 auxiliary file: appendix-3-Laminar-Topology-Comparison.aux
+A level-1 auxiliary file: appendix-A-SA-Verification-Cases.aux
+A level-1 auxiliary file: appendix-B-TO-Benchmarks.aux
+A level-1 auxiliary file: appendix-C-Laminar-TO-Comparison.aux
 The style file: abbrv.bst
 A level-1 auxiliary file: CoC.aux
 Database file #1: references.bib
-You've used 53 entries,
+You've used 39 entries,
             2118 wiz_defined-function locations,
-            871 strings with 13586 characters,
-and the built_in function-call counts, 16999 in all, are:
-= -- 1663
-> -- 864
+            780 strings with 11059 characters,
+and the built_in function-call counts, 12602 in all, are:
+= -- 1225
+> -- 662
 < -- 3
-+ -- 350
-- -- 288
-* -- 1269
-:= -- 2918
-add.period$ -- 159
-call.type$ -- 53
-change.case$ -- 297
++ -- 267
+- -- 222
+* -- 937
+:= -- 2164
+add.period$ -- 117
+call.type$ -- 39
+change.case$ -- 222
 chr.to.int$ -- 0
-cite$ -- 53
-duplicate$ -- 579
-empty$ -- 1288
-format.name$ -- 288
-if$ -- 3440
+cite$ -- 39
+duplicate$ -- 431
+empty$ -- 944
+format.name$ -- 222
+if$ -- 2552
 int.to.chr$ -- 0
-int.to.str$ -- 53
-missing$ -- 54
-newline$ -- 267
-num.names$ -- 102
-pop$ -- 268
+int.to.str$ -- 39
+missing$ -- 41
+newline$ -- 197
+num.names$ -- 74
+pop$ -- 208
 preamble$ -- 1
-purify$ -- 251
+purify$ -- 190
 quote$ -- 0
-skip$ -- 384
+skip$ -- 286
 stack$ -- 0
-substring$ -- 1047
-swap$ -- 62
+substring$ -- 741
+swap$ -- 49
 text.length$ -- 3
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 198
+type$ -- 144
 warning$ -- 0
-while$ -- 164
-width$ -- 55
-write$ -- 578
+while$ -- 117
+width$ -- 41
+write$ -- 425

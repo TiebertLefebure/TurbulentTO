@@ -91,13 +91,16 @@ SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 # Start gently, then force eddy viscosity out of solid material.
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [30.0, 60.0, 150.0, 350.0, 700.0, 1.0e3, 1.0e3, 1.0e3]
 SA_NU_TILDE_PENALTY_N = 3.0
+SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 
+SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 # Same continuation idea for design-induced wall distance.
 SA_WALL_PENALTY_ALPHA_SCHEDULE = [100.0, 300.0, 700.0, 1.0e3, 1.0e3, 1.0e3, 1.0e3, 1.0e3]
 SA_WALL_PENALTY_N = 3.0
+SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
 VOL_FRAC = 0.27

@@ -851,9 +851,12 @@ def _optimization_log_columns(
     include_ipcs_residuals=False,
     pressure_drop_columns=None,
     objective_column="Objective",
+    extra_columns=None,
 ):
     if pressure_drop_columns is None:
         pressure_drop_columns = ("DeltaP_Pa",)
+    if extra_columns is None:
+        extra_columns = ()
     objective_column = str(objective_column)
 
     columns = [
@@ -870,11 +873,7 @@ def _optimization_log_columns(
         ("VolFrac", 17),
         ("VolResid", 17),
     ])
-    if include_ipcs_residuals:
-        columns.extend([
-            ("du_ipcs", 17),
-            ("dp_ipcs", 17),
-        ])
+    columns.extend((str(name), max(17, len(str(name)))) for name in extra_columns)
     columns.append(("Timestamp", 24))
     return columns
 
@@ -884,11 +883,13 @@ def _format_optimization_log_row(
     include_ipcs_residuals=False,
     pressure_drop_columns=None,
     objective_column="Objective",
+    extra_columns=None,
 ):
     columns = _optimization_log_columns(
         include_ipcs_residuals=include_ipcs_residuals,
         pressure_drop_columns=pressure_drop_columns,
         objective_column=objective_column,
+        extra_columns=extra_columns,
     )
     if len(values) != len(columns):
         raise ValueError(
@@ -902,11 +903,13 @@ def initialize_optimization_log(
     include_ipcs_residuals=False,
     pressure_drop_columns=None,
     objective_column="Objective",
+    extra_columns=None,
 ):
     header_fields = _optimization_log_columns(
         include_ipcs_residuals=include_ipcs_residuals,
         pressure_drop_columns=pressure_drop_columns,
         objective_column=objective_column,
+        extra_columns=extra_columns,
     )
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "w") as txtout:
@@ -915,6 +918,7 @@ def initialize_optimization_log(
                 include_ipcs_residuals=include_ipcs_residuals,
                 pressure_drop_columns=pressure_drop_columns,
                 objective_column=objective_column,
+                extra_columns=extra_columns,
             ) + "\r\n")
     MPI.barrier(MPI.comm_world)
 
@@ -936,6 +940,8 @@ def append_optimization_log_entry(
     dp_ipcs=None,
     pressure_drop_columns=None,
     objective_column="Objective",
+    extra_values=None,
+    extra_columns=None,
 ):
     if MPI.rank(MPI.comm_world) == 0:
         with open(log_path, "a") as txtout:
@@ -944,6 +950,17 @@ def append_optimization_log_entry(
             pressure_drop_values = [float(value) for value in pressure_drop_values]
             if pressure_drop_columns is None:
                 pressure_drop_columns = ["dP"] * len(pressure_drop_values)
+            if extra_values is None:
+                extra_values = []
+            if extra_columns is None:
+                extra_columns = []
+            extra_values = [float(value) for value in extra_values]
+            if len(extra_values) != len(extra_columns):
+                raise ValueError(
+                    "Expected {} extra optimization-log values, got {}.".format(
+                        len(extra_columns), len(extra_values)
+                    )
+                )
             row_values = [
                 "{:d}".format(int(stage_idx)),
                 "{:.3f}".format(float(q_value)),
@@ -958,13 +975,7 @@ def append_optimization_log_entry(
                 "{:.10e}".format(float(volume_fraction)),
                 "{:.10e}".format(float(volume_residual)),
             ])
-            if du_ipcs is not None or dp_ipcs is not None:
-                if du_ipcs is None or dp_ipcs is None:
-                    raise ValueError("Both du_ipcs and dp_ipcs must be provided together.")
-                row_values.extend([
-                    "{:.10e}".format(float(du_ipcs)),
-                    "{:.10e}".format(float(dp_ipcs)),
-                ])
+            row_values.extend("{:.10e}".format(value) for value in extra_values)
             row_values.append(strftime("%a, %d %b %Y %H:%M:%S", localtime()))
             txtout.write(
                 _format_optimization_log_row(
@@ -972,5 +983,6 @@ def append_optimization_log_entry(
                     include_ipcs_residuals=(du_ipcs is not None or dp_ipcs is not None),
                     pressure_drop_columns=pressure_drop_columns,
                     objective_column=objective_column,
+                    extra_columns=extra_columns,
                 ) + "\r\n"
             )

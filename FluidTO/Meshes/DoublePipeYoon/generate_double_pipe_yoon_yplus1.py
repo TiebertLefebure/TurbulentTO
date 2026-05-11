@@ -12,7 +12,6 @@ INLET_BOTTOM_TAG = 3
 OUTLET_TOP_TAG = 4
 OUTLET_BOTTOM_TAG = 5
 DESIGN_TAG = 1
-NON_DESIGN_FLUID_TAG = 2
 
 L1 = 3.0
 L2 = 2.0
@@ -177,7 +176,7 @@ def build_mesh() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.nda
     nx = len(x_coords)
     ny = len(y_coords)
 
-    raw_points = np.array([(x, y, 0.0) for x in x_coords for y in y_coords], dtype=float)
+    raw_points = np.array([(x, y) for x in x_coords for y in y_coords], dtype=float)
     raw_triangles = []
     raw_tags = []
 
@@ -192,10 +191,9 @@ def build_mesh() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.nda
             n10 = node_index(i + 1, j, ny)
             n01 = node_index(i, j + 1, ny)
             n11 = node_index(i + 1, j + 1, ny)
-            tag = DESIGN_TAG if in_design(x_mid, y_mid) else NON_DESIGN_FLUID_TAG
             raw_triangles.append((n00, n10, n11))
             raw_triangles.append((n00, n11, n01))
-            raw_tags.extend((tag, tag))
+            raw_tags.extend((DESIGN_TAG, DESIGN_TAG))
 
     raw_triangles = np.asarray(raw_triangles, dtype=np.int64)
     raw_tags = np.asarray(raw_tags, dtype=np.int32)

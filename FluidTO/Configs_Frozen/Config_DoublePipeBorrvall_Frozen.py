@@ -88,12 +88,15 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_N = 3.0
+SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 
 # Relaxed wall equation parameters for the external reciprocal distance solve.
+SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_SIGMA = 0.01                    # PDE regularisation length
 SA_WALL_G0 = 20.0                       # reference reciprocal distance in solid
 SA_WALL_PENALTY_ALPHA = 1.0e3           # penalty amplitude
 SA_WALL_PENALTY_N = 3.0                 # penalty exponent
+SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8                # floor on reciprocal distance (avoids division by zero)
 
 # MMA objective and continuation parameters for the topology update.
