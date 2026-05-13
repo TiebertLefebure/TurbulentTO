@@ -199,7 +199,7 @@ OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
 
-RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeYoon_Re3000_NuTilde50_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeYoon_Re3000_NuTilde50_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

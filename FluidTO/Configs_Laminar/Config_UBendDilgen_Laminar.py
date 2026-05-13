@@ -5,23 +5,24 @@ from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
-# -------------------------------------------------------------------------
-# Configuration: Alexandersen 2026 Pipe-Bend - Laminar reference (Re = 1)
+# ----------------------------------------------------------------
+# Configuration: Dilgen 2018 U-Bend - Laminar reference (Re = 1)
 #
-# Uses the same mesh and non-design inlet/outlet ducts as the turbulent
-# Alexandersen pipe-bend case. The inlet profile is parabolic and Re is based
-# on the maximum inlet velocity and inlet height.
-# -------------------------------------------------------------------------
+# Uses the same non-design solid and fluid regions as the turbulent Dilgen
+# U-bend case. The inlet profile is parabolic and Re is based on the maximum
+# inlet velocity and full port height.
+# ----------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/mesh_yplus1.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/PipeBendAlexandersen/cell_yplus1.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendDilgen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendDilgen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
+NON_DESIGN_SOLID_TAG = 3
 
 
 def create_design_mesh():
@@ -32,25 +33,35 @@ build_density_bounds, build_volume_region, build_objective_region = build_cell_t
     mesh_files["CELL_DIRECTORY"],
     design_tags=(DESIGN_DOMAIN_TAG,),
     non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+    non_design_solid_tags=(NON_DESIGN_SOLID_TAG,),
 )
 
 
-L = 1.0
-H_MAX = 0.007
-LEAD_LENGTH = 0.2 * L
-INLET_HEIGHT = 0.2 * L
-OUTLET_WIDTH = 0.2 * L
-INLET_Y_MIN = 0.7 * L
-INLET_Y_MAX = INLET_Y_MIN + INLET_HEIGHT
-OUTLET_X_MIN = 0.7 * L
-OUTLET_X_MAX = OUTLET_X_MIN + OUTLET_WIDTH
+H = 0.1
+L = 10.0 * H
+H_MAX = 1.0 / 120.0
+LEAD_LENGTH = 2.0 * H
+PORT_HEIGHT = 2.0 * H
+TOP_PORT_Y_MIN = 5.5 * H
+TOP_PORT_Y_MAX = TOP_PORT_Y_MIN + PORT_HEIGHT
+BOTTOM_PORT_Y_MIN = 2.5 * H
+BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_HEIGHT
+
+BAR_THICKNESS = H
+BAR_RADIUS = 0.5 * BAR_THICKNESS
+BAR_X_START = -LEAD_LENGTH
+BAR_TIP_X = 5.0 * H
+BAR_TOTAL_LENGTH = BAR_TIP_X - BAR_X_START
+BAR_RECT_X_MAX = BAR_TIP_X - BAR_RADIUS
+BAR_Y_MIN = 0.5 * (L - BAR_THICKNESS)
+BAR_Y_MAX = BAR_Y_MIN + BAR_THICKNESS
 
 DESIGN_X_MIN = 0.0
 DESIGN_Y_MIN = 0.0
 DESIGN_X_MAX = L
 DESIGN_Y_MAX = L
 DOMAIN_X_MIN = DESIGN_X_MIN - LEAD_LENGTH
-DOMAIN_Y_MIN = DESIGN_Y_MIN - LEAD_LENGTH
+DOMAIN_Y_MIN = DESIGN_Y_MIN
 DOMAIN_X_MAX = DESIGN_X_MAX
 DOMAIN_Y_MAX = DESIGN_Y_MAX
 TOL = DOLFIN_EPS
@@ -58,13 +69,14 @@ TOL = DOLFIN_EPS
 REYNOLDS_NUMBER = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
-MU_FLUID_VALUE = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
+MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 
-# Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
+# Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
 
-VOL_FRAC = 0.25
+VOL_FRAC = 0.30
+INITIAL_DENSITY_VALUE = VOL_FRAC
 MAX_INNER_ITERATIONS = 80
-OBJECTIVE_TYPE = "average_inlet_pressure"
+OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -79,18 +91,15 @@ FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-9
 ADJOINT_SNES_RTOL = 1.0e-6
 ADJOINT_SNES_ATOL = 1.0e-9
-SNES_MAX_ITERS = 200
+SNES_MAX_ITERS = 220
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
-PRESSURE_OUTLET_COMPONENT_BCS = [
-    {"marker": "outlet", "component": 0, "value": 0.0},
-]
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_Laminar/Results_PipeBendAlexandersen_LaminarTO"
+RESULTS_ROOT_NAME = "Results_Laminar/Results_UBendDilgen_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 
@@ -100,11 +109,11 @@ def between(value, limits, eps=DOLFIN_EPS):
 
 
 def is_inlet_point(x):
-    return near(x[0], DOMAIN_X_MIN, TOL) and between(x[1], (INLET_Y_MIN, INLET_Y_MAX), TOL)
+    return near(x[0], DOMAIN_X_MIN, TOL) and between(x[1], (TOP_PORT_Y_MIN, TOP_PORT_Y_MAX), TOL)
 
 
 def is_outlet_point(x):
-    return near(x[1], DOMAIN_Y_MIN, TOL) and between(x[0], (OUTLET_X_MIN, OUTLET_X_MAX), TOL)
+    return near(x[0], DOMAIN_X_MIN, TOL) and between(x[1], (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX), TOL)
 
 
 class InletBoundary(SubDomain):
@@ -144,4 +153,4 @@ def _parabolic_horizontal_profile(y_min, y_max, u_max):
 
 
 def build_velocity_profile_sets():
-    return [_parabolic_horizontal_profile(INLET_Y_MIN, INLET_Y_MAX, U_MAX_INLET)], []
+    return [_parabolic_horizontal_profile(TOP_PORT_Y_MIN, TOP_PORT_Y_MAX, U_MAX_INLET)], []

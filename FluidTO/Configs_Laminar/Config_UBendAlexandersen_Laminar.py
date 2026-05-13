@@ -1,40 +1,42 @@
 import os
-from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, SubMesh, near
-from Utilities_SharedTO import load_cell_markers_from_xdmf, load_mesh_from_xdmf
+
+from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
+
+from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
-# -------------------------------------------------------
-# Configuration file for Alexandersen U-Bend case (Laminar)
-# -------------------------------------------------------
+# ----------------------------------------------------------------------
+# Configuration: Alexandersen 2026 U-Bend - Laminar reference (Re = 1)
+#
+# Uses the same mesh and non-design inlet/outlet ducts as the turbulent
+# Alexandersen U-bend case. The inlet profile is parabolic and Re is based
+# on the maximum inlet velocity and port height.
+# ----------------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Mesh files
-# Reuse the Alexandersen U-bend mesh as the source, then extract the tagged
-# design domain. No passive/non-design cells remain in this laminar case.
 mesh_files = {
-    'MESH_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/UBendAlexandersen/mesh_guided.xdmf'),
-    'CELL_DIRECTORY': os.path.join(REPO_ROOT, 'Meshes/UBendAlexandersen/cell_guided.xdmf'),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_guided.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_guided.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
+NON_DESIGN_FLUID_TAG = 2
 
 
 def create_design_mesh():
-    full_mesh = load_mesh_from_xdmf(mesh_files['MESH_DIRECTORY'], MPI.comm_world)
-    cell_markers = load_cell_markers_from_xdmf(
-        mesh_files['CELL_DIRECTORY'],
-        full_mesh,
-        comm=MPI.comm_world,
-    )
-    return SubMesh(full_mesh, cell_markers, DESIGN_DOMAIN_TAG)
+    return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
 
 
-# ------------------------------------------------------------
-# User parameters
-# ------------------------------------------------------------
+build_density_bounds, build_volume_region, build_objective_region = build_cell_tag_restriction_functions(
+    mesh_files["CELL_DIRECTORY"],
+    design_tags=(DESIGN_DOMAIN_TAG,),
+    non_design_fluid_tags=(NON_DESIGN_FLUID_TAG,),
+)
+
+
 L = 1.0
-H_MAX = 0.007  # mesh size used to generate the Alexandersen U-bend mesh
+H_MAX = 0.007
 LEAD_LENGTH = 0.2 * L
 PORT_HEIGHT = 0.2 * L
 TOP_PORT_Y_MIN = 0.55 * L
@@ -42,11 +44,10 @@ TOP_PORT_Y_MAX = TOP_PORT_Y_MIN + PORT_HEIGHT
 BOTTOM_PORT_Y_MIN = 0.25 * L
 BOTTOM_PORT_Y_MAX = BOTTOM_PORT_Y_MIN + PORT_HEIGHT
 
-# Fixed wall geometry cut out of the mesh to force the 180-degree turn.
 BAR_THICKNESS = 0.10 * L
 BAR_RADIUS = 0.5 * BAR_THICKNESS
-BAR_TOTAL_LENGTH = 0.70 * L
 BAR_X_START = -LEAD_LENGTH
+BAR_TOTAL_LENGTH = 0.70 * L
 BAR_TIP_X = BAR_X_START + BAR_TOTAL_LENGTH
 BAR_RECT_X_MAX = BAR_TIP_X - BAR_RADIUS
 BAR_Y_MIN = 0.5 * (L - BAR_THICKNESS)
@@ -56,32 +57,25 @@ DESIGN_X_MIN = 0.0
 DESIGN_Y_MIN = 0.0
 DESIGN_X_MAX = L
 DESIGN_Y_MAX = L
-DOMAIN_X_MIN = DESIGN_X_MIN
+DOMAIN_X_MIN = DESIGN_X_MIN - LEAD_LENGTH
 DOMAIN_Y_MIN = DESIGN_Y_MIN
 DOMAIN_X_MAX = DESIGN_X_MAX
 DOMAIN_Y_MAX = DESIGN_Y_MAX
 TOL = DOLFIN_EPS
 
-# Flow settings
 REYNOLDS_NUMBER = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 
+# Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
 
-# ===============================================================================================
-# Reynolds number: Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.0
-# ===============================================================================================
-
-
-# Topology optimization settings
 VOL_FRAC = 0.27
 MAX_INNER_ITERATIONS = 80
+OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 5e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
-# Match the low-Re Alexandersen laminar continuation style: permissive early
-# stages, then sharper projection with smaller MMA moves.
 Q_PENAL_SCHEDULE = [0.005, 0.01, 0.02, 0.03, 0.05, 0.10, 0.20, 0.35, 0.50]
 MOVE_LIMIT_SCHEDULE = [0.05, 0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005]
 BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
@@ -100,8 +94,10 @@ ETA_I = 0.50
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
+PRESSURE_OUTLET_COMPONENT_BCS = [
+    {"marker": "outlet", "component": 1, "value": 0.0},
+]
 ENABLE_PRESSURE_PIN = False
-PRESSURE_PIN_POINT = (DESIGN_X_MIN, DESIGN_Y_MIN)
 RESULTS_ROOT_NAME = "Results_Laminar/Results_UBendAlexandersen_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
@@ -112,11 +108,11 @@ def between(value, limits, eps=DOLFIN_EPS):
 
 
 def is_inlet_point(x):
-    return near(x[0], DESIGN_X_MIN, TOL) and between(x[1], (TOP_PORT_Y_MIN, TOP_PORT_Y_MAX), TOL)
+    return near(x[0], DOMAIN_X_MIN, TOL) and between(x[1], (TOP_PORT_Y_MIN, TOP_PORT_Y_MAX), TOL)
 
 
 def is_outlet_point(x):
-    return near(x[0], DESIGN_X_MIN, TOL) and between(x[1], (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX), TOL)
+    return near(x[0], DOMAIN_X_MIN, TOL) and between(x[1], (BOTTOM_PORT_Y_MIN, BOTTOM_PORT_Y_MAX), TOL)
 
 
 class InletBoundary(SubDomain):
@@ -143,7 +139,7 @@ def mark_boundaries(mesh):
     return boundaries
 
 
-def _build_horizontal_profile(u_max, y_min, y_max):
+def _parabolic_horizontal_profile(y_min, y_max, u_max):
     y_center = 0.5 * (y_min + y_max)
     width = y_max - y_min
     return Expression(
@@ -156,5 +152,4 @@ def _build_horizontal_profile(u_max, y_min, y_max):
 
 
 def build_velocity_profile_sets():
-    u_inlet = _build_horizontal_profile(U_MAX_INLET, TOP_PORT_Y_MIN, TOP_PORT_Y_MAX)
-    return [u_inlet], []
+    return [_parabolic_horizontal_profile(TOP_PORT_Y_MIN, TOP_PORT_Y_MAX, U_MAX_INLET)], []

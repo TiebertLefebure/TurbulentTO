@@ -124,6 +124,22 @@ BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
 # Alexandersen reports the continuation values but not the MMA move limit.
 MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
 MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
+
+# Sensitivity verification is performed once on the initial Alexandersen pipe-bend
+# state before the topology optimization update. The five sampled DG0 cells are
+# deterministic random samples, and the finite-difference perturbations keep the
+# SA eddy-viscosity and reciprocal wall-distance fields frozen to match the
+# frozen-adjoint derivative being verified.
+RUN_FINITE_DIFFERENCE_CHECKS = True
+FINITE_DIFFERENCE_CHECK_ITERATIONS = (0,)
+FINITE_DIFFERENCE_CHECK_STEP = 1.0e-6
+FINITE_DIFFERENCE_CHECK_SAMPLES = 5
+FINITE_DIFFERENCE_CHECK_SEED = 13
+FINITE_DIFFERENCE_CHECK_CLIP_TO_BOUNDS = True
+FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
+RUN_TAYLOR_SENSITIVITY_CHECKS = False
+SENSITIVITY_VERIFICATION_MODE_NAME = "frozen-turbulence"
+SENSITIVITY_VERIFICATION_DERIVATIVE_COLUMN = "FrozenTurbulence"
 # ================================================================== #
 
 LINEAR_SOLVER = "mumps"

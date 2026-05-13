@@ -50,6 +50,12 @@ R.~K. Apalowo.
   pipe bend.
 \newblock {\em U.Porto Journal of Engineering}, 8(2):121--134, 2022.
 
+\bibitem{Arnold2002}
+D.~N. Arnold, F.~Brezzi, B.~Cockburn, and L.~D. Marini.
+\newblock Unified analysis of discontinuous galerkin methods for elliptic
+  problems.
+\newblock {\em SIAM Journal on Numerical Analysis}, 39(5):1749--1779, 2002.
+
 \bibitem{Barroca2023}
 B.~Barroca, M.~Blommaert, G.~Buckinx, M.~Schevenels, and M.~Baelmans.
 \newblock High-resolution topology optimization of heat sinks for
@@ -75,6 +81,14 @@ T.~Borrvall and J.~Petersson.
 \newblock Topology optimization of fluids in stokes flow.
 \newblock {\em International journal for numerical methods in fluids},
   41(1):77--107, 2003.
+
+\bibitem{Brooks1982}
+A.~N. Brooks and T.~J. Hughes.
+\newblock Streamline upwind/petrov-galerkin formulations for convection
+  dominated flows with particular emphasis on the incompressible navier-stokes
+  equations.
+\newblock {\em Computer methods in applied mechanics and engineering},
+  32(1-3):199--259, 1982.
 
 \bibitem{Chorin1968}
 A.~J. Chorin.
@@ -124,6 +138,19 @@ C.~Geuzaine and J.-F. Remacle.
 \newblock {\em International journal for numerical methods in engineering},
   79(11):1309--1331, 2009.
 
+\bibitem{Guest2004}
+J.~K. Guest, J.~H. Pr{\'e}vost, and T.~Belytschko.
+\newblock Achieving minimum length scale in topology optimization using nodal
+  independent density variables and projection functions.
+\newblock {\em International journal for numerical methods in engineering},
+  61(2):238--254, 2004.
+
+\bibitem{Hesthaven2007}
+J.~S. Hesthaven and T.~Warburton.
+\newblock {\em Nodal Discontinuous Galerkin Methods: Algorithms, Analysis, and
+  Applications}.
+\newblock Springer Science \& Business Media, New York, NY, 2007.
+
 \bibitem{Andreasen2020}
 L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
   Andreasen.
@@ -142,6 +169,13 @@ H.~P. Langtangen and A.~Logg.
 \newblock {\em Solving PDEs in Python: The FEniCS Tutorial I}.
 \newblock Springer Nature, 2016.
 
+\bibitem{Lazarov2011}
+B.~S. Lazarov and O.~Sigmund.
+\newblock Filters in topology optimization based on helmholtz-type differential
+  equations.
+\newblock {\em International Journal for Numerical Methods in Engineering},
+  86(6):765--781, 2011.
+
 \bibitem{Logg2012}
 A.~Logg, K.-A. Mardal, and G.~N. Wells.
 \newblock {\em Automated Solution of Differential Equations by the Finite
@@ -159,6 +193,13 @@ C.~Othmer.
 \newblock Adjoint methods for car aerodynamics.
 \newblock {\em Journal of Mathematics in Industry}, 4(1):1--25, 2014.
 
+\bibitem{Papoutsis2016}
+E.~M. Papoutsis-Kiachagias and K.~C. Giannakoglou.
+\newblock Continuous adjoint methods for turbulent flows, applied to shape and
+  topology optimization: industrial applications.
+\newblock {\em Archives of Computational Methods in Engineering},
+  23(2):255--299, 2016.
+
 \bibitem{Pope2000}
 S.~B. Pope.
 \newblock {\em Turbulent Flows}.
@@ -171,6 +212,12 @@ C.~L. Rumsey et~al.
   2023.
 \newblock Accessed: 2024-05-15.
 
+\bibitem{Schramm2018}
+M.~Schramm, B.~Stoevesandt, and J.~Peinke.
+\newblock Optimization of airfoils using the adjoint approach and the influence
+  of adjoint turbulent viscosity.
+\newblock {\em Computation}, 6(1):10, 2018.
+
 \bibitem{Spalart1992}
 P.~Spalart and S.~Allmaras.
 \newblock A one-equation turbulence model for aerodynamic flows.
@@ -181,11 +228,25 @@ P.~R. Spalart and S.~R. Allmaras.
 \newblock A one-equation turbulence model for aerodynamic flows.
 \newblock {\em La Recherche Aérospatiale}, 1:5--21, 1994.
 
+\bibitem{Stolpe2001}
+M.~Stolpe and K.~Svanberg.
+\newblock An alternative interpolation scheme for minimum compliance topology
+  optimization.
+\newblock {\em Structural and Multidisciplinary Optimization}, 22(2):116--124,
+  2001.
+
 \bibitem{Sun2023}
 Y.~Sun, M.~Hao, and Z.~Wang.
 \newblock Topology optimization of turbulent flow cooling structures based on
   the $k$--$\varepsilon$ model.
 \newblock {\em Entropy}, 25:1061, 2023.
+
+\bibitem{Svanberg1987}
+K.~Svanberg.
+\newblock The method of moving asymptotes—a new method for structural
+  optimization.
+\newblock {\em International journal for numerical methods in engineering},
+  24(2):359--373, 1987.
 
 \bibitem{Takamasa1995}
 T.~Takamasa and M.~Kondo.
@@ -199,16 +260,35 @@ R.~Temam.
 \newblock {\em Archive for Rational Mechanics and Analysis}, 32(2):135--153,
   1969.
 
+\bibitem{Tucker2003}
+P.~Tucker.
+\newblock Differential equation-based wall distance computation for des and
+  rans.
+\newblock {\em Journal of Computational Physics}, 190(1):229--248, 2003.
+
 \bibitem{Versteeg2007}
 H.~K. Versteeg and W.~Malalasekera.
 \newblock {\em An introduction to computational fluid dynamics: the finite
   volume method}.
 \newblock Pearson education, 2007.
 
+\bibitem{Wang2011}
+F.~Wang, B.~S. Lazarov, and O.~Sigmund.
+\newblock On projection methods, convergence and robust formulations in
+  topology optimization.
+\newblock {\em Structural and Multidisciplinary Optimization}, 43(6):767--784,
+  2011.
+
 \bibitem{White2006}
 F.~M. White and J.~Majdalani.
 \newblock {\em Viscous fluid flow}, volume~3.
 \newblock McGraw-Hill New York, 2006.
+
+\bibitem{Wu2023}
+H.~Wu, D.~Wang, and X.~Huang.
+\newblock Effect of constant eddy viscosity assumption on optimization using a
+  discrete adjoint method.
+\newblock {\em Chinese Journal of Aeronautics}, 36(11):102--118, 2023.
 
 \bibitem{Yoon2016}
 G.~H. Yoon.
@@ -235,5 +315,11 @@ T.~Zhou, T.~Liu, Y.~Deng, L.~Chen, S.~Qian, and Z.~Liu.
 \newblock Design of microfluidic channel networks with specified output flow
   rates using the cfd-based optimization method.
 \newblock {\em Microfluidics and Nanofluidics}, 21(1), 2017.
+
+\bibitem{Zymaris2009}
+A.~Zymaris, D.~Papadimitriou, K.~Giannakoglou, and C.~Othmer.
+\newblock Continuous adjoint approach to the spalart--allmaras turbulence model
+  for incompressible flows.
+\newblock {\em Computers \& Fluids}, 38(8):1528--1538, 2009.
 
 \end{thebibliography}

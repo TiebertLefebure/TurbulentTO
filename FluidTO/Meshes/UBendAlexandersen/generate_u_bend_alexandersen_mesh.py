@@ -23,8 +23,9 @@ U_BEND_TOP_PORT_Y_MIN = 0.55 * L
 U_BEND_BOTTOM_PORT_Y_MIN = 0.25 * L
 U_BEND_BAR_THICKNESS = 0.10 * L
 U_BEND_BAR_RADIUS = 0.5 * U_BEND_BAR_THICKNESS
+U_BEND_BAR_X_START = -LEAD_LENGTH
 U_BEND_BAR_TOTAL_LENGTH = 0.70 * L
-U_BEND_BAR_TIP_X = -LEAD_LENGTH + U_BEND_BAR_TOTAL_LENGTH
+U_BEND_BAR_TIP_X = U_BEND_BAR_X_START + U_BEND_BAR_TOTAL_LENGTH
 U_BEND_BAR_RECT_X_MAX = U_BEND_BAR_TIP_X - U_BEND_BAR_RADIUS
 H_MAX = 0.007
 TOL = 1.0e-9
@@ -170,10 +171,10 @@ def build_u_bend_geometry() -> list[int]:
     fluid, _ = occ.fragment([(2, design)], [(2, inlet), (2, outlet)])
 
     bar_rect = occ.addRectangle(
-        -LEAD_LENGTH,
+        U_BEND_BAR_X_START,
         0.5 * (L - U_BEND_BAR_THICKNESS),
         0.0,
-        U_BEND_BAR_RECT_X_MAX + LEAD_LENGTH,
+        U_BEND_BAR_RECT_X_MAX - U_BEND_BAR_X_START,
         U_BEND_BAR_THICKNESS,
     )
     bar_cap = occ.addDisk(U_BEND_BAR_RECT_X_MAX, 0.5 * L, 0.0, U_BEND_BAR_RADIUS, U_BEND_BAR_RADIUS)

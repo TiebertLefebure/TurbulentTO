@@ -92,6 +92,7 @@ STATE_INITIAL_SA_RELAXATION = 0.25
 STATE_INITIAL_SA_SWEEPS = 4
 
 VOL_FRAC = 0.25
+OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 SAVE_SEMIFROZEN_DIAGNOSTICS = True
@@ -161,7 +162,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_PipeBendAlexandersen_TurbulentTO_SemiFrozen"
+RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_PipeBendAlexandersen_SemiFrozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

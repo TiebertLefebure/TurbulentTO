@@ -1,10 +1,15 @@
 # Monolithic forward: solve all primal unknowns together in one nonlinear system
 # X = [u, p, nu_tilde, G]
+# This SemiFrozen/Full split only applies to reciprocal wall-distance cases
+# with a Yoon-style G equation. Dilgen Poisson wall-distance cases have no G
+# state, so they only have Frozen and SemiFrozen configs; the SemiFrozen
+# adjoint is [lambda_u, lambda_p, lambda_nu].
 # one residual R(X, rho) = 0
 # one Newton/SNES solve on the full Jacobian
 
 # Monolithic adjoint: solve all adjoint unknowns together in one linear system
-# Lambda = [lambda_u, lambda_p, lambda_nu, lambda_G]
+# Reciprocal-G Full: Lambda = [lambda_u, lambda_p, lambda_nu, lambda_G]
+# Dilgen SemiFrozen: Lambda = [lambda_u, lambda_p, lambda_nu]
 #csolve (dR/dX)^T Lambda = dJ/dX
 
 # What you have now:

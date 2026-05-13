@@ -15,6 +15,7 @@ from mma import mmasub
 from Utilities_SharedTO import (
     append_optimization_log_entry,
     as_list,
+    build_design_pressure_drop_markers,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
     create_design_mesh_from_config,
@@ -22,6 +23,8 @@ from Utilities_SharedTO import (
     initialize_optimization_log,
     load_config_module_from_cli,
     pressure_drop_between_boundaries,
+    pressure_drop_between_design_facets,
+    pressure_drop_design_facet_functional,
     reset_vtk_series,
 )
 
@@ -160,6 +163,66 @@ def build_density_bounds_from_config():
 
     return lower_bound, upper_bound
 
+
+def build_region_function_from_config(builder_name, default_value=1.0):
+    """Return a DG0 mask used to restrict objective/volume integrations."""
+    region_builder = globals().get(builder_name)
+    if callable(region_builder):
+        region_spec = region_builder(mesh, DensitySpace)
+    else:
+        region_spec = default_value
+
+    region_function = _as_density_function(region_spec, DensitySpace)
+    region_values = np.clip(region_function.vector().get_local(), 0.0, 1.0)
+    region_function.vector().set_local(region_values)
+    region_function.vector().apply("insert")
+    return region_function
+
+
+def _as_scalar_dirichlet_value(value):
+    if np.isscalar(value):
+        return Constant(float(value))
+    return value
+
+
+def _normalize_velocity_component_bc_specs(raw_specs, marker_lookup):
+    """Expand optional component-wise velocity BC specs from the config."""
+    if raw_specs is None:
+        return []
+
+    normalized_specs = []
+    for spec in as_list(raw_specs):
+        if not isinstance(spec, dict):
+            raise TypeError("Velocity component BC specs must be dictionaries.")
+        if "component" not in spec:
+            raise ValueError("Velocity component BC specs must define 'component'.")
+
+        component = int(spec["component"])
+        if component not in (0, 1):
+            raise ValueError("Velocity component BC 'component' must be 0 or 1.")
+
+        marker_spec = spec.get("marker", "outlet")
+        if isinstance(marker_spec, str):
+            if marker_spec not in marker_lookup:
+                raise ValueError(
+                    "Unknown marker name '{}' in velocity component BC.".format(marker_spec)
+                )
+            marker_values = as_list(marker_lookup[marker_spec])
+        else:
+            marker_values = as_list(marker_spec)
+
+        value = _as_scalar_dirichlet_value(spec.get("value", 0.0))
+        for marker_value in marker_values:
+            normalized_specs.append(
+                {
+                    "marker": int(marker_value),
+                    "component": component,
+                    "value": value,
+                }
+            )
+
+    return normalized_specs
+
 mark = MARK
 boundaries = globals()["mark_boundaries"](mesh)
 wall_markers = as_list(mark["walls"])
@@ -168,10 +231,38 @@ outlet_markers = as_list(mark["outlet"])
 density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
+ObjectiveRegion = build_region_function_from_config("build_objective_region", 1.0)
+VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
+
+volume_region_values = VolumeRegion.vector().get_local()
+active_design_mask = (
+    (volume_region_values > 0.5)
+    & ((density_upper_values - density_lower_values) > 1.0e-12)
+)
+ActiveDV = np.flatnonzero(active_design_mask).astype(np.int64)
+PassiveDV = np.flatnonzero(~active_design_mask).astype(np.int64)
+if ActiveDV.size == 0:
+    raise ValueError("Active design space is empty. Check the design-region cell tags.")
+root_print(
+    "Active design space: {} active DG0 cells, {} passive/non-design cells.".format(
+        int(ActiveDV.size), int(PassiveDV.size),
+    )
+)
 
 dx = Measure("dx", domain=mesh)
 ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
 dS = Measure("dS", domain=mesh)
+design_pressure_drop_facets, design_pressure_drop_mark = build_design_pressure_drop_markers(mesh, globals())
+dS_design_pressure = Measure(
+    "dS",
+    domain=mesh,
+    subdomain_data=design_pressure_drop_facets,
+)
+ds_design_pressure = Measure(
+    "ds",
+    domain=mesh,
+    subdomain_data=design_pressure_drop_facets,
+)
 
 inlet_profiles, outlet_profiles = globals()["build_velocity_profile_sets"]()
 inlet_profiles = as_list(inlet_profiles)
@@ -202,6 +293,23 @@ if use_outlet_velocity_bc and len(outlet_profiles) != len(outlet_markers):
     )
 
 root_print("Outlet BC type: {}".format(outlet_bc_type))
+pressure_outlet_component_bcs = _normalize_velocity_component_bc_specs(
+    globals().get("PRESSURE_OUTLET_COMPONENT_BCS"),
+    mark,
+)
+if pressure_outlet_component_bcs and not use_outlet_pressure_bc:
+    raise ValueError("PRESSURE_OUTLET_COMPONENT_BCS require OUTLET_BC_TYPE = 'pressure'.")
+if pressure_outlet_component_bcs:
+    root_print(
+        "Pressure-outlet velocity component BCs: {}".format(
+            ", ".join(
+                "marker {} -> u[{}] = {}".format(
+                    spec["marker"], spec["component"], spec["value"]
+                )
+                for spec in pressure_outlet_component_bcs
+            )
+        )
+    )
 
 bcu_walls = [DirichletBC(FlowSpace.sub(0), u_noslip, boundaries, m) for m in wall_markers]
 bcu_inlet = [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(inlet_profiles, inlet_markers)]
@@ -209,11 +317,20 @@ bcu_outlet = (
     [DirichletBC(FlowSpace.sub(0), prof, boundaries, m) for prof, m in zip(outlet_profiles, outlet_markers)]
     if use_outlet_velocity_bc else []
 )
+bcu_pressure_outlet_components = [
+    DirichletBC(
+        FlowSpace.sub(0).sub(spec["component"]),
+        spec["value"],
+        boundaries,
+        spec["marker"],
+    )
+    for spec in pressure_outlet_component_bcs
+]
 bcp_outlet = (
     [DirichletBC(FlowSpace.sub(1), outlet_pressure_value, boundaries, m) for m in outlet_markers]
     if use_outlet_pressure_bc else []
 )
-bc_NS = bcu_walls + bcu_inlet + bcu_outlet + bcp_outlet
+bc_NS = bcu_walls + bcu_inlet + bcu_outlet + bcu_pressure_outlet_components + bcp_outlet
 if use_pressure_pin:
     bcp_pin = DirichletBC(
         FlowSpace.sub(1), Constant(0.0),
@@ -233,6 +350,15 @@ else:
     bc_NS_adj = bcu_walls_adj + bcu_inlet_adj
     if use_outlet_velocity_bc:
         bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(0), u_noslip, boundaries, m) for m in outlet_markers]
+    bc_NS_adj += [
+        DirichletBC(
+            FlowSpaceAdj.sub(0).sub(spec["component"]),
+            Constant(0.0),
+            boundaries,
+            spec["marker"],
+        )
+        for spec in pressure_outlet_component_bcs
+    ]
 if use_outlet_pressure_bc:
     bc_NS_adj += [DirichletBC(FlowSpaceAdj.sub(1), Constant(0.0), boundaries, m) for m in outlet_markers]
 if use_pressure_pin:
@@ -255,12 +381,26 @@ r = r_filter / (2.0 * 3.0**0.5)
 u_filter = TrialFunction(DensitySpace)
 v_filter = TestFunction(DensitySpace)
 filter_in = Function(DensitySpace)
+filter_work = Function(DensitySpace)
+active_design_indicator = Function(DensitySpace)
+filter_denominator = Function(DensitySpace)
 n = FacetNormal(mesh)
 h = CellDiameter(mesh)
 h_avg = (h("+") + h("-")) / 2.0
 
 
-def pde_filter(input_field, output_field):
+active_indicator_values = np.zeros_like(density_lower_values)
+active_indicator_values[ActiveDV] = 1.0
+active_design_indicator.vector().set_local(active_indicator_values)
+active_design_indicator.vector().apply("insert")
+filter_denominator_values = None
+filter_denominator_floor = max(
+    float(globals().get("FILTER_DENOMINATOR_FLOOR", 1.0e-12)),
+    1.0e-300,
+)
+
+
+def pde_filter_raw(input_field, output_field):
     alpha_dg = 4.0
     helmholtz = (
         r**2 * (alpha_dg / h_avg * dot(jump(v_filter, n), jump(u_filter, n))) * dS
@@ -272,10 +412,68 @@ def pde_filter(input_field, output_field):
     return output_field
 
 
+def initialize_design_filter_normalization():
+    """Precompute H(mask) for active-design-only filtering."""
+    global filter_denominator_values
+    pde_filter_raw(active_design_indicator, filter_denominator)
+    filter_denominator_values = np.maximum(
+        filter_denominator.vector().get_local(),
+        filter_denominator_floor,
+    )
+    min_active_denom = float(np.min(filter_denominator_values[ActiveDV]))
+    if min_active_denom <= 10.0 * filter_denominator_floor:
+        raise RuntimeError(
+            "Active-design filter normalization has near-zero denominator. "
+            "Check design-region tags and FILTER_DENOMINATOR_FLOOR."
+        )
+    root_print(
+        "Design filter: active-cell mask normalization enabled "
+        "(min active denominator {:.3e}).".format(min_active_denom)
+    )
+
+
+def pde_filter_design_density(input_field, output_field):
+    """Filter active design variables and restore configured passive cells."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    output_values = output_field.vector().get_local() / filter_denominator_values
+    output_values = np.clip(output_values, 0.0, 1.0)
+    output_values[PassiveDV] = np.clip(
+        input_values[PassiveDV],
+        density_lower_values[PassiveDV],
+        density_upper_values[PassiveDV],
+    )
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
+    return output_field
+
+
+def pde_filter_design_gradient(input_field, output_field):
+    """Apply the transpose of the active mask-normalized density filter."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV] / filter_denominator_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    output_values = output_field.vector().get_local()
+    output_values[PassiveDV] = 0.0
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
+    return output_field
+
+
 # ------------------------------------------------------------
 # Optimization forms
 # ------------------------------------------------------------
-AreaOfInterest = interpolate(Constant(1.0), DensitySpace)
 rho_effective = projection(rho_f, ETA_I)
 
 dissipation_density_builder = globals().get("build_dissipation_density")
@@ -285,17 +483,44 @@ else:
     deformation = nabla_grad(u) + nabla_grad(u).T
     dissipation_density = 0.5 * mu_fluid * inner(deformation, deformation)
 
-ObjFunctional = AreaOfInterest * (
-    dissipation_density + alpha(rho_effective) * inner(u, u)
-) * dx
-objective_log_column = "J_dissipation_W_per_m"
-objective_console_label = "J_dissipation"
-objective_console_unit = " W/m"
-root_print(
-    "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
-    "(2D unit-depth power, W/m)."
-)
-ViscousDissipationFunctional = AreaOfInterest * dissipation_density * dx
+objective_type = str(globals().get("OBJECTIVE_TYPE", "dissipation")).strip().lower()
+if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
+    ObjFunctional = ObjectiveRegion * (
+        dissipation_density + alpha(rho_effective) * inner(u, u)
+    ) * dx
+    objective_log_column = "J_dissipation_W_per_m"
+    objective_console_label = "J_dissipation"
+    objective_console_unit = " W/m"
+    root_print(
+        "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
+        "(2D unit-depth power, W/m)."
+    )
+elif objective_type in ("average_inlet_pressure", "inlet_pressure", "mean_inlet_pressure"):
+    ObjFunctional, design_inlet_area, design_outlet_area = pressure_drop_design_facet_functional(
+        p,
+        dS_design_pressure,
+        ds_design_pressure,
+        design_pressure_drop_mark["inlet"],
+        design_pressure_drop_mark["outlet"],
+    )
+    objective_log_column = "J_pressure_Pa"
+    objective_console_label = "J_pressure"
+    objective_console_unit = " Pa"
+    root_print(
+        "Objective type: J_pressure = design-domain pressure drop over inlet/outlet measures "
+        "{:.6e}/{:.6e} (Pa).".format(
+            design_inlet_area, design_outlet_area,
+        )
+    )
+else:
+    raise ValueError(
+        "OBJECTIVE_TYPE must be 'dissipation' or 'average_inlet_pressure', got '{}'.".format(
+            objective_type
+        )
+    )
+# The nondesign diagnostic mirrors dP_nondesign: use the full simulated domain.
+ViscousDissipationNondesignFunctional = dissipation_density * dx
+ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx)
 lagrangian_form = ObjFunctional + state_form
@@ -304,7 +529,7 @@ forward_form = derivative(state_form, w_adj, TestFunction(FlowSpace))
 adjoint_form = derivative(lagrangian_form, w_fwd, TestFunction(FlowSpaceAdj))
 
 ddx = derivative(lagrangian_form, rho_f)
-vol_constraint = AreaOfInterest * rho_effective * dx - AreaOfInterest * VOL_FRAC * dx
+vol_constraint = VolumeRegion * rho_effective * dx - VolumeRegion * VOL_FRAC * dx
 sensitivities_vol_constraint = derivative(vol_constraint, rho_f)
 
 
@@ -332,7 +557,9 @@ p_out = File(reset_vtk_series(os.path.join(p_dir, "plot_p.pvd"), COMM))
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 optimization_log_quantity_columns = (
+    "ViscousDissipation_nondesign_W_per_m",
     "ViscousDissipation_design_W_per_m",
+    "dP_nondesign_Pa",
     "dP_design_Pa",
 )
 initialize_optimization_log(
@@ -349,13 +576,16 @@ initial_density = float(globals().get("INITIAL_DENSITY_VALUE", VOL_FRAC))
 assign(rho, interpolate(Constant(initial_density), DensitySpace))
 rho.vector().set_local(np.clip(rho.vector().get_local(), density_lower_values, density_upper_values))
 rho.vector().apply("insert")
+initialize_design_filter_normalization()
 
 iter_count = 0
 previous_objective = 0.0
 
-num_mma = mesh.num_cells()
+num_mma = int(ActiveDV.size)
+active_density_lower_values = density_lower_values[ActiveDV]
+active_density_upper_values = density_upper_values[ActiveDV]
 xval = np.zeros((num_mma, 1))
-xval[:, 0] = rho.vector()
+xval[:, 0] = rho.vector().get_local()[ActiveDV]
 xold1 = np.zeros((num_mma, 1))
 xold2 = np.zeros((num_mma, 1))
 low = np.zeros((num_mma, 1))
@@ -367,14 +597,16 @@ a = np.zeros((mmma, 1))
 c = 1.0e4 * np.ones((mmma, 1))
 d = np.ones((mmma, 1))
 
-xmin = np.zeros((num_mma, 1))
-xmax = np.ones((num_mma, 1))
+xmin = active_density_lower_values.reshape((num_mma, 1)).copy()
+xmax = active_density_upper_values.reshape((num_mma, 1)).copy()
 
 df0dx = np.zeros((num_mma, 1))
 fval = np.zeros((mmma, 1))
 dfdx = np.zeros((mmma, num_mma))
 
-volume = assemble(AreaOfInterest * dx)
+volume = assemble(VolumeRegion * dx)
+if volume <= 0.0:
+    raise ValueError("The volume-constrained design region has zero measure.")
 
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
@@ -431,7 +663,7 @@ def solve_forward_once(method_override=None):
 
 
 root_print("[Stokes warm-start]")
-rho_f = pde_filter(rho, rho_f)
+rho_f = pde_filter_design_density(rho, rho_f)
 initialize_forward_guess_with_stokes()
 
 
@@ -459,7 +691,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         ))
 
         # Filter current design
-        rho_f = pde_filter(rho, rho_f)
+        rho_f = pde_filter_design_density(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
         rho_out << rho
         rhop_out << rho_proj_plot
@@ -493,9 +725,17 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         p_out << w_fwd.sub(1)
 
         f0val = assemble(ObjFunctional)
+        viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
-        pressure_drop_static_design_now = pressure_drop_between_boundaries(
+        pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
+        )
+        pressure_drop_design_now = pressure_drop_between_design_facets(
+            w_fwd.sub(1),
+            dS_design_pressure,
+            ds_design_pressure,
+            design_pressure_drop_mark["inlet"],
+            design_pressure_drop_mark["outlet"],
         )
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
 
@@ -509,18 +749,18 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # Objective gradient
         unfiltered_gradient.vector()[:] = assemble(ddx)[:]
-        filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
+        filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
         # Constraint and constraint gradient
         fval[0, 0] = assemble(vol_constraint)
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
-        filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
-        vol_fraction_now = assemble(AreaOfInterest * rho_effective * dx) / volume
+        filtered_s_vol = pde_filter_design_gradient(unfiltered_s_vol, filtered_s_vol)
+        vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
-        df0dx[:, 0] = filtered_gradient.vector()[:]
-        dfdx[0, :] = filtered_s_vol.vector()[:]
+        df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
+        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
 
         # MMA update
         root_print("  [MMA update]")
@@ -532,9 +772,16 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         xold2 = xold1.copy()
         xold1 = xval.copy()
         xval = xmma.copy()
-        rho_values = np.clip(xmma[:, 0].copy(), density_lower_values, density_upper_values)
-        xval[:, 0] = rho_values
-        rho.vector()[:] = rho_values
+        active_rho_values = np.clip(
+            xmma[:, 0].copy(),
+            active_density_lower_values,
+            active_density_upper_values,
+        )
+        xval[:, 0] = active_rho_values
+        rho_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+        rho_values[ActiveDV] = active_rho_values
+        rho.vector().set_local(rho_values)
+        rho.vector().apply("insert")
 
         append_optimization_log_entry(
             log_path,
@@ -544,13 +791,15 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             inner_count,
             iter_count,
             f0val,
-            pressure_drop_static_design_now,
+            pressure_drop_nondesign_now,
             obj_conv,
             vol_fraction_now,
             vol_residual_now,
             pressure_drop_values=(
+                viscous_dissipation_nondesign_now,
                 viscous_dissipation_design_now,
-                pressure_drop_static_design_now,
+                pressure_drop_nondesign_now,
+                pressure_drop_design_now,
             ),
             pressure_drop_columns=optimization_log_quantity_columns,
             objective_column=objective_log_column,
@@ -558,11 +807,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
-        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_design={:.4e} W/m dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}".format(
+        root_print("q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_nondesign={:.4e} W/m ViscousDissipation_design={:.4e} W/m dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}".format(
             q_val, float(BETA_PROJ.values()[0]), move_limit_now,
             inner_count, iteration_elapsed, optimization_elapsed,
             objective_console_label, f0val, objective_console_unit,
-            viscous_dissipation_design_now, pressure_drop_static_design_now,
+            viscous_dissipation_nondesign_now, viscous_dissipation_design_now,
+            pressure_drop_nondesign_now, pressure_drop_design_now,
             obj_conv, vol_fraction_now,
             convergence_history, OBJECTIVE_STREAK_TO_STOP,
         ))

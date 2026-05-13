@@ -88,6 +88,7 @@ SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
 VOL_FRAC = 0.27
+OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
@@ -141,7 +142,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_UBendAlexandersen_TurbulentTO_SemiFrozen"
+RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_UBendAlexandersen_SemiFrozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

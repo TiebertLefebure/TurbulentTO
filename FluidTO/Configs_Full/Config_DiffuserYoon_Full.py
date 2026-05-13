@@ -139,7 +139,7 @@ OUTLET_BC_TYPE = "velocity"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 
-RESULTS_ROOT_NAME = "Results_Full/Results_DiffuserYoon_TurbulentTO_Full"
+RESULTS_ROOT_NAME = "Results_Full/Results_DiffuserYoon_Full"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

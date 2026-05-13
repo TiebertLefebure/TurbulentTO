@@ -1,5 +1,6 @@
 import math
 import os
+import csv
 
 import numpy as np
 from dolfin import Function, MPI, Point, TestFunction, assemble, dot, dx, project, sqrt
@@ -34,6 +35,28 @@ def build_velocity_magnitude_field(velocity, density_space):
 def copy_scalar_field(source, name):
     target = Function(source.function_space())
     target.vector().set_local(source.vector().get_local())
+    target.vector().apply("insert")
+    target.rename(name, name)
+    return target
+
+
+def build_cell_area_normalized_field(source, name="df0dx_normalized"):
+    target = Function(source.function_space())
+    values = source.vector().get_local()
+    areas = np.maximum(_cell_measure_values(source.function_space()), 1.0e-300)
+    target.vector().set_local(values / areas)
+    target.vector().apply("insert")
+    target.rename(name, name)
+    return target
+
+
+def build_objective_normalized_field(source, objective_reference, name="df0dx_objective_normalized"):
+    reference = float(objective_reference)
+    if abs(reference) <= 1.0e-300:
+        raise ValueError("Objective-normalized Dilgen output needs a nonzero reference objective.")
+
+    target = Function(source.function_space())
+    target.vector().set_local(source.vector().get_local() / reference)
     target.vector().apply("insert")
     target.rename(name, name)
     return target
@@ -132,6 +155,14 @@ def _write_readme(output_dir, config, include_g_state):
         handle.write("Line data:\n")
         handle.write("  df0dx_diagonal_line_###.tsv: lower-left to upper-right, Dilgen Fig. 5\n")
         handle.write("  df0dx_x_y0p5_line_###.tsv: line (x, 0.5), Dilgen Fig. 6\n\n")
+        handle.write("Normalized plotting data:\n")
+        handle.write("  ../df0dx_normalized/plot_df0dx_normalized.pvd: df0dx divided by DG0 cell area for Dilgen Fig. 4\n")
+        handle.write("  df0dx_diagonal_line_normalized.tsv: df0dx divided by the initial objective J0 for Dilgen Fig. 5\n")
+        handle.write("  df0dx_x_y0point5_normalized.tsv: df0dx divided by the initial objective J0 for Dilgen Fig. 6\n\n")
+        handle.write("Sensitivity verification tables:\n")
+        handle.write("  ../SensitivityVerificationTable.tsv: Dilgen Table 2 finite-difference comparison\n")
+        handle.write("  ../TaylorCheckLog.tsv: directional Taylor remainder check\n")
+        handle.write("  ../TaylorDirection_###.tsv: nonzero entries of the Taylor perturbation direction\n\n")
         handle.write("Grid points: {}\n".format(int(config.get("DILGEN_PAPER_GRID_POINTS", 201))))
         handle.write("Line points: {}\n".format(int(config.get("DILGEN_PAPER_LINE_POINTS", 401))))
 
@@ -146,6 +177,7 @@ def write_dilgen_paper_data(
     config,
     comm,
     include_g_state=False,
+    df0dx_objective_normalized_field=None,
 ):
     if not _is_root(comm):
         return
@@ -206,3 +238,143 @@ def write_dilgen_paper_data(
         horizontal_y,
         line_points,
     )
+    if df0dx_objective_normalized_field is not None:
+        _write_diagonal_line(
+            os.path.join(output_dir, "df0dx_diagonal_line_normalized.tsv"),
+            df0dx_objective_normalized_field,
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+            line_points,
+        )
+        _write_horizontal_line(
+            os.path.join(output_dir, "df0dx_x_y0point5_normalized.tsv"),
+            df0dx_objective_normalized_field,
+            x_min,
+            x_max,
+            horizontal_y,
+            line_points,
+        )
+
+
+def _read_verification_table(path):
+    if not path or not os.path.isfile(path):
+        return []
+    with open(path, "r", newline="") as handle:
+        header = handle.readline()
+        if not header:
+            return []
+        if "\t" in header:
+            handle.seek(0)
+            reader = csv.DictReader(handle, delimiter="\t")
+            return [row for row in reader]
+        columns = header.split()
+        rows = []
+        for line in handle:
+            values = line.split()
+            if not values:
+                continue
+            rows.append(dict(zip(columns, values)))
+        return rows
+
+
+def _density_dof_key(row):
+    try:
+        return int(float(row.get("DensityDof", "")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _verification_rows_by_dof(rows):
+    rows_by_dof = {}
+    for row in rows:
+        density_dof = _density_dof_key(row)
+        if density_dof is not None:
+            rows_by_dof[density_dof] = row
+    return rows_by_dof
+
+
+def _first_existing_value(row, names, default="nan"):
+    for name in names:
+        if name in row and row[name] not in ("", None):
+            return row[name]
+    return default
+
+
+def _absolute_error_value(row, derivative_names):
+    existing_value = _first_existing_value(row, ("AbsoluteError",), None)
+    if existing_value not in ("", None):
+        return existing_value
+
+    finite_difference = _first_existing_value(row, ("FiniteDifferenceDerivative", "FiniteDifference"), None)
+    adjoint_value = _first_existing_value(row, derivative_names, None)
+    try:
+        return "{:.16e}".format(abs(float(finite_difference) - float(adjoint_value)))
+    except (TypeError, ValueError):
+        return "nan"
+
+
+def write_combined_dilgen_table2_if_available(output_path, frozen_table_path, semifrozen_table_path):
+    frozen_rows = _read_verification_table(frozen_table_path)
+    semifrozen_rows = _read_verification_table(semifrozen_table_path)
+    if not frozen_rows or not semifrozen_rows:
+        return False
+
+    frozen_by_dof = _verification_rows_by_dof(frozen_rows)
+    semifrozen_by_dof = _verification_rows_by_dof(semifrozen_rows)
+    shared_dofs = [dof for dof in semifrozen_by_dof if dof in frozen_by_dof]
+    if not shared_dofs:
+        return False
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", newline="") as handle:
+        columns = [
+            "CV",
+            "DensityDof",
+            "X",
+            "Y",
+            "Step",
+            "FiniteDifference",
+            "AdjointSA",
+            "FrozenTurbulence",
+            "AbsoluteErrorAdjointSA",
+            "AbsoluteErrorFrozenTurbulence",
+            "RelativeErrorAdjointSA",
+            "RelativeErrorFrozenTurbulence",
+            "SemiFrozenBaseObjective",
+            "FrozenBaseObjective",
+        ]
+        writer = csv.DictWriter(handle, fieldnames=columns, delimiter="\t", extrasaction="ignore")
+        writer.writeheader()
+        for idx, dof in enumerate(shared_dofs, start=1):
+            semi = semifrozen_by_dof[dof]
+            frozen = frozen_by_dof[dof]
+            writer.writerow(
+                {
+                    "CV": "CV{}".format(idx),
+                    "DensityDof": str(dof),
+                    "X": _first_existing_value(semi, ("X",), _first_existing_value(frozen, ("X",))),
+                    "Y": _first_existing_value(semi, ("Y",), _first_existing_value(frozen, ("Y",))),
+                    "Step": _first_existing_value(semi, ("Step",), _first_existing_value(frozen, ("Step",))),
+                    "FiniteDifference": _first_existing_value(semi, ("FiniteDifferenceDerivative", "FiniteDifference")),
+                    "AdjointSA": _first_existing_value(semi, ("AdjointSA", "AdjointDerivative", "Derivative")),
+                    "FrozenTurbulence": _first_existing_value(
+                        frozen,
+                        ("FrozenTurbulence", "AdjointDerivative", "Derivative"),
+                    ),
+                    "AbsoluteErrorAdjointSA": _absolute_error_value(
+                        semi,
+                        ("AdjointSA", "AdjointDerivative", "Derivative"),
+                    ),
+                    "AbsoluteErrorFrozenTurbulence": _absolute_error_value(
+                        frozen,
+                        ("FrozenTurbulence", "AdjointDerivative", "Derivative"),
+                    ),
+                    "RelativeErrorAdjointSA": _first_existing_value(semi, ("RelativeError",)),
+                    "RelativeErrorFrozenTurbulence": _first_existing_value(frozen, ("RelativeError",)),
+                    "SemiFrozenBaseObjective": _first_existing_value(semi, ("BaseObjective",)),
+                    "FrozenBaseObjective": _first_existing_value(frozen, ("BaseObjective",)),
+                }
+            )
+    return True

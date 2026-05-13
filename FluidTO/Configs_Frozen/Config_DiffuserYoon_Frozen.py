@@ -93,15 +93,14 @@ OBJECTIVE_STREAK_TO_STOP = 5
 
 # Yoon Fig. 20 gives n_u = 0.01-0.1 for the Brinkman interpolation.
 Q_PENAL_SCHEDULE = [0.01, 0.02, 0.05, 0.10]
-MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03]
-MAX_INNER_ITERATIONS_SCHEDULE = [100, 120, 160, 220]
+MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.015]
+MAX_INNER_ITERATIONS_SCHEDULE = [45, 40, 50, 70]
 
-# Yoon uses direct element design variables; disable the projective sharpening.
-USE_HEAVISIDE_PROJECTION = False
-BETA_PROJ_SCHEDULE = [1.0, 1.0, 1.0, 1.0]
+USE_HEAVISIDE_PROJECTION = True # USE_HEAVISIDE_PROJECTION = False ; Yoon uses direct element design variables; disable the projective sharpening.
+BETA_PROJ_SCHEDULE = [1.0, 1.5, 2.0, 3.0]
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
-FILTER_RADIUS_IN_CELLS = 0.0
+FILTER_RADIUS_IN_CELLS = 3.0 # FILTER_RADIUS_IN_CELLS = 0.0 (no filtering in the Yoon paper)
 QUADRATURE_DEGREE = 6
 
 # Frozen forward/adjoint solve parameters.
@@ -156,6 +155,7 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
     },
 ]
 
+# ============================================
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.15
 
@@ -174,12 +174,12 @@ FORWARD_IPCS_P_SOLVER = "bicgstab"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_ACCEPT_BEST_SCORE = 1.00
-
+# ============================================
 OUTLET_BC_TYPE = "velocity"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 
-RESULTS_ROOT_NAME = "Results_Frozen/Results_DiffuserYoon_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME = "Results_Frozen/Results_DiffuserYoon_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

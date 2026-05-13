@@ -122,10 +122,10 @@ SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 SA_NU_TILDE_PENALTY_ALPHA = 2.0e3
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [2.0e3] * 10
-# Dilgen Eq. (12) damps SA nu_tilde with the same Brinkman interpolation
+# Dilgen Eq. (12) damps SA nu_tilde with the same Brinkman/RAMP indicator
 # chi(gamma) = q(1 - gamma)/(q + gamma) used in the momentum equation.
-SA_NU_TILDE_PENALTY_INTERPOLATION = "dilgen"
-# Ignored by the Dilgen/Brinkman interpolation; retained for the legacy
+SA_NU_TILDE_PENALTY_INTERPOLATION = "brinkman"
+# Ignored by the Brinkman interpolation; retained for the legacy
 # power-law mode.
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -133,8 +133,8 @@ SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 2.0e3
 SA_WALL_PENALTY_ALPHA_SCHEDULE = [2.0e3] * 10
-SA_WALL_PENALTY_INTERPOLATION = "dilgen"
-# Ignored by the Dilgen/Brinkman Poisson wall-distance mode; retained for the
+SA_WALL_PENALTY_INTERPOLATION = "brinkman"
+# Ignored by the Brinkman Poisson wall-distance mode; retained for the
 # legacy reciprocal-distance mode.
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
@@ -181,7 +181,7 @@ FORWARD_FLOW_SOLVER = "ipcs"
 FORWARD_PICARD_FLOW_SOLVER = "ipcs"
 
 FORWARD_SNES_WARM_START_WITH_IPCS = True
-FORWARD_SNES_IPCS_WARM_START_MODE = "initial"
+FORWARD_SNES_IPCS_WARM_START_MODE = "final"
 FORWARD_SNES_STRICT_FINAL_SOLVE = False
 
 FORWARD_SNES_METHOD = "newtonls"
@@ -190,14 +190,8 @@ FORWARD_SNES_LINEAR_SOLVER = "mumps"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 260
-FORWARD_SNES_ERROR_ON_NONCONVERGENCE = False
-FORWARD_SNES_ACCEPT_NONCONVERGED_WITH_ACCEPT_NORM = True
-FORWARD_SNES_ACCEPT_INITIAL_IF_WITHIN_ACCEPT_NORM = True
 
 FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
-FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
-FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 1.0
-FORWARD_SNES_MAX_ACCEPTED_ABSOLUTE_RESIDUAL = 1.0e-3
 
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
 FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
@@ -282,11 +276,8 @@ FILTER_RADIUS_IN_CELLS = 0.01
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
-PRESSURE_OUTLET_COMPONENT_BCS = [
-    {"marker": "outlet", "component": 1, "value": 0.0},
-]
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendDilgen_TurbulentTO_Frozen"
+RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendDilgen_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

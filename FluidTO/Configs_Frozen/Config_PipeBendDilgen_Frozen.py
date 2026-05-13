@@ -95,10 +95,10 @@ SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [1.0e3]
-# Dilgen Eq. (12) damps SA nu_tilde with the same Brinkman interpolation
+# Dilgen Eq. (12) damps SA nu_tilde with the same Brinkman/RAMP indicator
 # chi(gamma) = q(1 - gamma)/(q + gamma) used in the momentum equation.
-SA_NU_TILDE_PENALTY_INTERPOLATION = "dilgen"
-# Ignored by the Dilgen/Brinkman interpolation mode; kept for configs that use
+SA_NU_TILDE_PENALTY_INTERPOLATION = "brinkman"
+# Ignored by the Brinkman interpolation mode; kept for configs that use
 # the driver's legacy power-law nu_tilde penalty.
 SA_NU_TILDE_PENALTY_N = 3.0
 
@@ -106,7 +106,7 @@ SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e3
 SA_WALL_PENALTY_ALPHA_SCHEDULE = [1.0e3]
-SA_WALL_PENALTY_INTERPOLATION = "dilgen"
+SA_WALL_PENALTY_INTERPOLATION = "brinkman"
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_G_FLOOR = 1.0e-8
 # Dilgen uses a Poisson-like wall-distance method for SA, not the Yoon
@@ -119,17 +119,20 @@ SA_WALL_SOLID_THRESHOLD = 0.10
 SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
 # ================================================================== #
-# MMA Objective and Continuation Parameters
+# Sensitivity-verification objective and continuation parameters
 #
 # The Re = 10,000 bend in Dilgen Sec. 5.1 is a sensitivity-verification
-# case, not an optimization case. It is evaluated on the all-fluid design
-# gamma = 1 with q = 0.1, lambda = 1e3 s^-1, and the paper's finite-difference
-# perturbation Delta h = 1e-6.
+# case, not an optimization case. Dilgen evaluates an all-fluid design with
+# q = 0.1, lambda = 1e3 s^-1, and central finite differences with
+# Delta h = 1e-6. The local normalized FEniCS filter clips filtered densities
+# to [0, 1], so the finite-difference check uses a near-fluid interior point
+# gamma = 0.99 to keep the +/- perturbations symmetric.
 # ================================================================== #
-VOL_FRAC = 1.00
-INITIAL_DENSITY_VALUE = 1.0
+VOL_FRAC = 0.99
+INITIAL_DENSITY_VALUE = 0.99
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = False
-LOG_DILGEN_FIG8_COLUMNS = True
+
+LOG_DILGEN_FIG8_COLUMNS = False
 DILGEN_OBJECTIVE_REFERENCE_LENGTH = INLET_HALF_HEIGHT
 USE_HEAVISIDE_PROJECTION = False
 OBJECTIVE_TYPE = "dissipation"
@@ -146,32 +149,39 @@ MAX_INNER_ITERATIONS_SCHEDULE = [1]
 RUN_FINITE_DIFFERENCE_CHECKS = True
 FINITE_DIFFERENCE_CHECK_ITERATIONS = (0,)
 FINITE_DIFFERENCE_CHECK_STEP = 1.0e-6
-FINITE_DIFFERENCE_CHECK_SAMPLES = 4
-FINITE_DIFFERENCE_CHECK_FLOW_SOLVER = "same"
-FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER = "same"
+FINITE_DIFFERENCE_CHECK_SAMPLES = 5
+FINITE_DIFFERENCE_CHECK_FLOW_SOLVER = "ipcs_snes_polish"
+FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER = "ipcs"
 # The paper reports CV1-CV4 but does not publish their coordinates. By default
 # these are deterministic samples; set FINITE_DIFFERENCE_CHECK_DOF_INDICES to
 # force specific cells on a fixed mesh.
 FINITE_DIFFERENCE_CHECK_SEED = 13
 FINITE_DIFFERENCE_CHECK_CLIP_TO_BOUNDS = False
 FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
+RUN_TAYLOR_SENSITIVITY_CHECKS = True
+TAYLOR_CHECK_STEPS = (1.0e-3, 3.0e-4, 1.0e-4, 3.0e-5)
+TAYLOR_CHECK_SEED = 29
+SENSITIVITY_VERIFICATION_MODE_NAME = "frozen-turbulence"
+SENSITIVITY_VERIFICATION_DERIVATIVE_COLUMN = "FrozenTurbulence"
 # ================================================================== #
 
 LINEAR_SOLVER = "mumps"             # Solver for [Picard] SA transport and [Adjoint] linear system
 
-FORWARD_FLOW_SOLVER = "ipcs"        # Solver for [Final flow] 
-FORWARD_PICARD_FLOW_SOLVER = "ipcs" # Solver for [Picard] flow 
+FORWARD_FLOW_SOLVER = "ipcs_snes_polish"        # Solver for [Final flow] 
+FORWARD_PICARD_FLOW_SOLVER = "ipcs"             # Solver for [Picard] flow 
+
 FORWARD_SNES_WARM_START_WITH_IPCS = True
 FORWARD_SNES_IPCS_WARM_START_MODE = "initial"
-FORWARD_SNES_STRICT_FINAL_SOLVE = False
+FORWARD_SNES_STRICT_FINAL_SOLVE = True
 
 FORWARD_SNES_METHOD = "newtonls"
 FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_LINEAR_SOLVER = "mumps"
-FORWARD_SNES_RTOL = 1.0e-6
-FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_RTOL = 1.0e-7
+FORWARD_SNES_ATOL = 1.0e-9
 FORWARD_SNES_MAX_ITERS = 220
 FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
+
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
     {"convection_weight": 0.20, "max_iters": 100, "atol": 1.5e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
@@ -181,11 +191,9 @@ FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 1.00, "max_iters": 180, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
 ]
 FORWARD_SNES_CONVECTION_SCHEDULE = [
-    {"convection_weight": 0.00, "max_iters": 60, "atol": 1.0e-7, "accept_norm": 1.5e-4, "accept_nonconverged": True},
-    {"convection_weight": 0.25, "max_iters": 80, "atol": 8.0e-8, "accept_norm": 1.0e-4, "accept_nonconverged": True},
-    {"convection_weight": 0.50, "max_iters": 100, "atol": 5.0e-8, "accept_norm": 8.0e-5, "accept_nonconverged": True},
-    {"convection_weight": 0.75, "max_iters": 120, "atol": 2.5e-8, "accept_norm": 6.0e-5, "accept_nonconverged": True},
-    {"convection_weight": 1.00, "max_iters": 140, "atol": 1.0e-8, "accept_norm": 5.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.00, "max_iters": 70,  "atol": 1.0e-8, "accept_norm": 1.0e-5, "accept_nonconverged": True},
+    {"convection_weight": 0.50, "max_iters": 100, "atol": 5.0e-9, "accept_norm": 5.0e-6, "accept_nonconverged": True},
+    {"convection_weight": 1.00, "max_iters": 220, "atol": 1.0e-9, "rtol": 1.0e-7, "accept_norm": None, "accept_nonconverged": False},
 ]
 FORWARD_SNES_RECOVERY_ATTEMPTS = [
     {
@@ -214,11 +222,11 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
     },
 ]
 
-PICARD_STEPS = 3
-TURBULENCE_RELAXATION = 0.20             
+PICARD_STEPS = 8
+TURBULENCE_RELAXATION = 0.35             
 
 FORWARD_IPCS_DT = 5.0e-7
-FORWARD_IPCS_MAX_ITERS = 400
+FORWARD_IPCS_MAX_ITERS = 600
 FORWARD_IPCS_VELOCITY_RTOL = 1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 2.0e-3
 FORWARD_IPCS_VEL_RELAXATION = 0.05
@@ -245,7 +253,9 @@ FILTER_RADIUS_IN_CELLS = 0.0
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendDilgen_TurbulentTO_Frozen"
+DILGEN_FROZEN_RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendDilgen_Frozen"
+DILGEN_SEMIFROZEN_RESULTS_ROOT_NAME = "Results_SemiFrozen/Results_PipeBendDilgen_SemiFrozen_Verification"
+RESULTS_ROOT_NAME = DILGEN_FROZEN_RESULTS_ROOT_NAME
 SAVE_DILGEN_PAPER_DATA = True
 DILGEN_PAPER_GRID_POINTS = 201
 DILGEN_PAPER_LINE_POINTS = 401

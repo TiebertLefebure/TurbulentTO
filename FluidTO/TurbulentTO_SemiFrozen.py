@@ -29,12 +29,16 @@ from Utilities_SharedTO import (
     initialize_optimization_log,
     load_config_module_from_cli,
     pressure_drop_between_boundaries,
-    pressure_drop_between_internal_facets,
+    pressure_drop_between_design_facets,
+    pressure_drop_design_facet_functional,
     ResilientVTKFile,
 )
 from Utilities_DilgenPostprocess import (
+    build_cell_area_normalized_field,
+    build_objective_normalized_field,
     build_velocity_magnitude_field,
     copy_scalar_field,
+    write_combined_dilgen_table2_if_available,
     write_dilgen_paper_data,
 )
 from Utilities_TurbulentTO import (
@@ -50,10 +54,10 @@ from Utilities_TurbulentTO import (
 )
 
 # ====================================================================================
-# Shared implementation for the SemiFrozen and Full turbulent adjoints.
-# By default the reciprocal-penalized wall-distance G is updated externally, yielding the
-# SemiFrozen adjoint. The TurbulentTO_Full entrypoint activates the 4-field
-# variant where G is promoted into the primal/adjoint state too.
+# Shared implementation for the SemiFrozen and Full turbulent adjoints. For
+# reciprocal wall-distance cases, SemiFrozen updates G externally and Full
+# promotes G into the primal/adjoint state. Non-reciprocal wall-distance modes
+# have no G state, so both entrypoints use the 3-field SA adjoint.
 # ====================================================================================
 
 parameters["ghost_mode"] = "shared_facet"
@@ -71,9 +75,9 @@ for _name, _value in vars(CONFIG).items():
     if not _name.startswith("_"):
         globals()[_name] = _value
 # The TurbulentTO_Full.py wrapper flips this environment variable so the main
-# implementation can stay shared in one file. Dilgen's Poisson wall-distance
-# path has no reciprocal G state; in that case the paper's "full turbulence"
-# SA adjoint is the 3-field (u, p, nu_tilde) state.
+# implementation can stay shared in one file. Poisson wall-distance paths have
+# no reciprocal G state; in that case the SA adjoint is the 3-field
+# (u, p, nu_tilde) state.
 SA_WALL_DISTANCE_MODE = str(globals().get("SA_WALL_DISTANCE_MODE", "reciprocal_penalized")).strip().lower()
 _REQUESTED_FULL_STATE_INCLUDE_G = str(os.environ.get("TURBULENTTO_INCLUDE_G_STATE", "0")).strip().lower() in {
     "1", "true", "yes", "on",
@@ -105,8 +109,8 @@ if not SHOW_DOLFIN_SOLVER_LOGS:
 
 if _REQUESTED_FULL_STATE_INCLUDE_G and not FULL_STATE_INCLUDE_G:
     root_print(
-        "Full wrapper requested, but SA_WALL_DISTANCE_MODE='{}' has no G state; "
-        "using Dilgen 3-field full-turbulence adjoint.".format(SA_WALL_DISTANCE_MODE)
+        "Full wrapper requested, but SA_WALL_DISTANCE_MODE='{}' has no reciprocal G state; "
+        "using the 3-field SA adjoint.".format(SA_WALL_DISTANCE_MODE)
     )
 
 
@@ -356,6 +360,7 @@ density_lower_bound, density_upper_bound = build_density_bounds_from_config()
 density_lower_values = density_lower_bound.vector().get_local()
 density_upper_values = density_upper_bound.vector().get_local()
 ActiveDV = np.where((density_upper_values - density_lower_values) > 1.0e-12)[0]
+PassiveDV = np.where((density_upper_values - density_lower_values) <= 1.0e-12)[0]
 if ActiveDV.size == 0:
     raise ValueError("No active design variables remain after applying density bounds.")
 VolumeRegion = build_region_function_from_config("build_volume_region", 1.0)
@@ -379,6 +384,12 @@ else:
 design_pressure_drop_facets, design_pressure_drop_mark = build_design_pressure_drop_markers(mesh, globals())
 dS_design_pressure = Measure(
     "dS",
+    domain=mesh,
+    subdomain_data=design_pressure_drop_facets,
+    metadata=measure_metadata,
+)
+ds_design_pressure = Measure(
+    "ds",
     domain=mesh,
     subdomain_data=design_pressure_drop_facets,
     metadata=measure_metadata,
@@ -630,11 +641,25 @@ r = r_filter / (2.0 * 3.0 ** 0.5)
 u_filter = TrialFunction(DensitySpace)
 v_filter = TestFunction(DensitySpace)
 filter_in = Function(DensitySpace)
+filter_work = Function(DensitySpace)
+active_design_indicator = Function(DensitySpace)
+filter_denominator = Function(DensitySpace)
 h = CellDiameter(mesh)
 h_avg = (h("+") + h("-")) / 2.0
 
 
-def pde_filter(input_field, output_field):
+active_indicator_values = np.zeros_like(density_lower_values)
+active_indicator_values[ActiveDV] = 1.0
+active_design_indicator.vector().set_local(active_indicator_values)
+active_design_indicator.vector().apply("insert")
+filter_denominator_values = None
+filter_denominator_floor = max(
+    float(globals().get("FILTER_DENOMINATOR_FLOOR", 1.0e-12)),
+    1.0e-300,
+)
+
+
+def pde_filter_raw(input_field, output_field):
     alpha_dg = 4.0
     helmholtz = (
         r ** 2 * (alpha_dg / h_avg * dot(jump(v_filter, n), jump(u_filter, n))) * dS
@@ -643,6 +668,65 @@ def pde_filter(input_field, output_field):
     )
     assign(filter_in, input_field)
     solve(lhs(helmholtz) == rhs(helmholtz), output_field)
+    return output_field
+
+
+def initialize_design_filter_normalization():
+    """Precompute H(mask) for the active-design normalized Helmholtz filter."""
+    global filter_denominator_values
+    pde_filter_raw(active_design_indicator, filter_denominator)
+    filter_denominator_values = np.maximum(
+        filter_denominator.vector().get_local(),
+        filter_denominator_floor,
+    )
+    min_active_denom = float(np.min(filter_denominator_values[ActiveDV]))
+    if min_active_denom <= 10.0 * filter_denominator_floor:
+        raise RuntimeError(
+            "Active-design filter normalization has near-zero denominator. "
+            "Check design-region tags and FILTER_DENOMINATOR_FLOOR."
+        )
+    root_print(
+        "Design filter: active-cell mask normalization enabled "
+        "(min active denominator {:.3e}).".format(min_active_denom)
+    )
+
+
+def pde_filter_design_density(input_field, output_field):
+    """Filter only active design variables and normalize by the filtered mask."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    output_values = output_field.vector().get_local() / filter_denominator_values
+    output_values = np.clip(output_values, 0.0, 1.0)
+    output_values[PassiveDV] = np.clip(
+        input_values[PassiveDV],
+        density_lower_values[PassiveDV],
+        density_upper_values[PassiveDV],
+    )
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
+    return output_field
+
+
+def pde_filter_design_gradient(input_field, output_field):
+    """Apply the transpose of the active mask-normalized density filter."""
+    if filter_denominator_values is None:
+        initialize_design_filter_normalization()
+    input_values = input_field.vector().get_local()
+    work_values = np.zeros_like(input_values)
+    work_values[ActiveDV] = input_values[ActiveDV] / filter_denominator_values[ActiveDV]
+    filter_work.vector().set_local(work_values)
+    filter_work.vector().apply("insert")
+    pde_filter_raw(filter_work, output_field)
+    output_values = output_field.vector().get_local()
+    output_values[PassiveDV] = 0.0
+    output_field.vector().set_local(output_values)
+    output_field.vector().apply("insert")
     return output_field
 
 
@@ -656,9 +740,9 @@ def enforce_density_bounds_inplace(density_field):
 
 rho_projected = projection(rho_f, ETA_I)
 rho_effective = density_lower_bound + (density_upper_bound - density_lower_bound) * rho_projected
-# Build the wall-distance model for the current design. In SemiFrozen this
-# remains an external update; the Full entrypoint promotes penalized G into the
-# monolithic state so the adjoint sees it too.
+# Build the wall-distance model for the current design. In reciprocal-G
+# SemiFrozen runs this remains an external update; the Full entrypoint promotes
+# penalized G into the monolithic state so the adjoint sees it too.
 custom_wall_distance_builder = globals().get("build_wall_distance_field")
 custom_initial_wall_distance = None
 if callable(custom_wall_distance_builder):
@@ -867,16 +951,43 @@ else:
     deformation = nabla_grad(u) + nabla_grad(u).T
     dissipation_density = 0.5 * mu_effective * inner(deformation, deformation)
 
-ObjFunctional = ObjectiveRegion * (
-    dissipation_density + alpha(rho_effective) * inner(u, u)
-) * dx
-objective_log_column = "J_dissipation_W_per_m"
-objective_console_label = "J_dissipation"
-objective_console_unit = " W/m"
-root_print(
-    "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
-    "(2D unit-depth power, W/m)."
-)
+objective_type = str(globals().get("OBJECTIVE_TYPE", "dissipation")).strip().lower()
+if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
+    ObjFunctional = ObjectiveRegion * (
+        dissipation_density + alpha(rho_effective) * inner(u, u)
+    ) * dx
+    objective_log_column = "J_dissipation_W_per_m"
+    objective_console_label = "J_dissipation"
+    objective_console_unit = " W/m"
+    root_print(
+        "Objective type: J_dissipation = viscous dissipation plus Brinkman drag "
+        "(2D unit-depth power, W/m)."
+    )
+elif objective_type in ("average_inlet_pressure", "inlet_pressure", "mean_inlet_pressure"):
+    ObjFunctional, design_inlet_area, design_outlet_area = pressure_drop_design_facet_functional(
+        p,
+        dS_design_pressure,
+        ds_design_pressure,
+        design_pressure_drop_mark["inlet"],
+        design_pressure_drop_mark["outlet"],
+    )
+    objective_log_column = "J_pressure_Pa"
+    objective_console_label = "J_pressure"
+    objective_console_unit = " Pa"
+    root_print(
+        "Objective type: J_pressure = design-domain pressure drop over inlet/outlet measures "
+        "{:.6e}/{:.6e} (Pa).".format(
+            design_inlet_area, design_outlet_area,
+        )
+    )
+else:
+    raise ValueError(
+        "OBJECTIVE_TYPE must be 'dissipation' or 'average_inlet_pressure', got '{}'.".format(
+            objective_type
+        )
+    )
+# The nondesign diagnostic mirrors dP_nondesign: use the full simulated domain.
+ViscousDissipationNondesignFunctional = dissipation_density * dx
 ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
 
 # Monolithic primal residual for the current design. Full simply adds the
@@ -2055,30 +2166,27 @@ def initialize_sensitivity_check_log(log_path):
         return
     if not IS_ROOT:
         return
+    columns = [
+        "Stage",
+        "InnerIter",
+        "GlobalIter",
+        "Mode",
+        "CV",
+        "ActivePosition",
+        "DensityDof",
+        "X",
+        "Y",
+        "Step",
+        "BaseObjective",
+        "AdjointDerivative",
+        "FiniteDifferenceDerivative",
+        "AbsoluteError",
+        "RelativeError",
+        "PlusObjective",
+        "MinusObjective",
+    ]
     with open(log_path, "w") as handle:
-        handle.write(
-            "\t".join(
-                [
-                    "Stage",
-                    "InnerIter",
-                    "GlobalIter",
-                    "Mode",
-                    "CV",
-                    "ActivePosition",
-                    "DensityDof",
-                    "X",
-                    "Y",
-                    "Step",
-                    "BaseObjective",
-                    "AdjointDerivative",
-                    "FiniteDifferenceDerivative",
-                    "RelativeError",
-                    "PlusObjective",
-                    "MinusObjective",
-                ]
-            )
-            + "\n"
-        )
+        handle.write(format_sensitivity_check_log_row(columns) + "\n")
 
 
 def append_sensitivity_check_log_entry(log_path, values):
@@ -2087,7 +2195,187 @@ def append_sensitivity_check_log_entry(log_path, values):
     if not IS_ROOT:
         return
     with open(log_path, "a") as handle:
+        handle.write(format_sensitivity_check_log_row(values) + "\n")
+
+
+def sanitize_sensitivity_label(raw_label):
+    text = "solve" if raw_label is None else str(raw_label)
+    cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in text)
+    return cleaned.strip("_") or "solve"
+
+
+def sensitivity_verification_mode_label(default_name="adjoint-SA"):
+    return str(globals().get("SENSITIVITY_VERIFICATION_MODE_NAME", default_name))
+
+
+def sensitivity_verification_derivative_column(default_name="AdjointDerivative"):
+    return str(globals().get("SENSITIVITY_VERIFICATION_DERIVATIVE_COLUMN", default_name))
+
+
+SENSITIVITY_CHECK_LOG_COLUMN_WIDTHS = (
+    7,
+    9,
+    10,
+    18,
+    5,
+    14,
+    10,
+    23,
+    23,
+    23,
+    23,
+    23,
+    26,
+    23,
+    23,
+    23,
+    23,
+)
+
+
+SENSITIVITY_VERIFICATION_COLUMN_WIDTHS = (
+    5,
+    26,
+    23,
+)
+
+
+def format_fixed_width_row(values, column_widths, left_aligned_columns):
+    cells = []
+    for column_idx, (value, width) in enumerate(zip(values, column_widths)):
+        text = str(value)
+        if column_idx in left_aligned_columns:
+            cells.append(text.ljust(width))
+        else:
+            cells.append(text.rjust(width))
+    return "  ".join(cells)
+
+
+def format_sensitivity_check_log_row(values):
+    return format_fixed_width_row(values, SENSITIVITY_CHECK_LOG_COLUMN_WIDTHS, {3, 4})
+
+
+def format_sensitivity_verification_table_row(values):
+    return format_fixed_width_row(values, SENSITIVITY_VERIFICATION_COLUMN_WIDTHS, {0})
+
+
+def initialize_sensitivity_verification_table(log_path):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    derivative_column = sensitivity_verification_derivative_column("AdjointSA")
+    columns = [
+        "CV",
+        "FiniteDifferenceDerivative",
+        derivative_column,
+    ]
+    with open(log_path, "w") as handle:
+        handle.write(format_sensitivity_verification_table_row(columns) + "\n")
+
+
+def append_sensitivity_verification_table_entry(log_path, values):
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "a") as handle:
+        handle.write(format_sensitivity_verification_table_row(values) + "\n")
+
+
+def taylor_check_steps():
+    raw_steps = globals().get("TAYLOR_CHECK_STEPS", (1.0e-3, 3.0e-4, 1.0e-4, 3.0e-5))
+    if isinstance(raw_steps, np.ndarray):
+        raw_steps = raw_steps.tolist()
+    elif not isinstance(raw_steps, (list, tuple, set)):
+        raw_steps = [raw_steps]
+    return [float(value) for value in raw_steps if float(value) > 0.0]
+
+
+def initialize_taylor_check_log(log_path):
+    if not bool(globals().get("RUN_TAYLOR_SENSITIVITY_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "w") as handle:
+        handle.write(
+            "\t".join(
+                [
+                    "Stage",
+                    "InnerIter",
+                    "GlobalIter",
+                    "Mode",
+                    "Direction",
+                    "Epsilon",
+                    "BaseObjective",
+                    "PlusObjective",
+                    "MinusObjective",
+                    "AdjointDirectionalDerivative",
+                    "CentralFiniteDifferenceDerivative",
+                    "DirectionalRelativeError",
+                    "TaylorRemainderPlus",
+                    "TaylorRemainderMinus",
+                    "TaylorRemainderSymmetric",
+                    "ActiveDofCount",
+                ]
+            )
+            + "\n"
+        )
+
+
+def append_taylor_check_log_entry(log_path, values):
+    if not bool(globals().get("RUN_TAYLOR_SENSITIVITY_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    with open(log_path, "a") as handle:
         handle.write("\t".join(str(value) for value in values) + "\n")
+
+
+def write_taylor_direction_table(path, mode_name, sampled_active_positions, direction_values, objective_gradient_active, coords):
+    if not IS_ROOT:
+        return
+    with open(path, "w") as handle:
+        handle.write("Mode\tEntry\tActivePosition\tDensityDof\tX\tY\tDirection\tAdjointDerivative\n")
+        for entry_idx, (active_position, direction_value) in enumerate(
+            zip(sampled_active_positions, direction_values),
+            start=1,
+        ):
+            density_dof = int(ActiveDV[int(active_position)])
+            if coords is not None and density_dof < coords.shape[0]:
+                xy = coords[density_dof]
+                x_coord = "{:.16e}".format(float(xy[0]))
+                y_coord = "{:.16e}".format(float(xy[1])) if xy.size > 1 else "nan"
+            else:
+                x_coord = "nan"
+                y_coord = "nan"
+            handle.write(
+                "{}\t{:d}\t{:d}\t{:d}\t{}\t{}\t{:.16e}\t{:.16e}\n".format(
+                    mode_name,
+                    entry_idx,
+                    int(active_position),
+                    density_dof,
+                    x_coord,
+                    y_coord,
+                    float(direction_value),
+                    float(objective_gradient_active[int(active_position)]),
+                )
+            )
+
+
+def maybe_write_combined_dilgen_table2():
+    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
+        return
+    if not IS_ROOT:
+        return
+    frozen_root = globals().get("DILGEN_FROZEN_RESULTS_ROOT_NAME")
+    semifrozen_root = globals().get("DILGEN_SEMIFROZEN_RESULTS_ROOT_NAME")
+    if not frozen_root or not semifrozen_root:
+        return
+    frozen_table = os.path.join(THIS_DIR, str(frozen_root), "SensitivityVerificationTable.tsv")
+    semifrozen_table = os.path.join(THIS_DIR, str(semifrozen_root), "SensitivityVerificationTable.tsv")
+    combined_path = os.path.join(results_root, "DilgenTable2_Combined.tsv")
+    write_combined_dilgen_table2_if_available(combined_path, frozen_table, semifrozen_table)
 
 
 def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_objective, objective_gradient_active):
@@ -2126,15 +2414,16 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
         if refresh_wall_distance and not FULL_STATE_INCLUDE_G:
             update_wall_distance_field()
 
-    def evaluate_perturbed_objective(active_position, delta, label):
+    def evaluate_perturbed_objective(perturbations, label):
         perturbed_values = base_rho_values.copy()
-        density_dof = int(ActiveDV[active_position])
-        perturbed_values[density_dof] += float(delta)
+        for active_position, delta in perturbations:
+            density_dof = int(ActiveDV[int(active_position)])
+            perturbed_values[density_dof] += float(delta)
         if clip_to_bounds:
             perturbed_values = np.clip(perturbed_values, density_lower_values, density_upper_values)
         rho.vector().set_local(perturbed_values)
         rho.vector().apply("insert")
-        pde_filter(rho, rho_f)
+        pde_filter_design_density(rho, rho_f)
         if not FULL_STATE_INCLUDE_G:
             update_wall_distance_field()
         solve_state_with_recovery(
@@ -2146,7 +2435,114 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
         )
         return float(assemble(ObjFunctional))
 
-    mode_name = "adjoint-SA"
+    def coordinate_step_for_position(active_position):
+        density_dof = int(ActiveDV[int(active_position)])
+        if clip_to_bounds:
+            max_step = min(
+                base_rho_values[density_dof] - density_lower_values[density_dof],
+                density_upper_values[density_dof] - base_rho_values[density_dof],
+            )
+            return min(fd_step, 0.5 * max_step)
+        return fd_step
+
+    def coordinate_xy(density_dof):
+        if coords is not None and density_dof < coords.shape[0]:
+            xy = coords[density_dof]
+            x_coord = "{:.16e}".format(float(xy[0]))
+            y_coord = "{:.16e}".format(float(xy[1])) if xy.size > 1 else "nan"
+            return x_coord, y_coord
+        return "nan", "nan"
+
+    def run_taylor_check():
+        if not bool(globals().get("RUN_TAYLOR_SENSITIVITY_CHECKS", False)):
+            return
+        steps = taylor_check_steps()
+        if not steps:
+            return
+        rng = np.random.RandomState(int(globals().get("TAYLOR_CHECK_SEED", 29)) + int(global_iter))
+        direction_values = rng.choice(np.asarray([-1.0, 1.0]), size=len(sampled_active_positions))
+        direction_name = "{}_stage{:02d}_iter{:03d}_global{:03d}".format(
+            sanitize_sensitivity_label(mode_name),
+            int(stage_idx),
+            int(inner_iter),
+            int(global_iter),
+        )
+        direction_path = os.path.join(results_root, "TaylorDirection_{}.tsv".format(direction_name))
+        write_taylor_direction_table(
+            direction_path,
+            mode_name,
+            sampled_active_positions,
+            direction_values,
+            objective_gradient_active,
+            coords,
+        )
+        adjoint_directional_derivative = float(
+            np.dot(objective_gradient_active[sampled_active_positions], direction_values)
+        )
+        root_print(
+            "  [Taylor check] mode {} using {} active direction entries, adjoint g.p={:.6e}".format(
+                mode_name,
+                len(sampled_active_positions),
+                adjoint_directional_derivative,
+            )
+        )
+        for eps_value in steps:
+            perturb_plus = [
+                (active_position, float(eps_value) * float(direction_value))
+                for active_position, direction_value in zip(sampled_active_positions, direction_values)
+            ]
+            perturb_minus = [
+                (active_position, -float(eps_value) * float(direction_value))
+                for active_position, direction_value in zip(sampled_active_positions, direction_values)
+            ]
+            restore_base_state()
+            plus_objective = evaluate_perturbed_objective(
+                perturb_plus,
+                "taylor_{}_eps{:.0e}_plus".format(mode_name, float(eps_value)),
+            )
+            restore_base_state()
+            minus_objective = evaluate_perturbed_objective(
+                perturb_minus,
+                "taylor_{}_eps{:.0e}_minus".format(mode_name, float(eps_value)),
+            )
+            central_fd = (plus_objective - minus_objective) / (2.0 * float(eps_value))
+            rel_error = abs(central_fd - adjoint_directional_derivative) / max(
+                abs(central_fd),
+                abs(adjoint_directional_derivative),
+                1.0e-30,
+            )
+            remainder_plus = abs(
+                plus_objective - float(base_objective)
+                - float(eps_value) * adjoint_directional_derivative
+            )
+            remainder_minus = abs(
+                minus_objective - float(base_objective)
+                + float(eps_value) * adjoint_directional_derivative
+            )
+            remainder_symmetric = abs(plus_objective + minus_objective - 2.0 * float(base_objective))
+            append_taylor_check_log_entry(
+                taylor_check_log_path,
+                [
+                    int(stage_idx),
+                    int(inner_iter),
+                    int(global_iter),
+                    mode_name,
+                    direction_name,
+                    "{:.16e}".format(float(eps_value)),
+                    "{:.16e}".format(float(base_objective)),
+                    "{:.16e}".format(float(plus_objective)),
+                    "{:.16e}".format(float(minus_objective)),
+                    "{:.16e}".format(float(adjoint_directional_derivative)),
+                    "{:.16e}".format(float(central_fd)),
+                    "{:.16e}".format(float(rel_error)),
+                    "{:.16e}".format(float(remainder_plus)),
+                    "{:.16e}".format(float(remainder_minus)),
+                    "{:.16e}".format(float(remainder_symmetric)),
+                    int(len(sampled_active_positions)),
+                ],
+            )
+
+    mode_name = sensitivity_verification_mode_label("adjoint-SA")
     root_print(
         "  [FD check] stage {} iter {} global {} with {} coordinate sample(s).".format(
             stage_idx, inner_iter, global_iter, len(sampled_active_positions),
@@ -2155,15 +2551,8 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
     root_print("  [FD check] mode: {}".format(mode_name))
     try:
         for cv_idx, active_position in enumerate(sampled_active_positions, start=1):
-            density_dof = int(ActiveDV[active_position])
-            if clip_to_bounds:
-                max_step = min(
-                    base_rho_values[density_dof] - density_lower_values[density_dof],
-                    density_upper_values[density_dof] - base_rho_values[density_dof],
-                )
-                step = min(fd_step, 0.5 * max_step)
-            else:
-                step = fd_step
+            density_dof = int(ActiveDV[int(active_position)])
+            step = coordinate_step_for_position(active_position)
             if step <= 1.0e-12:
                 root_print(
                     "    CV{} dof {} skipped: insufficient bound margin for FD step.".format(
@@ -2175,40 +2564,34 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
 
             restore_base_state()
             plus_objective = evaluate_perturbed_objective(
-                active_position,
-                step,
+                [(active_position, step)],
                 "fd_final_{}_dof{}_plus".format(mode_name, density_dof),
             )
             restore_base_state()
             minus_objective = evaluate_perturbed_objective(
-                active_position,
-                -step,
+                [(active_position, -step)],
                 "fd_final_{}_dof{}_minus".format(mode_name, density_dof),
             )
             fd_derivative = (plus_objective - minus_objective) / (2.0 * step)
             adjoint_derivative = float(objective_gradient_active[active_position])
-            rel_error = abs(fd_derivative - adjoint_derivative) / max(
+            absolute_error = abs(fd_derivative - adjoint_derivative)
+            rel_error = absolute_error / max(
                 abs(fd_derivative),
                 abs(adjoint_derivative),
                 1.0e-30,
             )
             root_print(
-                "    CV{} dof {} adj={:.6e} fd={:.6e} rel_err={:.3e} J0={:.6e}".format(
+                "    CV{} dof {} adj={:.6e} fd={:.6e} abs_err={:.3e} rel_err={:.3e} J0={:.6e}".format(
                     cv_idx,
                     density_dof,
                     adjoint_derivative,
                     fd_derivative,
+                    absolute_error,
                     rel_error,
                     float(base_objective),
                 )
             )
-            if coords is not None and density_dof < coords.shape[0]:
-                xy = coords[density_dof]
-                x_coord = "{:.16e}".format(float(xy[0]))
-                y_coord = "{:.16e}".format(float(xy[1])) if xy.size > 1 else "nan"
-            else:
-                x_coord = "nan"
-                y_coord = "nan"
+            x_coord, y_coord = coordinate_xy(density_dof)
             append_sensitivity_check_log_entry(
                 sensitivity_check_log_path,
                 [
@@ -2225,11 +2608,22 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
                     "{:.16e}".format(float(base_objective)),
                     "{:.16e}".format(float(adjoint_derivative)),
                     "{:.16e}".format(float(fd_derivative)),
+                    "{:.16e}".format(float(absolute_error)),
                     "{:.16e}".format(float(rel_error)),
                     "{:.16e}".format(float(plus_objective)),
                     "{:.16e}".format(float(minus_objective)),
                 ],
             )
+            append_sensitivity_verification_table_entry(
+                sensitivity_verification_table_path,
+                [
+                    "CV{}".format(cv_idx),
+                    "{:.16e}".format(float(fd_derivative)),
+                    "{:.16e}".format(float(adjoint_derivative)),
+                ],
+            )
+        run_taylor_check()
+        maybe_write_combined_dilgen_table2()
     finally:
         restore_base_state()
 
@@ -2245,7 +2639,7 @@ if results_root_name is None:
     if FULL_STATE_INCLUDE_G:
         semifrozen_root_name = globals().get("RESULTS_ROOT_NAME_SEMIFROZEN")
         if semifrozen_root_name is None:
-            results_root_name = "Results_Full/Results_TurbulentTO_Full"
+            results_root_name = "Results_Full/Results_Full"
         else:
             semifrozen_root_basename = os.path.basename(str(semifrozen_root_name).rstrip("/"))
             if semifrozen_root_basename.endswith("_SemiFrozen"):
@@ -2256,7 +2650,7 @@ if results_root_name is None:
     else:
         results_root_name = globals().get(
             "RESULTS_ROOT_NAME",
-            "Results_SemiFrozen/Results_TurbulentTO_SemiFrozen",
+            "Results_SemiFrozen/Results_SemiFrozen",
         )
 results_root = os.path.join(THIS_DIR, results_root_name)
 rho_dir = os.path.join(results_root, "rho")
@@ -2266,6 +2660,7 @@ u_magnitude_dir = os.path.join(results_root, "u_magnitude")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
 df0dx_dir = os.path.join(results_root, "df0dx")
+df0dx_normalized_dir = os.path.join(results_root, "df0dx_normalized")
 design_dir = os.path.join(results_root, "design")
 paper_data_dir = os.path.join(results_root, "paper_data")
 save_dilgen_paper_data = bool(globals().get("SAVE_DILGEN_PAPER_DATA", False))
@@ -2280,6 +2675,7 @@ ensure_clean_dir(p_dir)
 ensure_clean_dir(nu_tilde_dir)
 if save_dilgen_paper_data:
     ensure_clean_dir(df0dx_dir)
+    ensure_clean_dir(df0dx_normalized_dir)
 ensure_clean_dir(design_dir)
 if save_dilgen_paper_data:
     ensure_clean_dir(paper_data_dir)
@@ -2293,10 +2689,17 @@ p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
 nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
 if save_dilgen_paper_data:
     df0dx_out = ResilientVTKFile(os.path.join(df0dx_dir, "plot_df0dx.pvd"), COMM)
+    df0dx_normalized_out = ResilientVTKFile(
+        os.path.join(df0dx_normalized_dir, "plot_df0dx_normalized.pvd"),
+        COMM,
+    )
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 sensitivity_check_log_path = os.path.join(results_root, "SensitivityCheckLog.tsv")
+sensitivity_verification_table_path = os.path.join(results_root, "SensitivityVerificationTable.tsv")
+taylor_check_log_path = os.path.join(results_root, "TaylorCheckLog.tsv")
 optimization_log_quantity_columns = (
+    "ViscousDissipation_nondesign_W_per_m",
     "ViscousDissipation_design_W_per_m",
     "dP_nondesign_Pa",
     "dP_design_Pa",
@@ -2329,6 +2732,8 @@ initialize_optimization_log(
 )
 initialize_dilgen_fig8_metric_logs()
 initialize_sensitivity_check_log(sensitivity_check_log_path)
+initialize_sensitivity_verification_table(sensitivity_verification_table_path)
+initialize_taylor_check_log(taylor_check_log_path)
 save_semifrozen_diagnostics = bool(globals().get("SAVE_SEMIFROZEN_DIAGNOSTICS", False))
 state_diagnostics_log_path = os.path.join(results_root, "StateSolveDiagnostics.txt")
 field_diagnostics_log_path = os.path.join(results_root, "FieldDiagnostics.txt")
@@ -2342,6 +2747,7 @@ enforce_density_bounds_inplace(rho)
 
 iter_count = 0
 previous_objective = 0.0
+initial_objective_reference = None
 
 num_mma = int(ActiveDV.size)
 active_density_lower_values = density_lower_values[ActiveDV]
@@ -2491,7 +2897,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- Filtering and external wall-distance update ---
         solver_log("  [Filter] design density")
-        rho_f = pde_filter(rho, rho_f)
+        rho_f = pde_filter_design_density(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
         if not FULL_STATE_INCLUDE_G:
             solver_log("  [Wall distance] update")
@@ -2530,13 +2936,20 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             u_magnitude_out << velocity_magnitude_plot
 
         f0val = assemble(ObjFunctional)
+        if initial_objective_reference is None:
+            initial_objective_reference = float(f0val)
+            if abs(initial_objective_reference) <= float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)):
+                raise ValueError("Initial objective is too close to zero for Dilgen normalized line outputs.")
+            root_print("Dilgen line-plot objective reference J0: {:.6e}.".format(initial_objective_reference))
+        viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_state.sub(STATE_P_IDX), ds, MARK["inlet"], MARK["outlet"]
         )
-        pressure_drop_design_now = pressure_drop_between_internal_facets(
+        pressure_drop_design_now = pressure_drop_between_design_facets(
             w_state.sub(STATE_P_IDX),
             dS_design_pressure,
+            ds_design_pressure,
             design_pressure_drop_mark["inlet"],
             design_pressure_drop_mark["outlet"],
         )
@@ -2552,14 +2965,19 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # --- Sensitivities and constraints ---
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
-        filtered_gradient = pde_filter(unfiltered_gradient, filtered_gradient)
+        filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
         if save_dilgen_paper_data:
             df0dx_plot = copy_scalar_field(filtered_gradient, "df0dx")
             df0dx_out << df0dx_plot
+            df0dx_normalized_plot = build_cell_area_normalized_field(
+                filtered_gradient,
+                "df0dx_normalized",
+            )
+            df0dx_normalized_out << df0dx_normalized_plot
 
         fval[0, 0] = assemble(vol_constraint)
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
-        filtered_s_vol = pde_filter(unfiltered_s_vol, filtered_s_vol)
+        filtered_s_vol = pde_filter_design_gradient(unfiltered_s_vol, filtered_s_vol)
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
         vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
 
@@ -2584,6 +3002,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         if save_dilgen_paper_data:
             np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
             np.savetxt(os.path.join(design_dir, "df0dx_{:03}.txt".format(iter_count)), df0dx[:, 0])
+            df0dx_objective_normalized_plot = build_objective_normalized_field(
+                filtered_gradient,
+                initial_objective_reference,
+                "df0dx_objective_normalized",
+            )
             write_dilgen_paper_data(
                 paper_data_dir,
                 iter_count,
@@ -2594,6 +3017,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 globals(),
                 COMM,
                 include_g_state=FULL_STATE_INCLUDE_G,
+                df0dx_objective_normalized_field=df0dx_objective_normalized_plot,
             )
 
         mass_flow_status = []
@@ -2604,7 +3028,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
                 assemble(constraint_spec["functional"]) + constraint_spec["offset"]
             )
             unfiltered_constraint_gradient.vector()[:] = assemble(constraint_spec["gradient_form"])[:]
-            filtered_constraint_gradient = pde_filter(
+            filtered_constraint_gradient = pde_filter_design_gradient(
                 unfiltered_constraint_gradient, filtered_constraint_gradient
             )
             dfdx[constraint_idx, :] = filtered_constraint_gradient.vector().get_local()[ActiveDV]
@@ -2658,6 +3082,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             vol_fraction_now,
             vol_residual_now,
             pressure_drop_values=(
+                viscous_dissipation_nondesign_now,
                 viscous_dissipation_design_now,
                 pressure_drop_nondesign_now,
                 pressure_drop_design_now,
@@ -2675,11 +3100,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
         root_print(
-            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_design={:.4e} W/m dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
+            "q={:.3f} beta={:.2f} move={:.3f} iter={:03d} iter_time={:.1f}s elapsed={:.1f}s {}={:.4e}{} ViscousDissipation_nondesign={:.4e} W/m ViscousDissipation_design={:.4e} W/m dP_nondesign={:.4e} Pa dP_design={:.4e} Pa conv={:.3e} vol={:.4f} streak={}/{}{}".format(
                 q_val, float(BETA_PROJ.values()[0]), move_limit_now,
                 inner_count, iteration_elapsed, optimization_elapsed,
                 objective_console_label, f0val, objective_console_unit,
-                viscous_dissipation_design_now, pressure_drop_nondesign_now, pressure_drop_design_now,
+                viscous_dissipation_nondesign_now, viscous_dissipation_design_now,
+                pressure_drop_nondesign_now, pressure_drop_design_now,
                 obj_conv, vol_fraction_now,
                 convergence_history, OBJECTIVE_STREAK_TO_STOP,
                 constraint_status_text,
