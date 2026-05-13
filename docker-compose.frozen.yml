@@ -1,16 +1,17 @@
-# TurbulentTO — alleen Configs_Frozen + TurbulentTO_Frozen.py
+# TurbulentTO — Configs_Frozen + TurbulentTO_Frozen.py
 #
-# Eén case (aanbevolen):
-#   docker compose -f docker-compose.frozen.yml run --rm frozen-diffuser-yoon
+# Standaard (veilig): alleen de serial-batch — achter elkaar, één container.
+#   docker compose -f docker-compose.frozen.yml up -d
+#   docker compose -f docker-compose.frozen.yml logs -f frozen-all-serial
 #
-# Alle configs ÉÉN VOOR ÉÉN (zelfde volgorde als hieronder; stopt bij eerste fout):
-#   docker compose -f docker-compose.frozen.yml run --rm frozen-all-serial
+# Eén case apart:
+#   docker compose --profile individual -f docker-compose.frozen.yml run --rm frozen-diffuser-yoon
 #
-# LET OP: niet blind `docker compose ... up -d` zonder servicenamen — dan starten
-# alle frozen-* jobs tegelijk en zuigen je VM leeg. Kies expliciet welke service(s).
+# Stoppen batch-container:
+#   docker compose -f docker-compose.frozen.yml down
 #
-# Meerdere cases parallel (alleen als je weet dat je VM het trekt):
-#   docker compose -f docker-compose.frozen.yml up -d frozen-diffuser-yoon frozen-pipebend-dilgen
+# Parallel (alleen als je VM het aankan — expliciet meerdere services noemen):
+#   docker compose --profile individual -f docker-compose.frozen.yml up -d frozen-diffuser-yoon frozen-pipebend-dilgen
 
 x-frozen-common: &frozen-common
   image: fenics/stable:py3
@@ -25,6 +26,7 @@ x-frozen-common: &frozen-common
 services:
   frozen-diffuser-yoon:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -33,6 +35,7 @@ services:
 
   frozen-doublepipe-borrvall:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -41,6 +44,7 @@ services:
 
   frozen-doublepipe-yoon:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -49,6 +53,7 @@ services:
 
   frozen-pipebend-alexandersen:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -57,6 +62,7 @@ services:
 
   frozen-pipebend-dilgen:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -65,6 +71,7 @@ services:
 
   frozen-ubend-alexandersen:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
@@ -73,31 +80,14 @@ services:
 
   frozen-ubend-dilgen:
     <<: *frozen-common
+    profiles: [individual]
     command:
       - python3
       - TurbulentTO_Frozen.py
       - --config
       - Configs_Frozen/Config_UBendDilgen_Frozen.py
 
-  # Alle Configs_Frozen achter elkaar (één container, minder risico dan 7× parallel).
+  # Alle Configs_Frozen achter elkaar (script i.p.v. inline: geen Compose-$-interpolatie).
   frozen-all-serial:
     <<: *frozen-common
-    command:
-      - bash
-      - -lc
-      - |
-        set -euo pipefail
-        configs=(
-          Configs_Frozen/Config_DiffuserYoon_Frozen.py
-          Configs_Frozen/Config_DoublePipeBorrvall_Frozen.py
-          Configs_Frozen/Config_DoublePipeYoon_Frozen.py
-          Configs_Frozen/Config_PipeBendAlexandersen_Frozen.py
-          Configs_Frozen/Config_PipeBendDilgen_Frozen.py
-          Configs_Frozen/Config_UBendAlexandersen_Frozen.py
-          Configs_Frozen/Config_UBendDilgen_Frozen.py
-        )
-        for c in "${configs[@]}"; do
-          echo "========== START $c =========="
-          python3 TurbulentTO_Frozen.py --config "$c"
-          echo "========== DONE  $c =========="
-        done
+    command: ["bash", "/home/fenics/shared/scripts/run-all-frozen.sh"]
