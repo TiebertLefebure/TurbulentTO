@@ -2,14 +2,16 @@ name: ttofrozen-doublepipe-borrvall
 services:
   run:
     container_name: turbulentto-frozen-doublepipe-borrvall
-    image: quay.io/fenicsproject/stable:current
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: turbulentto-frozen-fenics:local
     working_dir: /home/fenics/shared
     volumes:
       - ../../:/home/fenics/shared
     environment:
       HDF5_USE_FILE_LOCKING: "FALSE"
-    entrypoint:
-      - python3
+    command:
       - FluidTO/TurbulentTO_Frozen.py
       - --config
       - FluidTO/Configs_Frozen/Config_DoublePipeBorrvall_Frozen.py
