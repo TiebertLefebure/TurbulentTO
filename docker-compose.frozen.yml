@@ -1,0 +1,103 @@
+# TurbulentTO — alleen Configs_Frozen + TurbulentTO_Frozen.py
+#
+# Eén case (aanbevolen):
+#   docker compose -f docker-compose.frozen.yml run --rm frozen-diffuser-yoon
+#
+# Alle configs ÉÉN VOOR ÉÉN (zelfde volgorde als hieronder; stopt bij eerste fout):
+#   docker compose -f docker-compose.frozen.yml run --rm frozen-all-serial
+#
+# LET OP: niet blind `docker compose ... up -d` zonder servicenamen — dan starten
+# alle frozen-* jobs tegelijk en zuigen je VM leeg. Kies expliciet welke service(s).
+#
+# Meerdere cases parallel (alleen als je weet dat je VM het trekt):
+#   docker compose -f docker-compose.frozen.yml up -d frozen-diffuser-yoon frozen-pipebend-dilgen
+
+x-frozen-common: &frozen-common
+  image: fenics/stable:py3
+  platform: linux/amd64
+  working_dir: /home/fenics/shared/FluidTO
+  volumes:
+    - .:/home/fenics/shared
+  environment:
+    HDF5_USE_FILE_LOCKING: "FALSE"
+  init: true
+
+services:
+  frozen-diffuser-yoon:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_DiffuserYoon_Frozen.py
+
+  frozen-doublepipe-borrvall:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_DoublePipeBorrvall_Frozen.py
+
+  frozen-doublepipe-yoon:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_DoublePipeYoon_Frozen.py
+
+  frozen-pipebend-alexandersen:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_PipeBendAlexandersen_Frozen.py
+
+  frozen-pipebend-dilgen:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_PipeBendDilgen_Frozen.py
+
+  frozen-ubend-alexandersen:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_UBendAlexandersen_Frozen.py
+
+  frozen-ubend-dilgen:
+    <<: *frozen-common
+    command:
+      - python3
+      - TurbulentTO_Frozen.py
+      - --config
+      - Configs_Frozen/Config_UBendDilgen_Frozen.py
+
+  # Alle Configs_Frozen achter elkaar (één container, minder risico dan 7× parallel).
+  frozen-all-serial:
+    <<: *frozen-common
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        configs=(
+          Configs_Frozen/Config_DiffuserYoon_Frozen.py
+          Configs_Frozen/Config_DoublePipeBorrvall_Frozen.py
+          Configs_Frozen/Config_DoublePipeYoon_Frozen.py
+          Configs_Frozen/Config_PipeBendAlexandersen_Frozen.py
+          Configs_Frozen/Config_PipeBendDilgen_Frozen.py
+          Configs_Frozen/Config_UBendAlexandersen_Frozen.py
+          Configs_Frozen/Config_UBendDilgen_Frozen.py
+        )
+        for c in "${configs[@]}"; do
+          echo "========== START $c =========="
+          python3 TurbulentTO_Frozen.py --config "$c"
+          echo "========== DONE  $c =========="
+        done
