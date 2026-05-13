@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Draait alle Configs_Frozen cases achter elkaar (TurbulentTO_Frozen.py).
-# Repo-root = parent van deze scriptmap.
+# Alle Configs_Frozen achter elkaar — zelfde commando als Tijbert, per case.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT/FluidTO"
+RUN="$ROOT/scripts/run-frozen.sh"
 configs=(
   Configs_Frozen/Config_DiffuserYoon_Frozen.py
   Configs_Frozen/Config_DoublePipeBorrvall_Frozen.py
@@ -15,6 +14,6 @@ configs=(
 )
 for c in "${configs[@]}"; do
   echo "========== START $c =========="
-  python3 TurbulentTO_Frozen.py --config "$c"
+  "$RUN" "$c"
   echo "========== DONE  $c =========="
 done
