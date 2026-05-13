@@ -4,13 +4,9 @@ services:
     container_name: turbulentto-frozen-ubend-alexandersen
     image: fenics/stable:py3
     platform: linux/amd64
-    working_dir: /home/fenics/shared/FluidTO
     volumes:
       - ../../:/home/fenics/shared
     environment:
       HDF5_USE_FILE_LOCKING: "FALSE"
-    command:
-      - python3
-      - TurbulentTO_Frozen.py
-      - --config
-      - Configs_Frozen/Config_UBendAlexandersen_Frozen.py
+    entrypoint: ["/bin/bash", "-lc"]
+    command: "cd /home/fenics/shared/FluidTO && exec python3 TurbulentTO_Frozen.py --config Configs_Frozen/Config_UBendAlexandersen_Frozen.py"
