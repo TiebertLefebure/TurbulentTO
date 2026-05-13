@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: turbulentto-frozen-fenics:local
+    platform: linux/amd64
     working_dir: /home/fenics/shared
     volumes:
       - ../../:/home/fenics/shared
