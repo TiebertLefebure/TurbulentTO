@@ -2,7 +2,12 @@ import os
 
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 
-from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
+from Utilities_SharedTO import (
+    build_cell_tag_restriction_functions,
+    eddy_viscosity_ratio_from_turbulence_intensity,
+    load_mesh_from_xdmf,
+)
+from Utilities_TurbulentTO_Frozen import nu_tilde_from_viscosity_ratio
 
 
 # ===================================================================
@@ -76,6 +81,18 @@ SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
+SA_LAMINAR_KINEMATIC_VISCOSITY = MU_FLUID_VALUE / RHO_FLUID_VALUE
+SA_INLET_EDDY_VISCOSITY_RATIO = eddy_viscosity_ratio_from_turbulence_intensity(
+    SA_TURBULENCE_INTENSITY,
+    SA_LAMINAR_KINEMATIC_VISCOSITY,
+    length_scale_ratio=SA_TURBULENCE_LENGTH_SCALE_RATIO,
+    reynolds_number=SA_REYNOLDS_NUMBER,
+)
+SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
+    SA_INLET_EDDY_VISCOSITY_RATIO,
+    SA_LAMINAR_KINEMATIC_VISCOSITY,
+)
+SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
 SA_SUPG_STABILIZATION = False
@@ -114,6 +131,8 @@ VOL_FRAC = 0.25
 OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
+INITIAL_DENSITY_VALUE = VOL_FRAC
+INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
 # Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
 # Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
@@ -124,22 +143,31 @@ BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
 # Alexandersen reports the continuation values but not the MMA move limit.
 MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
 MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
+MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
 
-# Sensitivity verification is performed once on the initial Alexandersen pipe-bend
-# state before the topology optimization update. The five sampled DG0 cells are
-# deterministic random samples, and the finite-difference perturbations keep the
-# SA eddy-viscosity and reciprocal wall-distance fields frozen to match the
-# frozen-adjoint derivative being verified.
-RUN_FINITE_DIFFERENCE_CHECKS = True
+# Keep the production pipe-bend run focused on topology optimization. The
+# one-shot sensitivity verification lives in
+# Config_PipeBendAlexandersen_Frozen_Sensitivity.py.
+RUN_FINITE_DIFFERENCE_CHECKS = False
+RUN_TAYLOR_SENSITIVITY_CHECKS = False
+STOP_AFTER_FINITE_DIFFERENCE_CHECKS = False
+FINITE_DIFFERENCE_CHECK_FLOW_SOLVER = "same"
+FINITE_DIFFERENCE_CHECK_PICARD_FLOW_SOLVER = "same"
 FINITE_DIFFERENCE_CHECK_ITERATIONS = (0,)
-FINITE_DIFFERENCE_CHECK_STEP = 1.0e-6
-FINITE_DIFFERENCE_CHECK_SAMPLES = 5
+FINITE_DIFFERENCE_CHECK_ACTIVE_POSITIONS = None
+FINITE_DIFFERENCE_CHECK_DOF_INDICES = None
+FINITE_DIFFERENCE_CHECK_STEP = 1.0e-3
+FINITE_DIFFERENCE_CHECK_SAMPLES = 4
 FINITE_DIFFERENCE_CHECK_SEED = 13
 FINITE_DIFFERENCE_CHECK_CLIP_TO_BOUNDS = True
 FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
-RUN_TAYLOR_SENSITIVITY_CHECKS = False
-SENSITIVITY_VERIFICATION_MODE_NAME = "frozen-turbulence"
-SENSITIVITY_VERIFICATION_DERIVATIVE_COLUMN = "FrozenTurbulence"
+FINITE_DIFFERENCE_CHECK_PICARD_STEPS = 1
+TAYLOR_CHECK_STEPS = (1.0e-3, 3.0e-4, 1.0e-4, 3.0e-5)
+TAYLOR_CHECK_SEED = 29
+SENSITIVITY_VERIFICATION_MODE_NAME = "frozen"
+SENSITIVITY_VERIFICATION_DERIVATIVE_COLUMN = "AdjointDerivative"
+DILGEN_FROZEN_RESULTS_ROOT_NAME = None
+DILGEN_SEMIFROZEN_RESULTS_ROOT_NAME = None
 # ================================================================== #
 
 LINEAR_SOLVER = "mumps"
@@ -162,8 +190,6 @@ FORWARD_SNES_LINEAR_SOLVER = "mumps"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 220
-
-FORWARD_SNES_ACCEPTED_RESIDUAL_FACTOR = 1.0
 
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
 FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
@@ -248,6 +274,7 @@ ETA_I = 0.50
 QUADRATURE_DEGREE = 6
 FILTER_BASE_LENGTH = H_MAX
 FILTER_RADIUS_IN_CELLS = 4.0
+FILTER_DENOMINATOR_FLOOR = 1.0e-12
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
@@ -256,7 +283,12 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 
 ENABLE_PRESSURE_PIN = False
-RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendAlexandersen_TurbulentTO_Frozen"
+SAVE_DILGEN_PAPER_DATA = False
+LOG_DILGEN_FIG8_COLUMNS = False
+SAVE_DF0DX_VECTOR = True
+SAVE_IPCS_RESIDUAL_PLOTS = False
+SAVE_IPCS_RESIDUAL_SVGS = False
+RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendAlexandersen_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

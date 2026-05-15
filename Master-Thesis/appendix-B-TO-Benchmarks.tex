@@ -1,210 +1,59 @@
-\chapter{Configuration and Grid Independence of the Topology Optimization Benchmarks}
+\chapter{Configuration and Grid Independence of the Alexandersen Benchmarks}
 \label{app:B_validation_configurations}
 
 \providecommand{\meshplaceholder}[1]{%
 	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
 }
 
-This appendix collects the detailed setup information that would interrupt the results narrative in Chapter~\ref{ch:benchmark_results}. It includes the geometry, boundary-condition, physical, numerical, and validation-mesh settings for the benchmark cases. The Dilgen pipe bend is included as a sensitivity verification case. The Dilgen U-bend, Alexandersen pipe bend, and Yoon diffuser are the three true topology optimization cases and therefore include Ansys grid-independence tables for the extracted geometries.
+This appendix collects the detailed setup information for the Alexandersen topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. Only the Alexandersen pipe bend and Alexandersen U-bend are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
 
 \section{Validation and Meshing Strategy}
 \label{sec:app_B_mesh_strategy}
-For the three extracted topology optimization designs, the Ansys validation meshes are refined through coarse, medium, and fine resolutions. The reported validation metrics in Chapter~\ref{ch:benchmark_results} should be taken from a mesh for which both viscous dissipation and pressure drop have become insensitive to further refinement. The final thesis should report the selected mesh explicitly for each case.
+The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. In both cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
 
-Both SA and SST $k$-$\omega$ validation runs should use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison should be performed for each turbulence model because the near-wall and separated-flow predictions can respond differently to grid refinement.
+For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. The reported validation metrics in Chapter~\ref{ch:benchmark_results} should be taken from a mesh for which both viscous dissipation and pressure drop have become insensitive to further refinement. The selected mesh should be reported explicitly for each case.
 
-\section{Wall-Distance and Penalization Conventions}
-\label{sec:app_B_wall_distance_conventions}
-The benchmark set uses more than one wall-distance and topology-penalty convention. Table~\ref{tab:app_B_wall_distance_modes} records these implementation choices so that the results can be interpreted without assuming a single global wall-distance equation or penalty interpolation.
+Both SA and SST $k$-$\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
 
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Wall-distance and SA wall-source conventions used by the Chapter~\ref{ch:benchmark_results} benchmarks.}
-	\label{tab:app_B_wall_distance_modes}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Case} & \textbf{Implementation note} \\
-		\hline
-		Dilgen pipe bend & Uses a fixed Poisson-style wall-distance field and Brinkman/RAMP-scaled interpolation for the SA working-variable penalty. \\
-		Dilgen U-bend & Uses the \texttt{poisson\_penalized} wall-distance mode with a design-driven SA wall source and Brinkman/RAMP-scaled interpolation for the SA and wall-distance penalties. \\
-		Alexandersen pipe bend & Uses the \texttt{reciprocal\_penalized} wall-distance mode with a design-driven SA wall source and power-law interpolation for the SA and wall-distance penalties. \\
-		Yoon diffuser & Uses the \texttt{reciprocal\_penalized} wall-distance mode following the reciprocal/Yoon-style wall-distance logic of Yoon~\cite{Yoon2016}, with power-law interpolation for the SA and wall-distance penalties. \\
-		\hline
-	\end{tabularx}
-\end{table}
+\section{Shared Alexandersen Topology Optimization Conventions}
+\label{sec:app_B_alexandersen_shared_conventions}
+Both Alexandersen cases use the same turbulence-topology coupling conventions. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The design density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}.
 
-Chapter~\ref{ch:topology_optimization_methodology} defines these alternatives explicitly. In particular, the Dilgen-style cases should not be described as if they used the same reciprocal wall-distance equation or the same topology-penalty interpolation as the Yoon-style cases.
-
-% ---------------------------------------------------------
-% BENCHMARK 1: DILGEN PIPE BEND
-% ---------------------------------------------------------
-\section{Benchmark 1: Dilgen Pipe Bend}
-\label{sec:app_B_config_dilgen_pipebend}
-
-The Dilgen pipe bend is used for sensitivity verification only. It does not require Ansys geometry extraction or a laminar topology comparison.
+The pipe-bend finite-difference sensitivity verification in Chapter~\ref{ch:benchmark_results} is not assigned a separate configuration table. It uses the same geometry, physical parameters, wall-distance convention, penalty settings, objective, filter, and solver setup as the pipe-bend topology optimization run. The only additional settings are the finite-difference sampling parameters listed in Table~\ref{tab:app_B_alexandersen_pipebend_numerical}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Dilgen pipe-bend sensitivity case.}
-	\label{tab:app_B_dilgen_pipebend_physical}
+	\caption{Shared wall-distance and SA topology-penalty conventions for the Alexandersen cases.}
+	\label{tab:app_B_alexandersen_shared_conventions}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
 		\hline
 		\textbf{Parameter} & \textbf{Setting} \\
 		\hline
-		Reference case & Pipe-bend sensitivity benchmark from Dilgen et al.~\cite{Dilgen2018} \\
-		Role in thesis & Fixed-geometry SA sensitivity verification \\
-		Reference figure for setup & Dilgen et al. Fig.~2 (left) \\
-		Reference flow figure & Dilgen et al. Fig.~2 velocity-magnitude contours \\
-		Turbulence model in this thesis & Spalart-Allmaras only \\
-		Models compared in reference paper & SA and SST $k$-$\omega$ \\
-		Reynolds number & [TBD] \\
-		Inlet condition & [TBD: velocity profile and SA inlet value] \\
-		Outlet condition & [TBD] \\
-		Wall conditions & No-slip velocity; SA wall condition [TBD] \\
-		Wall-distance mode & Fixed Poisson-style wall-distance field \\
-		SA penalty interpolation & Brinkman/RAMP-scaled indicator \\
-		Performance/sensitivity quantity & $dJ/d\gamma$ and the verification metrics corresponding to Dilgen et al. Figs.~5 and 6 \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Numerical FEniCS settings for the Dilgen pipe-bend sensitivity case.}
-	\label{tab:app_B_dilgen_pipebend_numerical}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c X}
-		\hline
-		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
-		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & [TBD] \\
-		SA working-variable space & $\tilde{\nu}$ & [TBD] \\
-		Design/sensitivity space & $\gamma$ & [TBD] \\
-		Reference mesh & -- & [TBD] \\
-		Forward coupling & -- & [TBD] \\
-		Frozen adjoint state & -- & $(\mathbf{u}^*,p^*)$ \\
-		Coupled SA adjoint state & -- & $(\mathbf{u}^*,p^*,\tilde{\nu}^*)$ \\
-		Wall-distance adjoint & -- & Not included for this Dilgen-style comparison \\
-		Linear solver & -- & [TBD] \\
-		Convergence tolerances & -- & [TBD] \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
-
-% ---------------------------------------------------------
-% BENCHMARK 2: DILGEN U-BEND
-% ---------------------------------------------------------
-\section{Benchmark 2: Dilgen U-Bend}
-\label{sec:app_B_config_dilgen_ubend}
-
-The Dilgen U-bend is the first true topology optimization case. It uses the same Dilgen-style wall-distance mode as the pipe-bend sensitivity case, but now the design field is active and must define the SA wall source.
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Dilgen U-bend topology optimization case.}
-	\label{tab:app_B_dilgen_ubend_physical}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Parameter} & \textbf{Setting} \\
-		\hline
-		Reference case & U-bend benchmark from Dilgen et al.~\cite{Dilgen2018} \\
-		Reference figure for setup & Dilgen et al. Fig.~7 \\
-		Design-domain dimensions & [TBD] \\
-		Non-design fluid regions & [TBD] \\
-		Fixed solid regions & [TBD, if applicable] \\
-		Volume fraction & [TBD] \\
-		Reynolds number & [TBD] \\
-		Density and viscosity & [TBD] \\
-		Inlet condition & [TBD: velocity profile and SA inlet value] \\
-		Outlet condition & [TBD] \\
-		Wall conditions & No-slip velocity; SA wall condition [TBD] \\
-		Wall-distance mode & \texttt{poisson\_penalized} \\
+		SA wall-distance mode & \texttt{reciprocal\_penalized} \\
 		SA wall-density source & \texttt{design} \\
-		SA/wall penalty interpolation & Brinkman/RAMP-scaled indicator \\
-		Primary FEniCS plots & Objective history, volume history, topology, velocity magnitude \\
-		Validation metrics & $\Phi_D$, pressure drop, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the Dilgen U-bend.}
-	\label{tab:app_B_dilgen_ubend_numerical}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c X}
-		\hline
-		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
-		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & [TBD] \\
-		SA working-variable space & $\tilde{\nu}$ & [TBD] \\
-		Design-density space & $\gamma$ & [TBD] \\
-		Reference FEniCS mesh & -- & [TBD] \\
-		Adjoint variants evaluated & -- & Frozen turbulence and coupled SA adjoint \\
-		RAMP continuation & $q$ & [TBD] \\
-		Projection continuation & $\beta$ & [TBD] \\
-		MMA move limits & -- & [TBD] \\
-		Maximum optimization iterations & -- & [TBD] \\
-		Filter radius & $r_f$ & [TBD] \\
-		Forward flow solver & -- & [TBD] \\
-		Frozen NS-SA coupling & -- & [TBD] \\
-		Linear solver & -- & [TBD] \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted Dilgen U-bend geometry.}
-	\label{tab:app_B_dilgen_ubend_mesh}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
-		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
-		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
-		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
+		Solid threshold for wall source & $\bar{\gamma}=0.50$ \\
+		SA working-variable penalty & Power-law solid indicator with amplitude $10^3$ and exponent $n=4$ \\
+		Wall-distance penalty & Power-law solid indicator with amplitude $10^3$ and exponent $n=4$ \\
+		Wall-distance recovery & Reciprocal recovery from the relaxed Eikonal variable $G$ \\
+		SA inlet turbulence estimate & $I=7.5\%$, $\ell/H=0.05$, eddy-viscosity ratio capped at $50$ \\
+		Optimization objective & Average inlet pressure with fixed outlet pressure $p=0$ \\
 		\hline
 	\end{tabularx}
 \end{table}
 
 \FloatBarrier
 
-% ---------------------------------------------------------
-% BENCHMARK 3: ALEXANDERSEN PIPE BEND
-% ---------------------------------------------------------
-\section{Benchmark 3: Alexandersen Pipe Bend}
+\section{Alexandersen Pipe Bend}
 \label{sec:app_B_config_alexandersen_pipebend}
 
-This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The reference paper uses a standard $k$-$\varepsilon$ model with wall functions; the present thesis uses the SA model and evaluates the $V_f=0.25$ design.
+The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The reference paper uses a standard $k$-$\varepsilon$ model with wall functions; the present thesis uses the wall-resolved SA implementation and evaluates the $V_f=0.25$ design.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Alexandersen pipe-bend topology optimization case.}
+	\caption{Geometric, physical, and boundary-condition parameters for the Alexandersen pipe-bend case.}
 	\label{tab:app_B_alexandersen_pipebend_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
@@ -216,17 +65,16 @@ This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The refe
 		Reference velocity figure & Bayat et al. Fig.~15 \\
 		Reference turbulence model & Standard $k$-$\varepsilon$ with wall functions \\
 		Turbulence model in this thesis & Spalart-Allmaras \\
-		Volume fraction & $V_f=0.25$ \\
 		Design-domain dimensions & Square design region $L\times L$ with $L=1$ \\
-		Non-design fluid regions & Inlet and outlet lead sections of length $0.2L$ and port height/width $0.2L$; inlet over $y/L\in[0.7,0.9]$ and outlet over $x/L\in[0.7,0.9]$ \\
+		Full computational domain & $x/L\in[-0.2,1]$, $y/L\in[-0.2,1]$ \\
+		Non-design inlet duct & Length $0.2L$, height $0.2L$, inlet over $y/L\in[0.7,0.9]$ \\
+		Non-design outlet duct & Width $0.2L$, length $0.2L$, outlet over $x/L\in[0.7,0.9]$ on the lower boundary \\
+		Volume fraction & $V_f=0.25$ \\
 		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ with $H_{\mathrm{in}}=0.2L$ \\
 		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
-		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from $I=7.5\%$ and $\ell/H_{\mathrm{in}}=0.05$, giving $\tilde{\nu}_{\mathrm{in}}\approx5.67\times10^{-4}$ \\
-		Outlet condition & Pressure outlet $p=0$ on the lower outlet, with $u_x=0$ imposed on the outlet boundary \\
-		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls; topology-created solids enter the SA and wall-distance equations through the design-density penalties \\
-		Wall-distance mode & \texttt{reciprocal\_penalized} \\
-		SA wall-density source & \texttt{design}, with solid threshold $0.50$ \\
-		SA/wall penalty interpolation & Power-law indicator with penalty amplitude $10^3$ and exponent $n=4$ \\
+		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_alexandersen_shared_conventions} \\
+		Outlet condition & Pressure outlet $p=0$ on the lower outlet, with the normal/tangential component constraint used by the FEniCS configuration \\
+		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls; topology-created solids enter through the design-density penalties \\
 		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST \\
 		\hline
 	\end{tabularx}
@@ -235,7 +83,7 @@ This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The refe
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the Alexandersen pipe bend.}
+	\caption{Numerical FEniCS solver, topology-optimization, and sensitivity-verification parameters for the Alexandersen pipe bend.}
 	\label{tab:app_B_alexandersen_pipebend_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
@@ -245,17 +93,22 @@ This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The refe
 		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
 		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
 		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
-		Reference FEniCS mesh & -- & \texttt{mesh\_yplus1.xdmf}; $39{,}128$ vertices, $77{,}334$ triangles, $h_{\max}=0.007L$, first near-wall strip sized for approximately $y^+=1$ \\
-		Objective & $J$ & Average inlet pressure with fixed outlet pressure $p=0$ \\
-		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and the reciprocal wall-distance field are frozen during the flow adjoint solve \\
-		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/30,\ 1/15]$ with $\alpha_{\mathrm{solid}}=100$ \\
+		hh & -- & \texttt{mesh\_yplus1.xdmf}; $39{,}128$ vertices, $77{,}334$ triangles, $h_{\max}=0.007L$ \\
+		Objective & $J_p$ & Average inlet pressure \\
+		Initial design density & $\gamma_0$ & $V_f=0.25$, matched to the filtered volume \\
+		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
+		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/30,\ 1/15]$ \\
 		Projection continuation & $\beta$ & $[4,\ 6,\ 9,\ 13]$ with threshold $\eta=0.50$ \\
 		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each, $100$ maximum total; stop if objective change is below $10^{-5}$ for five iterations \\
+		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
 		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
 		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
 		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
 		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
+		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
+		Sensitivity verification samples & -- & Five active DG0 cells, seed $13$ \\
+		Sensitivity verification step & $\Delta h$ & $10^{-6}$, central finite difference \\
+		Sensitivity verification fields held fixed & -- & SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -263,7 +116,7 @@ This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The refe
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted Alexandersen pipe-bend geometry.}
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Alexandersen pipe-bend geometry.}
 	\label{tab:app_B_alexandersen_pipebend_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
@@ -290,40 +143,36 @@ This case follows the pipe-bend setup of Bayat et al.~\cite{Bayat2026}. The refe
 
 \FloatBarrier
 
-% ---------------------------------------------------------
-% BENCHMARK 4: YOON DIFFUSER
-% ---------------------------------------------------------
-\section{Benchmark 4: Yoon Diffuser}
-\label{sec:app_B_config_yoon_diffuser}
+\section{Alexandersen U-Bend}
+\label{sec:app_B_config_alexandersen_ubend}
 
-The Yoon diffuser is the SA-based diffuser benchmark used to compare against the turbulent layout reported by Yoon~\cite{Yoon2016}. The target turbulent case is $Re=3{,}000$ with $\tilde{\nu}=1$ prescribed at both inlet and outlet.
+The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It uses the same turbulent topology optimization framework as the pipe bend, but forces a $180^\circ$ return path around a fixed internal separator.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Yoon diffuser topology optimization case.}
-	\label{tab:app_B_yoon_diffuser_physical}
+	\caption{Geometric, physical, and boundary-condition parameters for the Alexandersen U-bend case.}
+	\label{tab:app_B_alexandersen_ubend_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
 		\hline
 		\textbf{Parameter} & \textbf{Setting} \\
 		\hline
-		Reference case & Diffuser benchmark from Yoon~\cite{Yoon2016} \\
-		Reference figure for setup & Yoon Fig.~20 \\
-		Reference turbulent topology & Yoon Fig.~22 \\
-		Reynolds number & $Re=3{,}000$ \\
-		SA inlet/outlet value & $\tilde{\nu}=1$ at inlet and outlet \\
-		Design-domain dimensions & [TBD] \\
-		Non-design fluid regions & [TBD] \\
-		Volume fraction & [TBD] \\
-		Density and viscosity & [TBD] \\
-		Inlet condition & [TBD] \\
-		Outlet condition & [TBD] \\
-		Wall conditions & [TBD] \\
-		Wall-distance mode & \texttt{reciprocal\_penalized} \\
-		SA wall-density source & \texttt{design} \\
-		SA/wall penalty interpolation & Power-law indicator \\
-		Validation metrics & $\Phi_D$, pressure drop, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST \\
+		Reference case & U-bend benchmark from Bayat et al.~\cite{Bayat2026} \\
+		Reference figure/table for setup & Bayat et al. Fig.~11 and Table~4 \\
+		Reference turbulence model & Standard $k$-$\varepsilon$ with wall functions \\
+		Turbulence model in this thesis & Spalart-Allmaras \\
+		Design-domain dimensions & Square design region $L\times L$ with $L=1$ \\
+		Full computational domain & $x/L\in[-0.2,1]$, $y/L\in[0,1]$ \\
+		Port geometry & Two left-side ports of height $0.2L$; inlet over $y/L\in[0.55,0.75]$, outlet over $y/L\in[0.25,0.45]$ \\
+		Fixed separator & Bar thickness $0.10L$, rounded-tip radius $0.05L$, extending from $x/L=-0.2$ to tip at $x/L=0.5$ \\
+		Volume fraction & $V_f=0.27$ \\
+		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ with $H_{\mathrm{port}}=0.2L$ \\
+		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
+		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_alexandersen_shared_conventions} \\
+		Outlet condition & Pressure outlet $p=0$ on the lower left port, with the component constraint used by the FEniCS configuration \\
+		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls and the fixed separator; topology-created solids enter through the design-density penalties \\
+		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -331,26 +180,29 @@ The Yoon diffuser is the SA-based diffuser benchmark used to compare against the
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the Yoon diffuser.}
-	\label{tab:app_B_yoon_diffuser_numerical}
+	\caption{Numerical FEniCS solver and topology-optimization parameters for the Alexandersen U-bend.}
+	\label{tab:app_B_alexandersen_ubend_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
 		\hline
 		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
 		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & [TBD] \\
-		SA working-variable space & $\tilde{\nu}$ & [TBD] \\
-		Design-density space & $\gamma$ & [TBD] \\
-		Reference FEniCS mesh & -- & [TBD] \\
-		Adjoint treatment & -- & [TBD] \\
-		RAMP continuation & $q$ & [TBD] \\
-		Projection continuation & $\beta$ & [TBD] \\
-		MMA move limits & -- & [TBD] \\
-		Maximum optimization iterations & -- & [TBD] \\
-		Filter radius & $r_f$ & [TBD] \\
-		Forward flow solver & -- & [TBD] \\
-		Frozen NS-SA coupling & -- & [TBD] \\
-		Linear solver & -- & [TBD] \\
+		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
+		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
+		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
+		Reference FEniCS mesh & -- & \texttt{mesh\_yplus1.xdmf}; wall-resolved triangular Gmsh mesh with $45{,}280$ vertices, $85{,}780$ triangles, near-wall refinement based on $y^+\approx1$, and far-field $h_{\max}=0.007L$ \\
+		Objective & $J_p$ & Average inlet pressure \\
+		Initial design density & $\gamma_0$ & $V_f=0.27$, matched to the filtered volume \\
+		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
+		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/35,\ 1/12]$ \\
+		Projection continuation & $\beta$ & $[8,\ 10,\ 18,\ 18]$ with threshold $\eta=0.50$ \\
+		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
+		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
+		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
+		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
+		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
+		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
+		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -358,8 +210,8 @@ The Yoon diffuser is the SA-based diffuser benchmark used to compare against the
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted Yoon diffuser geometry.}
-	\label{tab:app_B_yoon_diffuser_mesh}
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Alexandersen U-bend geometry.}
+	\label{tab:app_B_alexandersen_ubend_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
 		\hline

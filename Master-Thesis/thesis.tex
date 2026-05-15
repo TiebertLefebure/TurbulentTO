@@ -43,15 +43,42 @@
 \DeclareUnicodeCharacter{00A0}{ }
 \DeclareUnicodeCharacter{200B}{ }
 \DeclareUnicodeCharacter{202F}{ }
+\definecolor{codebg}{HTML}{F6F8FB}
+\definecolor{codeframe}{HTML}{9FB3C8}
+\definecolor{codekeyword}{HTML}{005F9E}
+\definecolor{codecomment}{HTML}{3B7A45}
+\definecolor{codestring}{HTML}{A33D2D}
+\definecolor{codeemph}{HTML}{6D4AA2}
+\definecolor{codenumber}{HTML}{687385}
 \lstset{
     language=Python,
+    alsoletter={_},
     basicstyle=\ttfamily\footnotesize,
-    keywordstyle=\color{blue}\bfseries,
-    commentstyle=\color{green!60!black},
-    stringstyle=\color{red},
+    keywordstyle=\color{codekeyword}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    emphstyle=\color{codeemph}\bfseries,
+    emph={
+        active_mask,ActiveDV,rho_raw,rho_filtered,rho_effective,
+        alpha,nu_tilde,nu_t_frozen,wall_distance,dJ_drho_raw,
+        SA_NU_TILDE_PENALTY_ALPHA,SA_NU_TILDE_PENALTY_N,
+        SA_WALL_PENALTY_ALPHA,SA_WALL_PENALTY_N
+    },
     showstringspaces=false,
+    columns=fullflexible,
+    keepspaces=true,
     breaklines=true,
-    frame=single
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    framerule=0.6pt,
+    framesep=5pt,
+    xleftmargin=0.5em,
+    xrightmargin=0.5em,
+    numbers=left,
+    numberstyle=\scriptsize\color{codenumber},
+    numbersep=7pt,
+    captionpos=b
 }
 %%%%%%%
 % The lipsum package is used to generate random text.
@@ -86,7 +113,7 @@ As modern electronic and automotive systems grow increasingly compact and powerf
 
 This thesis develops and implements a density-based topology optimization framework for turbulent internal flows as a baseline for future heat-transfer applications. The computational methodology is built upon the open-source FEniCS platform and utilizes the fictitious domain method with Brinkman momentum penalization to conceptualize solid boundaries within a continuous fluid mesh. To capture the complex physics of high-Reynolds flows, the framework integrates the one-equation Spalart-Allmaras (SA) turbulence model. The optimization process is driven by a frozen-turbulence continuous adjoint, meaning that the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
 
-The assessment strategy is deliberately separated into three stages. First, the predictive scope of the SA model for curvature-dominated internal flows is established and benchmarked against Ansys Fluent. Second, the custom SA implementation in FEniCS is verified on turbulent benchmark flows. Third, the Alexandersen pipe-bend optimization is verified through finite-difference sensitivity checks and exported to Ansys Fluent for sharp-geometry validation. This final stage compares FEniCS-SA with Ansys-SA on the same geometry and then evaluates the same design with SST $k$-$\omega$ to quantify turbulence-model sensitivity. In this revised framing, laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
+The assessment strategy is deliberately separated into methodology and results. First, the predictive scope of the SA model for curvature-dominated internal flows is established. The FEniCS-SA implementation is then verified against Ansys Fluent on turbulent channel and U-bend benchmarks. Finally, the pipe-bend and U-bend topology optimization benchmarks from Bayat et al. are evaluated, with the pipe-bend derivative checked through a Dilgen-style finite-difference sensitivity verification before the optimized geometries are exported to Ansys Fluent for sharp-geometry validation with SA and SST $k$-$\omega$ turbulence models. Laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
 
 The resulting thesis is therefore intentionally conservative in its claims. Its central question is not merely whether turbulent topologies look different from laminar ones, but whether SA-driven topology optimization produces low-loss designs whose predicted performance remains credible under independent CFD re-analysis. This establishes a more defensible and transparent baseline for future three-dimensional and conjugate heat-transfer extensions.
 
@@ -124,8 +151,7 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		SA  & Spalart-Allmaras \\
 		SIMP & Solid Isotropic Material with Penalization \\
 		SST & Shear Stress Transport \\
-		SUPG & Streamline Upwind Petrov-Galerkin \\
-		TO  & Topology Optimization \\
+			TO  & Topology Optimization \\
 		UFL & Unified Form Language \\
 	\end{tabularx}
 \end{flushleft}
@@ -173,7 +199,6 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		$\epsilon_{tol}$ & Convergence tolerance [-] \\
 		$\phi$ & General scalar field variable [-] \\
 		$\sigma_w$ & Eikonal relaxation constant [-] \\
-		$\tau$ & SUPG stabilization time parameter [s] \\
 	\end{tabularx}
 \end{flushleft}
 
@@ -208,7 +233,8 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 \include{chapter-4}
 % ... and so on until
 \include{chapter-5}
-\include{chapter-6-conclusion}
+\include{chapter-6-results}
+\include{chapter-7-conclusion}
 
 % If you have appendices:
 \appendixpage*          % if wanted

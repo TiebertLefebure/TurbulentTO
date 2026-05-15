@@ -160,9 +160,7 @@ def _write_readme(output_dir, config, include_g_state):
         handle.write("  df0dx_diagonal_line_normalized.tsv: df0dx divided by the initial objective J0 for Dilgen Fig. 5\n")
         handle.write("  df0dx_x_y0point5_normalized.tsv: df0dx divided by the initial objective J0 for Dilgen Fig. 6\n\n")
         handle.write("Sensitivity verification tables:\n")
-        handle.write("  ../SensitivityVerificationTable.tsv: Dilgen Table 2 finite-difference comparison\n")
-        handle.write("  ../TaylorCheckLog.tsv: directional Taylor remainder check\n")
-        handle.write("  ../TaylorDirection_###.tsv: nonzero entries of the Taylor perturbation direction\n\n")
+        handle.write("  ../SensitivityVerificationTable.tsv: Dilgen Table 2 finite-difference comparison\n\n")
         handle.write("Grid points: {}\n".format(int(config.get("DILGEN_PAPER_GRID_POINTS", 201))))
         handle.write("Line points: {}\n".format(int(config.get("DILGEN_PAPER_LINE_POINTS", 401))))
 

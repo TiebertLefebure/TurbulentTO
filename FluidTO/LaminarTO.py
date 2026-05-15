@@ -15,6 +15,7 @@ from mma import mmasub
 from Utilities_SharedTO import (
     append_optimization_log_entry,
     as_list,
+    boundary_average_functional,
     build_design_pressure_drop_markers,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
@@ -24,7 +25,6 @@ from Utilities_SharedTO import (
     load_config_module_from_cli,
     pressure_drop_between_boundaries,
     pressure_drop_between_design_facets,
-    pressure_drop_design_facet_functional,
     reset_vtk_series,
 )
 
@@ -52,12 +52,14 @@ if "BETA_PROJ_SCHEDULE" in globals():
 else:
     BETA_PROJ_SCHEDULE = [float(BETA_PROJ_VALUE)] * len(Q_PENAL_SCHEDULE)
 
-# Brinkman penalization constants
+# Brinkman limits for fluid and solid regions.
 mu_fluid = Constant(MU_FLUID_VALUE)
 rho_fluid = Constant(RHO_FLUID_VALUE)
-alpha_fluid = Constant(2.5 * MU_FLUID_VALUE / 100.0**2.0)
-alpha_solid = Constant(2.5 * MU_FLUID_VALUE / 0.01**2.0)
-q_penal = Constant(0.1)
+brinkman_fluid_length = float(globals().get("BRINKMAN_FLUID_LENGTH", 100.0))
+brinkman_solid_length = float(globals().get("BRINKMAN_SOLID_LENGTH", 0.01))
+alpha_fluid = Constant(float(globals().get("ALPHA_FLUID", 2.5 * MU_FLUID_VALUE / brinkman_fluid_length**2.0)))
+alpha_solid = Constant(float(globals().get("ALPHA_SOLID", 2.5 * MU_FLUID_VALUE / brinkman_solid_length**2.0)))
+q_penal = Constant(0.1)  # updated each continuation stage
 
 
 def projection(rho_design, eta_proj):
@@ -398,6 +400,7 @@ filter_denominator_floor = max(
     float(globals().get("FILTER_DENOMINATOR_FLOOR", 1.0e-12)),
     1.0e-300,
 )
+filter_cell_mass_values = np.maximum(assemble(v_filter * dx).get_local(), 1.0e-300)
 
 
 def pde_filter_raw(input_field, output_field):
@@ -459,12 +462,19 @@ def pde_filter_design_gradient(input_field, output_field):
     if filter_denominator_values is None:
         initialize_design_filter_normalization()
     input_values = input_field.vector().get_local()
+    # Forward filtering solves A rho_f = M rho before pointwise mask normalization.
+    # The coefficient-space transpose is M A^{-T} D^{-1}; the DG Helmholtz
+    # operator is symmetric, so A^{-T}=A^{-1}.
     work_values = np.zeros_like(input_values)
-    work_values[ActiveDV] = input_values[ActiveDV] / filter_denominator_values[ActiveDV]
+    work_values[ActiveDV] = (
+        input_values[ActiveDV]
+        / filter_denominator_values[ActiveDV]
+        / filter_cell_mass_values[ActiveDV]
+    )
     filter_work.vector().set_local(work_values)
     filter_work.vector().apply("insert")
     pde_filter_raw(filter_work, output_field)
-    output_values = output_field.vector().get_local()
+    output_values = output_field.vector().get_local() * filter_cell_mass_values
     output_values[PassiveDV] = 0.0
     output_field.vector().set_local(output_values)
     output_field.vector().apply("insert")
@@ -496,21 +506,17 @@ if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
         "(2D unit-depth power, W/m)."
     )
 elif objective_type in ("average_inlet_pressure", "inlet_pressure", "mean_inlet_pressure"):
-    ObjFunctional, design_inlet_area, design_outlet_area = pressure_drop_design_facet_functional(
+    ObjFunctional, physical_inlet_area = boundary_average_functional(
         p,
-        dS_design_pressure,
-        ds_design_pressure,
-        design_pressure_drop_mark["inlet"],
-        design_pressure_drop_mark["outlet"],
+        ds,
+        inlet_markers,
     )
     objective_log_column = "J_pressure_Pa"
     objective_console_label = "J_pressure"
     objective_console_unit = " Pa"
     root_print(
-        "Objective type: J_pressure = design-domain pressure drop over inlet/outlet measures "
-        "{:.6e}/{:.6e} (Pa).".format(
-            design_inlet_area, design_outlet_area,
-        )
+        "Objective type: J_pressure = physical inlet-boundary average pressure "
+        "over Gamma_in area {:.6e} (Pa).".format(physical_inlet_area)
     )
 else:
     raise ValueError(
@@ -608,10 +614,80 @@ volume = assemble(VolumeRegion * dx)
 if volume <= 0.0:
     raise ValueError("The volume-constrained design region has zero measure.")
 
+
+def _assign_scalar_active_density(active_density_value):
+    """Set a uniform active density while preserving configured passive cells."""
+    density_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+    density_values[ActiveDV] = np.clip(
+        float(active_density_value),
+        active_density_lower_values,
+        active_density_upper_values,
+    )
+    rho.vector().set_local(density_values)
+    rho.vector().apply("insert")
+    return rho
+
+
+def _filtered_volume_fraction_for_active_density(active_density_value):
+    _assign_scalar_active_density(active_density_value)
+    pde_filter_design_density(rho, rho_f)
+    return float(assemble(VolumeRegion * rho_effective * dx) / volume)
+
+
+def initialize_active_density_to_filtered_volume_target():
+    """Choose the initial active value so rho_effective starts at VOL_FRAC."""
+    if not bool(globals().get("INITIAL_DENSITY_MATCH_FILTERED_VOLUME", False)):
+        pde_filter_design_density(rho, rho_f)
+        return
+
+    target = float(VOL_FRAC)
+    lower_value = float(np.min(active_density_lower_values))
+    upper_value = float(np.max(active_density_upper_values))
+    lower_fraction = _filtered_volume_fraction_for_active_density(lower_value)
+    upper_fraction = _filtered_volume_fraction_for_active_density(upper_value)
+    if lower_fraction > upper_fraction:
+        lower_value, upper_value = upper_value, lower_value
+        lower_fraction, upper_fraction = upper_fraction, lower_fraction
+
+    if target <= lower_fraction:
+        chosen_density = lower_value
+    elif target >= upper_fraction:
+        chosen_density = upper_value
+    else:
+        lo = lower_value
+        hi = upper_value
+        for _ in range(36):
+            mid = 0.5 * (lo + hi)
+            mid_fraction = _filtered_volume_fraction_for_active_density(mid)
+            if mid_fraction < target:
+                lo = mid
+            else:
+                hi = mid
+        chosen_density = 0.5 * (lo + hi)
+
+    final_fraction = _filtered_volume_fraction_for_active_density(chosen_density)
+    root_print(
+        "Initial active density {:.6f} gives filtered volume {:.6f} "
+        "(target {:.6f}).".format(chosen_density, final_fraction, target)
+    )
+
+
+initialize_active_density_to_filtered_volume_target()
+xval[:, 0] = rho.vector().get_local()[ActiveDV]
+
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 if len(BETA_PROJ_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("BETA_PROJ_SCHEDULE must match Q_PENAL_SCHEDULE length.")
+
+# Allow either one stage limit or one value per stage.
+_max_iters_raw = globals().get("MAX_INNER_ITERATIONS_SCHEDULE", globals().get("MAX_INNER_ITERATIONS", 150))
+if isinstance(_max_iters_raw, (list, tuple)):
+    MAX_INNER_ITERATIONS_SCHEDULE = [int(x) for x in _max_iters_raw]
+else:
+    MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
+if len(MAX_INNER_ITERATIONS_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("MAX_INNER_ITERATIONS_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 # ------------------------------------------------------------
@@ -675,6 +751,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
+    max_iters_now = MAX_INNER_ITERATIONS_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
     inner_count = 0
     convergence_history = 0
@@ -683,7 +760,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
     ))
 
-    while inner_count < MAX_INNER_ITERATIONS and not objective_converged:
+    while inner_count < max_iters_now and not objective_converged:
         iteration_start_time = time.perf_counter()
 
         root_print("--- Stage {}/{} | iter {:03d} (global {:03d}) ---".format(
@@ -826,7 +903,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         ))
     else:
         root_print("Stage {}/{} reached max iterations ({}).".format(
-            stage_idx + 1, len(Q_PENAL_SCHEDULE), MAX_INNER_ITERATIONS,
+            stage_idx + 1, len(Q_PENAL_SCHEDULE), max_iters_now,
         ))
 
 optimization_elapsed = time.perf_counter() - optimization_start_time

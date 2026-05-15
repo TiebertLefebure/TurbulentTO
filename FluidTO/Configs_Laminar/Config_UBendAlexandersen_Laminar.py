@@ -9,15 +9,15 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 # Configuration: Alexandersen 2026 U-Bend - Laminar reference (Re = 1)
 #
 # Uses the same mesh and non-design inlet/outlet ducts as the turbulent
-# Alexandersen U-bend case. The inlet profile is parabolic and Re is based
-# on the maximum inlet velocity and port height.
+# Alexandersen U-bend case. The inlet profile is uniform, matching the
+# turbulent comparison case, and Re is based on inlet velocity and port height.
 # ----------------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_guided.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_guided.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
@@ -67,24 +67,31 @@ REYNOLDS_NUMBER = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
+ALPHA_FLUID = 0.0
+ALPHA_SOLID = 100.0
 
 # Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
 
 VOL_FRAC = 0.27
-MAX_INNER_ITERATIONS = 80
 OBJECTIVE_TYPE = "average_inlet_pressure"
-OBJECTIVE_CONVERGENCE_TOL = 5e-5
+OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
+INITIAL_DENSITY_VALUE = VOL_FRAC
+INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.02, 0.03, 0.05, 0.10, 0.20, 0.35, 0.50]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005]
-BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 35.0, 12.0]
+Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
+BETA_PROJ_SCHEDULE = [8.0, 10.0, 18.0, 18.0]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
+MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
+MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
 
 SNES_LINEAR_SOLVER = "mumps"
 FILTER_BASE_LENGTH = H_MAX
-FILTER_RADIUS_IN_CELLS = 3.0
+FILTER_RADIUS_IN_CELLS = 4.0
 FORWARD_SNES_RTOL = 1.0e-6
-FORWARD_SNES_ATOL = 1.0e-9
+FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_MAX_ITERS = 260
 ADJOINT_SNES_RTOL = 1.0e-6
 ADJOINT_SNES_ATOL = 1.0e-9
 SNES_MAX_ITERS = 200
@@ -139,17 +146,6 @@ def mark_boundaries(mesh):
     return boundaries
 
 
-def _parabolic_horizontal_profile(y_min, y_max, u_max):
-    y_center = 0.5 * (y_min + y_max)
-    width = y_max - y_min
-    return Expression(
-        ("u_max * (1 - pow(2.0 * (x[1] - y_c) / width, 2))", "0.0"),
-        degree=2,
-        u_max=u_max,
-        y_c=y_center,
-        width=width,
-    )
-
-
 def build_velocity_profile_sets():
-    return [_parabolic_horizontal_profile(TOP_PORT_Y_MIN, TOP_PORT_Y_MAX, U_MAX_INLET)], []
+    u_inlet = Expression(("u_max", "0.0"), degree=0, u_max=U_MAX_INLET)
+    return [u_inlet], []

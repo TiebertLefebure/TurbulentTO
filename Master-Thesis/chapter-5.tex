@@ -1,479 +1,147 @@
-\chapter{Topology Optimization for Turbulent Flows: Results and CFD Validation}
-\label{ch:benchmark_results}
-
-\providecommand{\validationplaceholder}[1]{%
-	\fbox{\parbox[c][0.22\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
-}
+\chapter{Verification of the Spalart-Allmaras Solver for Turbulent Internal Flows}
+\label{ch:sa_verification}
 
 \section{Introduction}
-\label{sec:ch5_introduction}
-Building upon the mathematical and numerical framework developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on established internal-flow benchmarks. The main emphasis is the Alexandersen pipe bend, because this is the working configuration used for the final thesis campaign: \texttt{reciprocal\_penalized} wall distance, \texttt{design} wall-density source, power-law SA and wall-distance penalties, and the frozen-turbulence adjoint. The chapter therefore first verifies the sensitivity calculation for this exact Alexandersen setup before discussing the topology optimization result.
+\label{sec:sa_verification_introduction}
+Chapter~\ref{ch:fenics_implementation} introduced the numerical implementation of the Spalart-Allmaras (SA) model in FEniCS. Before using this solver inside the topology optimization framework, the forward fluid solver is verified against independent Ansys Fluent calculations on two benchmark flows. The first benchmark is a fully developed turbulent channel, which isolates wall damping, turbulence production, and Picard coupling in a simple geometry. The second benchmark is a curved U-bend, which tests the same implementation under strong convection, streamline curvature, and separation.
 
-The evaluation addresses three questions. First, does the implemented frozen adjoint produce derivatives that agree with central finite differences for the Alexandersen pipe bend? Second, does the resulting optimized topology reproduce the expected smooth, separation-avoiding bend behavior reported in the turbulent topology optimization literature? Third, does the extracted diffuse design remain credible when re-evaluated as a sharp geometry in Ansys Fluent with SA and SST $k$-$\omega$ turbulence models?
+This chapter focuses on the verification evidence rather than the full simulation setup. For the channel benchmark, the physical setup is listed in Table~\ref{tab:app_A_channel_physical}, the FEniCS solver settings in Table~\ref{tab:app_A_channel_numerical}, and the mesh studies in Tables~\ref{tab:app_A_channel_meshes} and \ref{tab:app_A_channel_meshes_ansys} of Section~\ref{sec:app_A_channel}. For the U-bend benchmark, the corresponding geometry, numerical settings, truncation study, and mesh studies are documented in Tables~\ref{tab:app_A_ubend_physical}, \ref{tab:app_A_ubend_numerical}, \ref{tab:app_A_ubend_meshes}, and \ref{tab:app_A_ubend_meshes_ansys}, together with Figure~\ref{fig:app_A_ubend_truncation_proof} in Section~\ref{sec:app_A_ubend}. The purpose here is to show that the FEniCS-SA implementation reproduces the relevant Ansys-SA flow behavior well enough to serve as the forward model for the topology optimization studies in Chapter~\ref{ch:benchmark_results}.
 
-The Dilgen and Yoon cases are retained as supporting benchmarks. They document how the same solver family behaves on other turbulent topology optimization examples, but they are not used as the primary sensitivity verification for the final Alexandersen pipe-bend results. To maintain focus on the core turbulent physics and topology results, detailed geometric parameters, solver settings, and Ansys grid-independence studies are deferred to Appendix~\ref{app:B_validation_configurations}. Similarly, the detailed laminar-versus-turbulent topology comparisons are consolidated in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}.
+\section{Verification Benchmark 1: Channel Flow}
+\label{sec:sa_channel_verification}
+To verify the fundamental correctness of the custom fluid and turbulence solvers, the code was first tested on a standard 2D turbulent channel flow. To cleanly isolate and verify turbulence production, wall damping, and Picard coupling without the artifacts of a developing boundary layer, this benchmark was formulated as a pressure-driven periodic channel rather than a conventional inlet-outlet duct.
 
-\section{Benchmark Strategy and Evaluation Metrics}
-\label{sec:ch5_strategy_metrics}
+The velocity field ($\mathbf{u}$) and Spalart-Allmaras working variable ($\tilde{\nu}$) were constrained periodically between the streamwise boundaries, while the top and bottom boundaries were treated as standard no-slip walls ($\mathbf{u} = 0, \tilde{\nu} = 0$). Flow was driven entirely by a fixed pressure drop from the upstream plane ($p=2$ Pa) to the downstream plane ($p=0$ Pa). Based on a reference bulk velocity of $U_{\mathrm{ref}}=18.5$ m/s and using the full channel height ($H=2.0$ m) as the characteristic length scale, the solver was targeted to resolve a fully turbulent flow regime at a channel Reynolds number of $Re_H \approx 20{,}300$. The complete definition of the geometric, physical, and boundary-condition parameters is provided in Table~\ref{tab:app_A_channel_physical} of Section~\ref{subsec:app_A_channel_physical} in Appendix~\ref{app:A_baseline_configurations}.
 
-Table~\ref{tab:ch5_benchmark_strategy} outlines the strategic role of each benchmark. The Alexandersen pipe bend is the primary case: it receives the finite-difference sensitivity verification, the main topology optimization discussion, and the independent Ansys validation. The remaining cases provide supporting evidence and context.
+\subsection{Mesh Resolution Requirements}
+\label{subsec:sa_channel_mesh}
+Because the SA formulation is a low-Reynolds model that does not use empirical wall functions, it requires mathematical integration directly through the viscous sublayer. To satisfy this strict boundary-layer requirement, a custom structured inflation mesh was generated for the channel flow. Because the domain is a simple periodic rectangle, this anisotropic grid was constructed programmatically using NumPy arrays and converted into a FEniCS-compatible format via the \texttt{meshio} library. Based on the target bulk Reynolds number, this approach enforced a physical first-cell height of approximately $1.7 \times 10^{-3}$ m, aiming for a non-dimensional wall distance of $y^+ \approx 1$ across the entire domain.
+
+To verify that the numerical results were not dominated by spatial discretization, a grid-independence study was conducted. The full spatial verification is documented in Section~\ref{subsec:app_A_channel_mesh} of Appendix~\ref{app:A_baseline_configurations}. The mesh hierarchy is detailed in Table~\ref{tab:app_A_channel_meshes}, and visual confirmation of convergence is provided by the velocity profiles in Figure~\ref{fig:app_A_channel_mesh_independence}.
+
+\subsection{FEniCS vs. Ansys Comparison}
+\label{subsec:sa_channel_ansys_comparison}
+Prior to this comparative analysis, the Ansys baseline itself was verified for grid independence to ensure a robust reference (see Table~\ref{tab:app_A_channel_meshes_ansys} and Figure~\ref{fig:app_A_channel_mesh_indep_ansys} in Section~\ref{subsec:app_A_channel_mesh} of Appendix~\ref{app:A_baseline_configurations}). The channel flow was then simulated in FEniCS using the decoupled Picard iteration method and compared against the Ansys Fluent baseline.
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Ansys Fluent SA contour}
+		\label{fig:channel_ansys}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{FEniCS SA contour}
+		\label{fig:channel_fenics}
+	\end{subfigure}
+
+	\vspace{0.5cm}
+
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Velocity profiles}
+		\label{fig:channel_profiles}
+	\end{subfigure}
+	\caption{Verification of the 2D channel flow ($Re_H \approx 20{,}300$). The comparison includes qualitative velocity contours from Ansys Fluent and FEniCS, plus quantitative velocity profiles extracted across the channel.}
+	\label{fig:channel_benchmark}
+\end{figure}
+
+As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation show good agreement with the Ansys Fluent baseline. The quantitative line plots confirm that the FEniCS velocity profiles closely track the Ansys reference data. The custom solver resolves the logarithmic region of the turbulent boundary layer and predicts the turbulent diffusion toward the channel center. The quantitative errors and macroscopic metrics are summarized in Table~\ref{tab:channel_errors}.
 
 \begin{table}[!ht]
 	\centering
-	\footnotesize
-	\caption{Benchmark strategy used in Chapter~\ref{ch:benchmark_results}. Detailed physical and numerical parameters are listed in Appendix~\ref{app:B_validation_configurations}.}
-	\label{tab:ch5_benchmark_strategy}
+	\small
+	\caption{Quantitative comparison of flow metrics and extracted errors for the 2D channel benchmark.}
+	\label{tab:channel_errors}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X X X}
+	\begin{tabular}{l c c c}
 		\hline
-		\textbf{Case} & \textbf{Role in this thesis} & \textbf{Reference comparison} & \textbf{Validation scope} \\
+		\textbf{Metric} & \textbf{Ansys Fluent} & \textbf{Custom FEniCS} & \textbf{Relative Error / Difference} \\
 		\hline
-		Alexandersen pipe bend & Primary thesis case: frozen-adjoint sensitivity verification followed by topology optimization at $V_f=0.25$ & Pipe-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & Five-cell central finite-difference check; FEniCS optimization; Ansys-SA and Ansys-SST validation \\
-		Dilgen pipe bend & Supporting fixed-geometry diagnostic retained for comparison with the earlier Dilgen-style verification workflow & Velocity contours and SA sensitivity plots from Dilgen et al.~\cite{Dilgen2018} & FEniCS sensitivity comparison only \\
-		Dilgen U-bend & Supporting topology optimization case for a curved turbulent manifold & Objective and volume histories; SA topology and velocity contours from Dilgen et al.~\cite{Dilgen2018} & FEniCS and, if time permits, Ansys validation \\
-		Yoon diffuser & Supporting adverse-pressure-gradient benchmark & Geometry, boundary conditions, and turbulent layout from Yoon~\cite{Yoon2016} & FEniCS and, if time permits, Ansys validation \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\subsection{Optimization and Validation Metrics}
-\label{subsec:ch5_metrics}
-Throughout the optimization process, the objective $J$ follows the case-specific metric defined in Chapter~\ref{ch:topology_optimization_methodology}. Dissipation-driven cases use the Brinkman-penalized power dissipation in Eq.~\ref{eq:objective_function}, while the Alexandersen pipe bend uses the average inlet-pressure objective in Eq.~\ref{eq:inlet_pressure_objective}. The dissipation formulation smoothly combines physical viscous dissipation with the artificial resistance necessary to enforce solid regions. However, this diffuse metric cannot be directly compared to the results from Ansys Fluent. Once the geometry is extracted, the Brinkman penalty is removed, leaving discrete, sharp solid walls.
-
-To bridge this gap, the primary validation metric is the physical viscous dissipation integrated over the active fluid domain,
-\begin{equation}
-	\Phi_D = \int_{\Omega_{\mathrm{design}}}
-	\frac{1}{2} \mu_{\mathrm{eff}}
-	\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right):
-	\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right)
-	\,d\Omega ,
-	\label{eq:ch5_validation_dissipation}
-\end{equation}
-where the effective viscosity is $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent evaluations and $\mu_{\mathrm{eff}}=\mu$ for laminar reference solves. Furthermore, because pressure drop is the most direct and practical engineering interpretation of these flow losses, $\Delta p$ is also reported from the Ansys validation runs. All two-dimensional dissipation quantities are evaluated per unit depth.
-
-\subsection{Wall-Distance and SA Penalization Conventions}
-\label{subsec:ch5_wall_distance_note}
-The final Alexandersen computations use one wall-distance and penalty convention throughout: \texttt{reciprocal\_penalized} wall distance, \texttt{design} wall-density source, and the power-law solid indicator in Eq.~\ref{eq:power_penalty_indicator}. The wall-distance field is updated in the forward loop, but it is treated as a frozen coefficient during the adjoint sensitivity solve. Thus, the finite-difference verification below checks the implemented frozen derivative for the same practical assumption used by the optimizer.
-
-\section{Dilgen Pipe Bend: Supporting Sensitivity Diagnostic}
-\label{sec:dilgen_pipebend}
-The Dilgen pipe bend~\cite{Dilgen2018} is retained as a supporting diagnostic because it was used during development to compare frozen-adjoint sensitivities against central finite differences on a known turbulent bend. It is not the primary sensitivity verification for the final thesis campaign. The primary check is the Alexandersen pipe bend in Section~\ref{subsec:alexandersen_pipebend_sensitivity}, because that case uses the same \texttt{reciprocal\_penalized}, power-law, frozen-turbulence configuration as the reported optimization.
-
-\subsection{Geometry and Boundary Conditions}
-\label{subsec:dilgen_pipebend_setup}
-The geometric domain and boundary conditions are configured according to the pipe-bend setup illustrated in Fig.~2 of Dilgen et al.~\cite{Dilgen2018}. While the original authors compared multiple turbulence models, the present implementation restricts its scope exclusively to the SA model. In Dilgen et al., the channel-bend verification is initialized with $\gamma=1$ throughout the design domain, and the SA distance function is not penalized for that verification. The present \texttt{passive} wall-density source and \texttt{poisson} wall-distance mode reproduce that choice.
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.6\textwidth]{Dilgen-PipeBend-GeometryBCs}
-	\caption{Geometry and boundary conditions for the Dilgen pipe-bend sensitivity verification case. The setup is reproduced from Dilgen et al.~\cite{Dilgen2018}; the present calculations use the SA turbulence model only.}
-	\label{fig:dilgen_pipebend_setup}
-\end{figure}
-
-\subsection{Sensitivity Verification Results}
-\label{subsec:dilgen_pipebend_sensitivity}
-To ensure the baseline flow physics are captured correctly, the forward FEniCS-SA velocity-magnitude contours are first computed (Fig.~\ref{fig:dilgen_pipebend_velocity}). The main high-speed stream follows the curved passage from inlet to outlet, while the inner recirculating part of the bend remains a low-velocity region. This reproduces the qualitative structure of the SA result reported by Dilgen et al.~\cite{Dilgen2018} and provides the necessary forward-state basis for interpreting the adjoint field.
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.82\textwidth]{Dilgen-PipeBend-SA-Frozen-Velocity}
-	\caption{Velocity-magnitude contours for the Dilgen pipe bend computed with the FEniCS-SA frozen-turbulence implementation, following the contour presentation of Dilgen et al.~\cite{Dilgen2018}.}
-	\label{fig:dilgen_pipebend_velocity}
-\end{figure}
-
-With the flow field established, the spatial sensitivity field $dJ/d\gamma$ is evaluated. The coordinate-wise finite-difference verification follows the central-difference metric used by Dilgen et al.~\cite{Dilgen2018}. For a sampled DG0 design cell $i$ with unit perturbation vector $\mathbf{e}_i$, the frozen-turbulence finite-difference sensitivity used in the present table is
-\begin{equation}
-	S_i^{\mathrm{FD}}
-	=
-	\frac{
-			J\!\left(\boldsymbol{\gamma}+\Delta h\,\mathbf{e}_i;
-			\mathbf{u}^{+},p^{+},\tilde{\nu}^{0}\right)
-		-
-			J\!\left(\boldsymbol{\gamma}-\Delta h\,\mathbf{e}_i;
-			\mathbf{u}^{-},p^{-},\tilde{\nu}^{0}\right)
-	}{
-		2\Delta h
-	},
-	\qquad \Delta h=10^{-6}.
-	\label{eq:dilgen_pipebend_fd_metric}
-\end{equation}
-Here $J$ is the power-dissipation objective, corresponding to Dilgen's notation $C$, the superscripts $+$ and $-$ denote the converged flow states for the positively and negatively perturbed designs, and $\tilde{\nu}^{0}$ is the unperturbed SA working-variable field held fixed in the frozen-turbulence comparison. The discrepancy reported in Table~\ref{tab:dilgen_pipebend_fd_adjoint_comparison} is computed as
-\begin{equation}
-	\varepsilon_i^{(m)}
-	=
-	\frac{\left|S_i^{(m)}-S_i^{\mathrm{FD}}\right|}
-	{\max\!\left(\left|S_i^{(m)}\right|,\left|S_i^{\mathrm{FD}}\right|,10^{-30}\right)},
-	\label{eq:dilgen_pipebend_fd_relative_error}
-\end{equation}
-where $m$ denotes the adjoint mode being compared. The present table reports only the frozen-turbulence mode. For this fixed Poisson wall-distance case, the wall distance is passive with respect to the design field; there is no penalized wall-distance derivative, no reciprocal wall-distance state, and no $G$-adjoint contribution.
-
-\begin{table}[!ht]
-	\centering
-	\scriptsize
-	\caption{Coordinate sensitivity verification for the Dilgen pipe bend, following the comparison structure of Dilgen et al. Table~2~\cite{Dilgen2018}. The finite-difference values are computed with Eq.~\eqref{eq:dilgen_pipebend_fd_metric}; the error columns use Eq.~\eqref{eq:dilgen_pipebend_fd_relative_error}.}
-	\label{tab:dilgen_pipebend_fd_adjoint_comparison}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabular}{l c c c c}
-		\hline
-		\textbf{Cell} &
-		\shortstack{\textbf{Finite}\\\textbf{difference}\\$S_i^{\mathrm{FD}}$} &
-		\shortstack{\textbf{Frozen}\\\textbf{adjoint}\\$S_i^{\mathrm{fr}}$} &
-		\shortstack{\textbf{Absolute}\\\textbf{error}} &
-			\shortstack{\textbf{Relative}\\\textbf{error}\\$\varepsilon_i^{\mathrm{fr}}$} \\
-		\hline
-		$CV_1$ & $-1.64230238 \times 10^{-2}$ & $-1.64230269 \times 10^{-2}$ & $3.03 \times 10^{-9}$ & $1.85 \times 10^{-7}$ \\
-		$CV_2$ & $-8.88178420 \times 10^{-9}$ & $-4.05592879 \times 10^{-9}$ & $4.83 \times 10^{-9}$ & $5.43 \times 10^{-1}$ \\
-		$CV_3$ & $-5.09747711 \times 10^{-3}$ & $-5.09745305 \times 10^{-3}$ & $2.41 \times 10^{-8}$ & $4.72 \times 10^{-6}$ \\
-		$CV_4$ & $4.22981206 \times 10^{-4}$ & $4.23061639 \times 10^{-4}$ & $8.04 \times 10^{-8}$ & $1.90 \times 10^{-4}$ \\
-		$CV_5$ & $-3.05915293 \times 10^{-5}$ & $-3.05958417 \times 10^{-5}$ & $4.31 \times 10^{-9}$ & $1.41 \times 10^{-4}$ \\
+		Bulk Velocity ($U_\mathrm{bulk}$) [m/s] & [TBD] & [TBD] & [TBD]\% \\
+		Friction Coefficient ($C_f$) & [TBD] & [TBD] & [TBD]\% \\
+		Max Pointwise Velocity Error & -- & -- & [TBD]\% \\
+		Relative $L_2$ Velocity Error & -- & -- & [TBD]\% \\
 		\hline
 	\end{tabular}
 \end{table}
 
-The absolute agreement in Table~\ref{tab:dilgen_pipebend_fd_adjoint_comparison} is strong: the largest absolute discrepancy is $8.04 \times 10^{-8}$. The only large relative error occurs at $CV_2$, where both the finite-difference and adjoint sensitivities are close to zero; the absolute error there remains only $4.83 \times 10^{-9}$. Excluding this near-zero normalization case, the largest relative discrepancy is $1.90 \times 10^{-4}$. The coordinate check therefore confirms that the implemented frozen-turbulence adjoint is consistent with central finite differences for the fixed Dilgen wall-distance formulation.
+This agreement supports the verification that the core Navier-Stokes solver, relaxed Eikonal wall-distance field, and SA production/destruction terms behave correctly in a canonical wall-bounded turbulent flow.
 
-Figure~\ref{fig:dilgen_pipebend_sensitivity_contour} shows the corresponding spatial sensitivity field. The negative sensitivity band follows the energetic curved flow path, indicating where increasing the local fluid indicator most strongly reduces the dissipation objective. By contrast, regions outside the active passage are weakly positive or close to neutral, consistent with their limited contribution to the useful flow route.
+\section{Verification Benchmark 2: U-Bend Geometry}
+\label{sec:sa_ubend_verification}
+Following the channel flow verification, the solver was tested on the highly convective separating U-bend flow evaluated in Chapter~\ref{ch:turbulence_modeling}. This case is closer to the curved internal-flow topologies studied later in the thesis because the flow experiences strong streamline curvature and pressure-gradient-driven redistribution.
 
-\begin{figure}[!ht]
+As discussed in Section~\ref{subsec:app_A_ubend_truncation} of Appendix~\ref{app:A_baseline_configurations}, the verification used a modified computational domain for efficiency. First, the domain was reduced to a 2D geometry corresponding to the symmetry mid-plane of the full 3D case. Since the FEniCS domain is mathematically a 2D planar approximation, it cannot resolve true 3D Dean secondary vortices. Instead, this benchmark validates the 2D symmetry-plane approximation and the solver's ability to capture curvature-induced separation and momentum redistribution. Second, the extended straight inlet and outlet sections of the standard benchmark were truncated to $30D$ to reduce unnecessary computational cost. The mathematical justification for this truncation is plotted in Figure~\ref{fig:app_A_ubend_truncation_proof}.
+
+To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the domain is 2D, the 3D physical pipe diameter ($D = 0.028$ m) and radius of curvature ($R_c = 0.125$ m) were retained as the characteristic length scales. This preserves the target Reynolds number ($Re_D \approx 44{,}700$) and Dean number ($De \approx 15{,}000$) of the 3D Ansys reference case. The physical setup and boundary conditions are listed in Table~\ref{tab:app_A_ubend_physical} of Section~\ref{subsec:app_A_ubend_physical} in Appendix~\ref{app:A_baseline_configurations}.
+
+\subsection{Mesh Resolution Requirements}
+\label{subsec:sa_ubend_mesh}
+The U-bend geometry features curved inner and outer arcs, complex corner transitions, and anisotropic boundary-layer inflation around non-orthogonal walls. To manage this geometric complexity while satisfying the $y^+ \approx 1$ resolution requirement, a custom mesh was generated using Gmsh \cite{Geuzaine2009}. The first element height adjacent to the wall was controlled to $1.20 \times 10^{-5}$ m across the entire domain. The independence studies are documented in Section~\ref{subsec:app_A_ubend_mesh} of Appendix~\ref{app:A_baseline_configurations}: the inflation parameters and element densities of the Gmsh hierarchy are listed in Table~\ref{tab:app_A_ubend_meshes}, and the extracted velocity profiles confirming grid convergence at the bend exit are illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}.
+
+\subsection{FEniCS vs. Ansys Comparison}
+\label{subsec:sa_ubend_ansys_comparison}
+Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-independence study was executed for the commercial Ansys Fluent baseline (detailed in Table~\ref{tab:app_A_ubend_meshes_ansys} and Figure~\ref{fig:app_A_ubend_mesh_indep_ansys} of Section~\ref{subsec:app_A_ubend_mesh} in Appendix~\ref{app:A_baseline_configurations}). With both solvers operating on spatially converged grids, an independent Ansys Fluent simulation was executed on the shortened 2D domain.
+
+\begin{figure}[htpb]
 	\centering
-	\includegraphics[width=0.82\textwidth]{Dilgen-PipeBend-SA-Frozen-Sensitivity}
-	\caption{Frozen-turbulence sensitivity contour $dJ/d\gamma$ for the Dilgen pipe bend, following the comparison style of Dilgen et al. Fig.~4~\cite{Dilgen2018}.}
-	\label{fig:dilgen_pipebend_sensitivity_contour}
-\end{figure}
-
-Further quantitative verification is provided by the one-dimensional cuts in Fig.~\ref{fig:dilgen_pipebend_verification_metrics}. Along the diagonal line $x=y$, the minimum sensitivity is approximately $-7.17 \times 10^{-2}$ at $x=y\approx0.575$. Along the horizontal line $y=0.5$, the minimum is approximately $-7.00 \times 10^{-2}$ at $x\approx0.65$. In both cuts, the strong negative trough appears where the sampling line intersects the accelerated bend flow, while the sensitivity approaches zero outside the active passage.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
+	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\linewidth]{Dilgen-PipeBend-SA-Frozen-DiagonalSensitivity}
-		\caption{Sensitivity along the diagonal line $x=y$.}
-		\label{fig:dilgen_pipebend_fig5_metric}
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Ansys Fluent SA contour}
+		\label{fig:ubend_ansys}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
+	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\linewidth]{Dilgen-PipeBend-SA-Frozen-Y05Sensitivity}
-		\caption{Sensitivity along the line $y=0.5$.}
-		\label{fig:dilgen_pipebend_fig6_metric}
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{FEniCS SA contour}
+		\label{fig:ubend_fenics}
 	\end{subfigure}
-	\caption{One-dimensional sensitivity cuts for the Dilgen pipe bend, corresponding to the quantities shown in Figs.~5 and 6 of Dilgen et al.~\cite{Dilgen2018}.}
-	\label{fig:dilgen_pipebend_verification_metrics}
+
+	\vspace{0.5cm}
+
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Velocity profiles}
+		\label{fig:ubend_profiles}
+	\end{subfigure}
+	\caption{Verification of the 2D U-bend flow ($Re_D \approx 44{,}700$, $De \approx 15{,}000$). The comparison includes qualitative velocity contours from Ansys Fluent and FEniCS, showing separation characteristics, plus quantitative velocity profiles extracted at the bend exit.}
+	\label{fig:ubend_verification}
 \end{figure}
 
-Because this case functions purely as a fixed-domain diagnostic tool, it requires no independent Ansys validation or laminar comparison. The use of a passive wall-distance source is appropriate here because the Dilgen pipe bend is an all-fluid sensitivity benchmark with fixed geometric walls. The conclusion from Table~\ref{tab:dilgen_pipebend_fd_adjoint_comparison} is therefore limited but useful: the frozen-turbulence derivative assembled by the FEniCS implementation is consistent with central finite differences for the fixed Dilgen-style diagnostic. The final thesis verification, however, is the Alexandersen check in Section~\ref{subsec:alexandersen_pipebend_sensitivity}.
+As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and separation regions observed in the qualitative velocity contours demonstrate visual agreement. To provide a more robust assessment, velocity data was extracted along a cross-sectional line probe positioned at the bend exit. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary-layer growth and the momentum shift toward the outer wall.
 
-\section{Dilgen U-Bend}
-\label{sec:dilgen_ubend}
-The Dilgen U-bend is retained as a supporting topology optimization benchmark. By allowing the design variable to actively sculpt the flow path, the solver must dynamically update the SA wall source to reflect the newly forming turbulent boundaries.
-
-The U-bend is not repeated as a sensitivity-verification case. It uses the same frozen-turbulence differentiation strategy as the rest of the reported optimization campaign, and the implementation check is already provided by the Alexandersen pipe bend.
-
-\subsection{Geometry and Boundary Conditions}
-\label{subsec:dilgen_ubend_setup}
-The geometric domain and boundary conditions match those of Fig.~7 in Dilgen et al.~\cite{Dilgen2018}. The solver relies on the \texttt{poisson\_penalized} wall-distance mode alongside a design-driven SA wall source.
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.8\textwidth]{Dilgen-UBend-GeometryBCs}
-	\caption{Geometry and boundary conditions for the Dilgen U-bend topology optimization case, reproduced from Dilgen et al.~\cite{Dilgen2018}.}
-	\label{fig:dilgen_ubend_setup}
-\end{figure}
-
-\subsection{FEniCS Optimization Results}
-\label{subsec:dilgen_ubend_fenics}
-The convergence histories for the normalized objective function and the volume constraint are detailed in Fig.~\ref{fig:dilgen_ubend_histories}.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Normalized objective function vs. optimization iteration}
-		\caption{Normalized objective function.}
-		\label{fig:dilgen_ubend_objective_history}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume constraint.}
-		\label{fig:dilgen_ubend_volume_history}
-	\end{subfigure}
-	\caption{Optimization convergence history for the Dilgen U-bend, corresponding to the progression reported in Dilgen et al. Fig.~8~\cite{Dilgen2018}.}
-	\label{fig:dilgen_ubend_histories}
-\end{figure}
-
-As shown in Fig.~\ref{fig:dilgen_ubend_fenics_results}, the frozen-turbulence topology is expected to suppress the sharp inner corners that are typical of creeping-flow designs. Instead, the turbulent optimization should favor a smoothly sweeping inner radius, mitigating flow separation and reducing turbulent mixing losses. While minor discrepancies with the reference literature may arise due to the specific FEniCS continuation schedules or wall-distance implementations, the fundamental routing strategy and velocity acceleration zones are expected to align robustly with the published behaviors.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Frozen topology}
-		\caption{Projected density. Final $J/J_0 =$ [TBD].}
-		\label{fig:dilgen_ubend_frozen_result}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Frozen velocity contours}
-		\caption{Velocity magnitude.}
-		\label{fig:dilgen_ubend_velocity_result}
-	\end{subfigure}
-	\caption{Final frozen-turbulence topology and velocity-magnitude contours for the Dilgen U-bend.}
-	\label{fig:dilgen_ubend_fenics_results}
-\end{figure}
-
-\subsection{CFD Validation and Turbulence Model Sensitivity}
-\label{subsec:dilgen_ubend_cfd}
-To guarantee that the optimized diffuse geometry performs well in a realistic engineering context, the final design is extracted as a discrete, sharp-walled domain and evaluated in Ansys Fluent. As summarized in Table~\ref{tab:dilgen_ubend_validation_metrics}, the performance is analyzed using both the SA and the SST $k$-$\omega$ models. This dual-model approach confirms whether the design's superior performance is a genuine physical improvement or merely an artifact of exploiting the specific formulation of the SA model during optimization.
+Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers.
 
 \begin{table}[!ht]
 	\centering
-	\footnotesize
-	\caption{CFD validation metrics for the extracted Dilgen U-bend topology.}
-	\label{tab:dilgen_ubend_validation_metrics}
+	\small
+	\caption{Quantitative comparison of flow metrics and extracted errors for the 2D U-bend benchmark.}
+	\label{tab:ubend_errors}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c c X}
+	\begin{tabular}{l c c c}
 		\hline
-		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
+		\textbf{Metric} & \textbf{Ansys Fluent} & \textbf{Custom FEniCS} & \textbf{Relative Error / Difference} \\
 		\hline
-		FEniCS diffuse design & SA & [TBD] & [TBD] & Optimization state \\
-		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
-		Ansys sharp geometry & SST $k$-$\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\subsection{Comparison with Laminar Design}
-\label{subsec:dilgen_ubend_laminar}
-The comparison against a purely laminar design is presented in Section~\ref{sec:app_C_dilgen_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. This analysis illustrates a central premise of this thesis: topologies optimized for the creeping-flow limit ($Re=1$) often produce overly direct flow paths that suffer severe penalties, such as massive separation and intense turbulent dissipation, when forced to operate under turbulent flow conditions.
-
-\section{Alexandersen Pipe Bend}
-\label{sec:alexandersen_pipebend}
-The Alexandersen pipe bend benchmark, originally formulated by Bayat, Li, and Alexandersen~\cite{Bayat2026}, introduces a critical cross-model verification. While the reference study employs a standard $k$-$\varepsilon$ RANS model with wall functions, the present framework tackles the exact same problem using a wall-resolved SA model under the frozen-turbulence assumption. This comparison provides valuable insight into whether the fundamental topological solution, a streamlined and separation-avoiding bend, remains consistent across fundamentally different turbulence closures.
-
-\subsection{Geometry and Boundary Conditions}
-\label{subsec:alexandersen_pipebend_setup}
-The boundary conditions and geometric constraints replicate the setup shown in Fig.~10 of Bayat et al.~\cite{Bayat2026}, specifically targeting the $V_f=0.25$ volume-fraction case. In contrast to the dissipation-driven cases, the Alexandersen optimization minimizes the average inlet pressure while holding the outlet pressure fixed, so the objective directly represents the pressure loss required to drive the imposed flow through the evolving bend.
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.8\textwidth]{Alexandersen-PipeBend-GeometryBCs}
-	\caption{Geometry and boundary conditions for the Alexandersen pipe-bend benchmark, based on Bayat et al.~\cite{Bayat2026}. The present evaluation targets the $V_f=0.25$ case using the SA model.}
-	\label{fig:alexandersen_pipebend_setup}
-\end{figure}
-
-\subsection{Sensitivity Verification}
-\label{subsec:alexandersen_pipebend_sensitivity}
-Before interpreting the optimized topology, the frozen adjoint is verified directly on the Alexandersen pipe-bend configuration. This is the relevant check for the final thesis setup because it uses the same power-law SA penalty, \texttt{reciprocal\_penalized} wall distance, \texttt{design} wall-density source, inlet-pressure objective, and frozen-turbulence adjoint used during the optimization.
-
-Five active DG0 design cells are sampled deterministically from a random seed. For each sampled cell $i$, the raw density is perturbed by a central finite-difference step $\Delta h=10^{-6}$ while the SA working-variable field and reciprocal wall-distance field are held fixed. The perturbed velocity-pressure state is then re-solved, and the finite-difference derivative is computed as
-\begin{equation}
-	S_i^{\mathrm{FD}}
-	=
-	\frac{
-			J_p\!\left(\boldsymbol{\gamma}+\Delta h\,\mathbf{e}_i;
-			\mathbf{u}^{+},p^{+},\tilde{\nu}^{0},G^{0}\right)
-		-
-			J_p\!\left(\boldsymbol{\gamma}-\Delta h\,\mathbf{e}_i;
-			\mathbf{u}^{-},p^{-},\tilde{\nu}^{0},G^{0}\right)
-	}{
-		2\Delta h
-	}.
-	\label{eq:alexandersen_pipebend_fd_metric}
-\end{equation}
-This verifies the derivative actually supplied to MMA: the flow adjoint accounts for the dependence of the inlet-pressure objective on the flow solution and the density penalties, while the turbulence and wall-distance updates are frozen during differentiation. The absolute and relative errors are
-\begin{equation}
-	\Delta_i^{\mathrm{abs}} =
-	\left|S_i^{\mathrm{fr}}-S_i^{\mathrm{FD}}\right|,
-	\qquad
-	\varepsilon_i^{\mathrm{fr}}
-	=
-	\frac{\Delta_i^{\mathrm{abs}}}
-	{\max\!\left(\left|S_i^{\mathrm{fr}}\right|,\left|S_i^{\mathrm{FD}}\right|,10^{-30}\right)} .
-	\label{eq:alexandersen_pipebend_fd_relative_error}
-\end{equation}
-
-\begin{table}[!ht]
-	\centering
-	\scriptsize
-	\caption{Coordinate sensitivity verification for the Alexandersen pipe bend.}
-	\label{tab:alexandersen_pipebend_fd_adjoint_comparison}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabular}{l c c c c}
-		\hline
-		\textbf{Cell} &
-		\shortstack{\textbf{Finite}\\\textbf{difference}\\$S_i^{\mathrm{FD}}$} &
-		\shortstack{\textbf{Frozen}\\\textbf{adjoint}\\$S_i^{\mathrm{fr}}$} &
-		\shortstack{\textbf{Absolute}\\\textbf{error}\\$\Delta_i^{\mathrm{abs}}$} &
-		\shortstack{\textbf{Relative}\\\textbf{error}\\$\varepsilon_i^{\mathrm{fr}}$} \\
-		\hline
-		$CV_1$ & [TBD] & [TBD] & [TBD] & [TBD] \\
-		$CV_2$ & [TBD] & [TBD] & [TBD] & [TBD] \\
-		$CV_3$ & [TBD] & [TBD] & [TBD] & [TBD] \\
-		$CV_4$ & [TBD] & [TBD] & [TBD] & [TBD] \\
-		$CV_5$ & [TBD] & [TBD] & [TBD] & [TBD] \\
+		Pressure Drop ($\Delta p$) [Pa] & [TBD] & [TBD] & [TBD]\% \\
+		Max Pointwise Velocity Error & -- & -- & [TBD]\% \\
+		Relative $L_2$ Velocity Error & -- & -- & [TBD]\% \\
 		\hline
 	\end{tabular}
 \end{table}
 
-After running the configured finite-difference check, the numerical values in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison} are filled from \texttt{SensitivityCheckLog.tsv} in the Alexandersen frozen-results directory.
-
-Agreement in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison} is the primary sensitivity verification used in this chapter. The check is intentionally limited to one representative case because it verifies the implementation of the frozen derivative; repeating the same derivative check for the Alexandersen U-bend would test the same algebraic path rather than a fundamentally new sensitivity implementation.
-
-\subsection{FEniCS Optimization Results}
-\label{subsec:alexandersen_pipebend_fenics}
-Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected density field $\bar{\gamma}$ and the corresponding velocity magnitude. Despite the differing turbulence models, it is anticipated that the FEniCS-SA optimizer will converge on a broadly similar routing strategy as the $k$-$\varepsilon$ reference. The primary high-speed flow path should bypass the sharpest corners to minimize momentum loss, although subtle differences in the treatment of the boundary layer may result in variations in the exact gray-scale density distribution near the walls.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Projected density field $\bar{\gamma}$, $V_f=0.25$}
-		\caption{Projected density. Final objective $J_p=$ [TBD].}
-		\label{fig:alexandersen_pipebend_topology}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity-magnitude contours}
-		\caption{Velocity magnitude.}
-		\label{fig:alexandersen_pipebend_velocity}
-	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the Alexandersen pipe bend at $V_f=0.25$.}
-	\label{fig:alexandersen_pipebend_fenics_results}
-\end{figure}
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective function vs. optimization iteration}
-		\caption{Objective function.}
-		\label{fig:alexandersen_pipebend_objective_history}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume constraint.}
-		\label{fig:alexandersen_pipebend_volume_history}
-	\end{subfigure}
-	\caption{Optimization convergence histories for the Alexandersen pipe bend.}
-	\label{fig:alexandersen_pipebend_histories}
-\end{figure}
-
-\subsection{CFD Validation and Turbulence Model Sensitivity}
-\label{subsec:alexandersen_pipebend_cfd}
-The structural robustness of the extracted Alexandersen bend is verified in Table~\ref{tab:alexandersen_pipebend_validation_metrics}. Because the SST $k$-$\omega$ model is notably more sensitive to adverse pressure gradients than SA, evaluating the extracted geometry under both closures serves as a rigorous stress test for the optimized shape.
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{CFD validation metrics for the extracted Alexandersen pipe-bend topology.}
-	\label{tab:alexandersen_pipebend_validation_metrics}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c c X}
-		\hline
-		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
-		\hline
-		FEniCS diffuse design & SA & [TBD] & [TBD] & Optimization state \\
-		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
-		Ansys sharp geometry & SST $k$-$\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\subsection{Comparison with Laminar Design}
-\label{subsec:alexandersen_pipebend_laminar}
-The laminar-design comparison is reported in Section~\ref{sec:app_C_alexandersen_pipebend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. The expected distinction is that a laminar bend optimized at $Re=1$ can minimize wall length and viscous shear in the creeping-flow limit, but may produce a sharper or less separation-aware turn when evaluated at the target turbulent Reynolds number.
-
-\section{Yoon Diffuser}
-\label{sec:yoon_diffuser}
-The final benchmark, based on the diffuser studied by Yoon~\cite{Yoon2016}, poses the most severe physical challenge in the suite. Unlike the bend-dominated flows examined previously, diffuser performance is almost entirely dictated by the management of adverse pressure gradients. This case is therefore ideal for demonstrating the optimizer's ability to actively sculpt geometries that prevent widespread boundary layer separation.
-
-\subsection{Geometry and Boundary Conditions}
-\label{subsec:yoon_diffuser_setup}
-The configuration follows Yoon's $Re=3{,}000$ setup, characterized by $\tilde{\nu}=1$ prescribed at the inlet and outlet boundaries. This corresponds directly to the turbulent layout reported in Fig.~22 of the original publication. 
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.8\textwidth]{Yoon-Diffuser-GeometryBCs}
-	\caption{Geometry and boundary conditions for the Yoon diffuser benchmark, based on Yoon~\cite{Yoon2016}.}
-	\label{fig:yoon_diffuser_setup}
-\end{figure}
-
-\subsection{FEniCS Optimization Results}
-\label{subsec:yoon_diffuser_fenics}
-For a flow undergoing expansion, the optimization framework is expected to strongly penalize the abrupt, stepwise enlargements that often appear in Stokes-flow approximations. As seen in Fig.~\ref{fig:yoon_diffuser_fenics_results}, the turbulent optimizer actively drives the design toward a gently diverging profile. This controlled expansion safely diffuses momentum while maintaining wall attachment, closely mirroring the characteristic trumpet-like shapes recognized in classical aerodynamics.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Projected density field $\bar{\gamma}$}
-		\caption{Projected density. Final objective $J=$ [TBD].}
-		\label{fig:yoon_diffuser_topology}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Velocity-magnitude contours}
-		\caption{Velocity magnitude.}
-		\label{fig:yoon_diffuser_velocity}
-	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the Yoon diffuser. The gracefully diverging topology prevents the massive separation zones that would otherwise dominate an abrupt expansion.}
-	\label{fig:yoon_diffuser_fenics_results}
-\end{figure}
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective function vs. optimization iteration}
-		\caption{Objective function.}
-		\label{fig:yoon_diffuser_objective_history}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume constraint.}
-		\label{fig:yoon_diffuser_volume_history}
-	\end{subfigure}
-	\caption{Optimization convergence histories for the Yoon diffuser.}
-	\label{fig:yoon_diffuser_histories}
-\end{figure}
-
-\subsection{CFD Validation and Turbulence Model Sensitivity}
-\label{subsec:yoon_diffuser_cfd}
-Given that separation prediction is highly model-dependent, cross-validation in Ansys Fluent is paramount here. A diffuser design that remains attached under the SA formulation must be rigorously verified with the SST $k$-$\omega$ model to ensure the topology is genuinely robust against adverse pressure gradients (Table~\ref{tab:yoon_diffuser_validation_metrics}).
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{CFD validation metrics for the extracted Yoon diffuser topology.}
-	\label{tab:yoon_diffuser_validation_metrics}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c c X}
-		\hline
-		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
-		\hline
-		FEniCS diffuse design & SA & [TBD] & [TBD] & Optimization state \\
-		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
-		Ansys sharp geometry & SST $k$-$\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\subsection{Comparison with Laminar Design}
-\label{subsec:yoon_diffuser_laminar}
-As detailed in Section~\ref{sec:app_C_yoon_diffuser} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}, the contrast between laminar and turbulent diffuser optimization is profound. A laminar layout minimizes viscous shear by expanding as quickly as possible, a strategy that catastrophically fails due to massive flow recirculation when subjected to high-Reynolds turbulent conditions. 
+This general agreement in localized velocity gradients and global pressure-drop behavior indicates that the framework provides a credible forward-flow basis for the pressure-drop minimization objectives in the subsequent topology optimization campaigns.
 
 \section{Conclusion}
-\label{sec:ch5_conclusion}
-This chapter centers the final thesis evidence on the Alexandersen pipe bend. The sensitivity verification is performed on the same \texttt{reciprocal\_penalized}, power-law, frozen-turbulence configuration used for the optimization, so the finite-difference comparison directly checks the derivative supplied to MMA. The resulting topology is then evaluated as the primary turbulent design case, with the Dilgen and Yoon benchmarks retained as supporting context for curved manifolds and adverse-pressure-gradient flows.
+\label{sec:sa_verification_conclusion}
+The two verification cases establish the practical operating range of the custom FEniCS-SA solver before it is embedded in the topology optimization loop. The periodic channel confirms that the solver reproduces canonical wall-bounded turbulent behavior, while the U-bend checks the same implementation in a curved, separation-prone internal flow.
 
-The independent CFD validation using Ansys Fluent is therefore interpreted as a sharp-geometry check of the Alexandersen design, not merely as another internal FEniCS result. Testing the extracted topology with both SA and SST $k$-$\omega$ quantifies how much of the optimized performance survives a change in turbulence closure. Together with the laminar comparisons detailed in the appendices, this chapter supports the thesis argument that high-Reynolds turbulence physics must be included directly in the optimization loop when designing viable internal-flow topologies.
+These results do not remove the known limitations of a 2D SA model: secondary Dean vortices, anisotropic Reynolds stresses, and full three-dimensional separation physics remain outside the present solver scope. They do, however, show that the implemented SA equations, wall-distance calculation, and segregated coupling strategy are sufficiently consistent with Ansys Fluent to support the topology optimization methodology and results presented in Chapters~\ref{ch:topology_optimization_methodology} and \ref{ch:benchmark_results}.

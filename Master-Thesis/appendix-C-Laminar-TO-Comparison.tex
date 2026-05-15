@@ -1,117 +1,30 @@
-\chapter{Performance Comparison of Laminar and Turbulent Topologies}
+\chapter{Performance Comparison of Laminar and Turbulent Benchmark Topologies}
 \label{app:C_laminar_turbulent_topology_comparison}
 
 \providecommand{\validationplaceholder}[1]{%
 	\fbox{\parbox[c][0.22\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
 }
 
-This appendix supports the main results in Chapter~\ref{ch:benchmark_results} by comparing topologies optimized with a laminar formulation against topologies optimized with the turbulent SA formulation. The Dilgen pipe bend is not included because it is a fixed-geometry sensitivity verification case rather than a topology optimization case. The comparison is therefore performed for the Dilgen U-bend, the Alexandersen pipe bend, and the Yoon diffuser.
+This appendix supports the results in Chapter~\ref{ch:benchmark_results} by comparing topologies optimized with a laminar formulation against topologies optimized with the turbulent SA formulation. The comparison is performed for the pipe-bend and U-bend benchmarks from Bayat et al.~\cite{Bayat2026}.
 
 \section{Methodology and Evaluation Pipeline}
 \label{sec:app_C_lam_vs_turb_methodology}
-Each true topology optimization benchmark is solved twice. The laminar reference design is optimized at $Re=1$, where the optimizer primarily responds to creeping-flow viscous losses. The turbulent design is optimized at the target high-Reynolds operating condition using the SA topology optimization framework described in Chapter~\ref{ch:topology_optimization_methodology}. The same design-domain restrictions, volume constraints, and inlet/outlet locations are retained wherever possible so that the topology comparison isolates the effect of the flow physics rather than a change in problem definition.
+Each benchmark is solved twice. The laminar reference design is optimized at $Re=1$, where the optimizer primarily responds to creeping-flow viscous losses. The turbulent design is optimized at the target high-Reynolds operating condition using the SA topology optimization framework described in Chapter~\ref{ch:topology_optimization_methodology}. Apart from replacing the SA turbulent state equations by the laminar flow formulation and setting $Re=1$, the laminar topology-optimization runs use the same benchmark-specific FEniCS setup as the turbulent Alexandersen runs: identical mesh, design-domain restrictions, non-design regions, volume constraint, uniform prescribed inlet velocity profile, pressure outlet, inlet-pressure objective, Brinkman penalty limits, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations. This keeps the laminar-vs-turbulent comparison focused on the flow-physics model rather than on optimization or boundary-condition choices.
 
-After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. The key performance metrics are viscous dissipation, pressure drop, and any case-specific loss measure reported in Chapter~\ref{ch:benchmark_results}. The purpose of this appendix is not merely to show that the topologies look different, but to test whether the turbulent topology actually performs better when both designs are exposed to the same turbulent flow.
+Because these FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables in this appendix. The additional tables reported here are therefore limited to the Ansys mesh-independence studies for the extracted laminar geometries and the final CFD metric comparisons against the turbulent-design results from Chapter~\ref{ch:benchmark_results}.
 
-For fairness, the extracted laminar geometries receive their own grid-independence checks. The turbulent-design grid studies are reported in Appendix~\ref{app:B_validation_configurations}; this appendix adds the corresponding laminar-design mesh tables and the final laminar-vs-turbulent performance comparison.
+After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. The key performance metrics are viscous dissipation and pressure drop, reported with both SA and SST $k$-$\omega$ turbulence models when available. The purpose of this appendix is not merely to show that the topologies look different, but to test whether the turbulent topology actually performs better when both designs are exposed to the same turbulent flow.
 
-% ---------------------------------------------------------
-% CASE 1: DILGEN U-BEND
-% ---------------------------------------------------------
-\section{Dilgen U-Bend}
-\label{sec:app_C_dilgen_ubend}
+For fairness, the extracted laminar geometries receive their own Ansys mesh-independence checks. The turbulent-design grid studies are reported in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} and Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend} in Appendix~\ref{app:B_validation_configurations}; this appendix adds the corresponding laminar-design mesh tables and final laminar-vs-turbulent performance comparisons.
 
-The Dilgen U-bend is expected to show a clear difference between laminar and turbulent design logic. A laminar optimizer can favor short, smooth routes that reduce creeping-flow shear, while the turbulent optimizer must also account for momentum reversal, separation, and turbulence production around the inner turn.
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Projected density: laminar U-bend design ($Re=1$)}
-		\caption{Laminar-optimized topology.}
-		\label{fig:app_C_dilgen_ubend_lam_topo}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Projected density: turbulent U-bend design (SA)}
-		\caption{Turbulent-optimized topology.}
-		\label{fig:app_C_dilgen_ubend_turb_topo}
-	\end{subfigure}
-	\caption{Laminar and turbulent topology comparison for the Dilgen U-bend.}
-	\label{fig:app_C_dilgen_ubend_topologies}
-\end{figure}
-
-\begin{figure}[!ht]
-	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Ansys turbulent velocity field through laminar U-bend design}
-		\caption{Laminar design evaluated turbulently.}
-		\label{fig:app_C_dilgen_ubend_lam_vel}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Ansys turbulent velocity field through turbulent U-bend design}
-		\caption{Turbulent design evaluated turbulently.}
-		\label{fig:app_C_dilgen_ubend_turb_vel}
-	\end{subfigure}
-	\caption{Velocity-magnitude comparison for the extracted Dilgen U-bend designs under identical turbulent operating conditions.}
-	\label{fig:app_C_dilgen_ubend_velocity_comparison}
-\end{figure}
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Ansys mesh-independence table for the extracted laminar Dilgen U-bend design.}
-	\label{tab:app_C_dilgen_ubend_lam_mesh}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
-		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
-		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
-		Selected comparison mesh & \multicolumn{3}{c}{[TBD]} \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\begin{table}[!ht]
-	\centering
-	\footnotesize
-	\caption{Performance comparison of the extracted Dilgen U-bend topologies under identical turbulent operating conditions.}
-	\label{tab:app_C_dilgen_ubend_perf}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c X}
-		\hline
-		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
-		\hline
-		Laminar TO, $Re=1$ & SA & [TBD] & [TBD] & Baseline \\
-		Turbulent TO, SA & SA & [TBD] & [TBD] & [TBD]\% vs. laminar \\
-		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
-		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
-
-% ---------------------------------------------------------
-% CASE 2: ALEXANDERSEN PIPE BEND
-% ---------------------------------------------------------
-\section{Alexandersen Pipe Bend}
+\section{Pipe-Bend Benchmark}
 \label{sec:app_C_alexandersen_pipebend}
 
-The Alexandersen pipe bend tests whether a topology optimized under turbulent conditions produces a more separation-aware turning path than a laminar topology optimized at $Re=1$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.25$ design.
+The pipe bend tests whether a topology optimized under turbulent conditions produces a more separation-aware $90^\circ$ turning path than a laminar topology optimized at $Re=1$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.25$ design.
+
+\subsection{Topology Comparison}
+\label{subsec:app_C_alexandersen_pipebend_topology}
+Figure~\ref{fig:app_C_alexandersen_pipebend_topologies} compares the laminar and turbulent optimized topologies before sharp-geometry extraction. The expected distinction is that the laminar design can favor a shorter and more direct turning path, while the turbulent design should allocate fluid volume to reduce separation and momentum loss through the bend.
 
 \begin{figure}[!ht]
 	\centering
@@ -128,7 +41,7 @@ The Alexandersen pipe bend tests whether a topology optimized under turbulent co
 		\caption{Turbulent-optimized topology.}
 		\label{fig:app_C_alexandersen_pipebend_turb_topo}
 	\end{subfigure}
-	\caption{Laminar and turbulent topology comparison for the Alexandersen pipe bend.}
+	\caption{Laminar and turbulent topology comparison for the pipe-bend benchmark.}
 	\label{fig:app_C_alexandersen_pipebend_topologies}
 \end{figure}
 
@@ -147,14 +60,18 @@ The Alexandersen pipe bend tests whether a topology optimized under turbulent co
 		\caption{Turbulent design evaluated turbulently.}
 		\label{fig:app_C_alexandersen_pipebend_turb_vel}
 	\end{subfigure}
-	\caption{Velocity-magnitude comparison for the extracted Alexandersen pipe-bend designs under identical turbulent operating conditions.}
+	\caption{Velocity-magnitude comparison for the extracted pipe-bend designs under identical turbulent operating conditions.}
 	\label{fig:app_C_alexandersen_pipebend_velocity_comparison}
 \end{figure}
+
+\subsection{Laminar-Design Mesh Independence}
+\label{subsec:app_C_alexandersen_pipebend_lam_mesh}
+Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar pipe-bend design. This table is separate from the turbulent-design mesh study in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} because the laminar and turbulent topologies generally produce different wall shapes and near-wall mesh requirements.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys mesh-independence table for the extracted laminar Alexandersen pipe-bend design.}
+	\caption{Ansys mesh-independence table for the extracted laminar pipe-bend design.}
 	\label{tab:app_C_alexandersen_pipebend_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
@@ -163,8 +80,12 @@ The Alexandersen pipe bend tests whether a topology optimized under turbulent co
 		\hline
 		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
 		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
+		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
+		Inflation layers & [TBD] & [TBD] & [TBD] \\
+		Growth rate & [TBD] & [TBD] & [TBD] \\
 		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$ & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
 		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
@@ -175,10 +96,14 @@ The Alexandersen pipe bend tests whether a topology optimized under turbulent co
 	\end{tabularx}
 \end{table}
 
+\subsection{Performance Comparison}
+\label{subsec:app_C_alexandersen_pipebend_performance}
+The final comparison in Table~\ref{tab:app_C_alexandersen_pipebend_perf} evaluates the extracted laminar and turbulent pipe-bend designs under identical turbulent operating conditions. A lower pressure drop and lower viscous dissipation for the turbulent design would support the need for a turbulent topology optimization framework rather than a laminar surrogate.
+
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Performance comparison of the extracted Alexandersen pipe-bend topologies under identical turbulent operating conditions.}
+	\caption{Performance comparison of the extracted pipe-bend topologies under identical turbulent operating conditions.}
 	\label{tab:app_C_alexandersen_pipebend_perf}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c X}
@@ -195,57 +120,62 @@ The Alexandersen pipe bend tests whether a topology optimized under turbulent co
 
 \FloatBarrier
 
-% ---------------------------------------------------------
-% CASE 3: YOON DIFFUSER
-% ---------------------------------------------------------
-\section{Yoon Diffuser}
-\label{sec:app_C_yoon_diffuser}
+\section{U-Bend Benchmark}
+\label{sec:app_C_alexandersen_ubend}
 
-The Yoon diffuser is expected to highlight the importance of turbulent optimization in adverse pressure gradients. A laminar diffuser topology may reduce creeping-flow dissipation but still create a separated turbulent flow when evaluated at $Re=3{,}000$.
+The U-bend tests whether the turbulent optimizer remains advantageous when the flow must complete a $180^\circ$ return path around a fixed separator. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.27$ design.
+
+\subsection{Topology Comparison}
+\label{subsec:app_C_alexandersen_ubend_topology}
+Figure~\ref{fig:app_C_alexandersen_ubend_topologies} compares the laminar and turbulent optimized U-bend topologies. The expected distinction is that the laminar design may create an overly tight return path around the separator tip, while the turbulent design should form a smoother passage that reduces separation and turbulent mixing losses.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Projected density: laminar diffuser design ($Re=1$)}
+		\validationplaceholder{Projected density: laminar U-bend design ($Re=1$)}
 		\caption{Laminar-optimized topology.}
-		\label{fig:app_C_yoon_diffuser_lam_topo}
+		\label{fig:app_C_alexandersen_ubend_lam_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Projected density: turbulent diffuser design (SA)}
+		\validationplaceholder{Projected density: turbulent U-bend design (SA)}
 		\caption{Turbulent-optimized topology.}
-		\label{fig:app_C_yoon_diffuser_turb_topo}
+		\label{fig:app_C_alexandersen_ubend_turb_topo}
 	\end{subfigure}
-	\caption{Laminar and turbulent topology comparison for the Yoon diffuser.}
-	\label{fig:app_C_yoon_diffuser_topologies}
+	\caption{Laminar and turbulent topology comparison for the U-bend benchmark.}
+	\label{fig:app_C_alexandersen_ubend_topologies}
 \end{figure}
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Ansys turbulent velocity field through laminar diffuser design}
+		\validationplaceholder{Ansys turbulent velocity field through laminar U-bend design}
 		\caption{Laminar design evaluated turbulently.}
-		\label{fig:app_C_yoon_diffuser_lam_vel}
+		\label{fig:app_C_alexandersen_ubend_lam_vel}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Ansys turbulent velocity field through turbulent diffuser design}
+		\validationplaceholder{Ansys turbulent velocity field through turbulent U-bend design}
 		\caption{Turbulent design evaluated turbulently.}
-		\label{fig:app_C_yoon_diffuser_turb_vel}
+		\label{fig:app_C_alexandersen_ubend_turb_vel}
 	\end{subfigure}
-	\caption{Velocity-magnitude comparison for the extracted Yoon diffuser designs under identical turbulent operating conditions.}
-	\label{fig:app_C_yoon_diffuser_velocity_comparison}
+	\caption{Velocity-magnitude comparison for the extracted U-bend designs under identical turbulent operating conditions.}
+	\label{fig:app_C_alexandersen_ubend_velocity_comparison}
 \end{figure}
+
+\subsection{Laminar-Design Mesh Independence}
+\label{subsec:app_C_alexandersen_ubend_lam_mesh}
+Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar U-bend design. The turbulent U-bend mesh study is reported separately in Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys mesh-independence table for the extracted laminar Yoon diffuser design.}
-	\label{tab:app_C_yoon_diffuser_lam_mesh}
+	\caption{Ansys mesh-independence table for the extracted laminar U-bend design.}
+	\label{tab:app_C_alexandersen_ubend_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
 		\hline
@@ -253,8 +183,12 @@ The Yoon diffuser is expected to highlight the importance of turbulent optimizat
 		\hline
 		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
 		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
+		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
+		Inflation layers & [TBD] & [TBD] & [TBD] \\
+		Growth rate & [TBD] & [TBD] & [TBD] \\
 		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$ & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
 		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
@@ -265,11 +199,15 @@ The Yoon diffuser is expected to highlight the importance of turbulent optimizat
 	\end{tabularx}
 \end{table}
 
+\subsection{Performance Comparison}
+\label{subsec:app_C_alexandersen_ubend_performance}
+Table~\ref{tab:app_C_alexandersen_ubend_perf} compares the extracted laminar and turbulent U-bend topologies under identical turbulent operating conditions. If the turbulent design lowers $\Delta p$ and $\Phi_D$ across both SA and SST $k$-$\omega$ evaluations, the result supports the thesis claim that high-Reynolds topology optimization should include turbulence directly in the design loop.
+
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Performance comparison of the extracted Yoon diffuser topologies under identical turbulent operating conditions.}
-	\label{tab:app_C_yoon_diffuser_perf}
+	\caption{Performance comparison of the extracted U-bend topologies under identical turbulent operating conditions.}
+	\label{tab:app_C_alexandersen_ubend_perf}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c X}
 		\hline

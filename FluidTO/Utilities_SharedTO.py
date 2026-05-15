@@ -701,6 +701,21 @@ def area_weighted_boundary_average(field, boundary_measure, markers, area_floor=
     return float(weighted_integral) / boundary_area
 
 
+def boundary_average_functional(field, boundary_measure, markers, area_floor=1.0e-14):
+    marker_list = as_list(markers)
+    one = Constant(1.0)
+    average_functional = None
+    boundary_area = 0.0
+    for marker in marker_list:
+        term = field * boundary_measure(marker)
+        average_functional = term if average_functional is None else average_functional + term
+        boundary_area += assemble(one * boundary_measure(marker))
+    boundary_area = float(boundary_area)
+    if average_functional is None or boundary_area <= area_floor:
+        raise ValueError("Boundary average needs a non-empty boundary marker set.")
+    return Constant(1.0 / boundary_area) * average_functional, boundary_area
+
+
 def pressure_drop_between_boundaries(pressure, boundary_measure, inlet_markers, outlet_markers):
     inlet_pressure = area_weighted_boundary_average(pressure, boundary_measure, inlet_markers)
     outlet_pressure = area_weighted_boundary_average(pressure, boundary_measure, outlet_markers)

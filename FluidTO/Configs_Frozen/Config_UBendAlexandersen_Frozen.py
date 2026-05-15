@@ -2,7 +2,12 @@ import os
 
 from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 
-from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
+from Utilities_SharedTO import (
+    build_cell_tag_restriction_functions,
+    eddy_viscosity_ratio_from_turbulence_intensity,
+    load_mesh_from_xdmf,
+)
+from Utilities_TurbulentTO_Frozen import nu_tilde_from_viscosity_ratio
 
 
 # ===================================================================
@@ -16,8 +21,8 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 mesh_files = {
-    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_guided.xdmf"),
-    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_guided.xdmf"),
+    "MESH_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/mesh_yplus1.xdmf"),
+    "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_yplus1.xdmf"),
 }
 
 DESIGN_DOMAIN_TAG = 1
@@ -77,11 +82,24 @@ ALPHA_SOLID = 100.0
 
 SA_TURBULENCE_INTENSITY = 0.075
 SA_TURBULENCE_LENGTH_SCALE_RATIO = 0.05
+SA_REFERENCE_VELOCITY = U_MAX_INLET
 SA_REFERENCE_LENGTH = PORT_HEIGHT
 SA_REYNOLDS_NUMBER = REYNOLDS_NUMBER
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * L
 SA_NU_TILDE_FLOOR = 1.0e-12
+SA_LAMINAR_KINEMATIC_VISCOSITY = MU_FLUID_VALUE / RHO_FLUID_VALUE
+SA_INLET_EDDY_VISCOSITY_RATIO = eddy_viscosity_ratio_from_turbulence_intensity(
+    SA_TURBULENCE_INTENSITY,
+    SA_LAMINAR_KINEMATIC_VISCOSITY,
+    length_scale_ratio=SA_TURBULENCE_LENGTH_SCALE_RATIO,
+    reynolds_number=SA_REYNOLDS_NUMBER,
+)
+SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
+    SA_INLET_EDDY_VISCOSITY_RATIO,
+    SA_LAMINAR_KINEMATIC_VISCOSITY,
+)
+SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
 SA_SUPG_STABILIZATION = False
@@ -115,12 +133,19 @@ SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SOLID_THRESHOLD = 0.50
 SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
+# =================================================
+
 VOL_FRAC = 0.27
 OBJECTIVE_TYPE = "average_inlet_pressure"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
 OBJECTIVE_STREAK_TO_STOP = 5
+INITIAL_DENSITY_VALUE = VOL_FRAC
+INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
+
 RUN_FINITE_DIFFERENCE_CHECKS = False
+STOP_AFTER_FINITE_DIFFERENCE_CHECKS = False
 FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
+
 
 # Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
 # Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
@@ -242,6 +267,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 
 ENABLE_PRESSURE_PIN = False
+
 RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendAlexandersen_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
