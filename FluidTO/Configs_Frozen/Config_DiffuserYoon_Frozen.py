@@ -86,21 +86,27 @@ SA_WALL_G_FLOOR = 1.0e-8
 # corresponds to a maximum fluid volume fraction of 30%.
 OBJECTIVE_TYPE = "dissipation"
 VOL_FRAC = 0.30
-INITIAL_DENSITY_VALUE = 1.0
-INITIAL_DENSITY_MATCH_FILTERED_VOLUME = False
 OBJECTIVE_CONVERGENCE_TOL = 1e-5
 OBJECTIVE_STREAK_TO_STOP = 5
 
 # Yoon Fig. 20 gives n_u = 0.01-0.1 for the Brinkman interpolation.
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.05, 0.10]
-MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.015]
-MAX_INNER_ITERATIONS_SCHEDULE = [45, 40, 50, 70]
 
-USE_HEAVISIDE_PROJECTION = True # USE_HEAVISIDE_PROJECTION = False ; Yoon uses direct element design variables; disable the projective sharpening.
-BETA_PROJ_SCHEDULE = [1.0, 1.5, 2.0, 3.0]
+#Q_PENAL_SCHEDULE = [0.01, 0.02, 0.05, 0.10]
+#MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.015]
+#MAX_INNER_ITERATIONS_SCHEDULE = [45, 40, 50, 70]
+
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
+MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100]
+
+# Thesis-standard solver path: use the same projection/filter continuation as
+# the Alexandersen pipe-bend case, even though Yoon used direct element
+# design variables without filtering.
+USE_HEAVISIDE_PROJECTION = True
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
-FILTER_RADIUS_IN_CELLS = 3.0 # FILTER_RADIUS_IN_CELLS = 0.0 (no filtering in the Yoon paper)
+FILTER_RADIUS_IN_CELLS = 4.0
 QUADRATURE_DEGREE = 6
 
 # Frozen forward/adjoint solve parameters.

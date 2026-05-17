@@ -25,12 +25,19 @@ from Utilities_SharedTO import (
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
     create_design_mesh_from_config,
+    checkpoint_scalar,
     ensure_clean_dir,
+    ensure_dir,
     initialize_optimization_log,
+    load_optimization_checkpoint,
     load_config_module_from_cli,
+    optimization_checkpoint_path,
     pressure_drop_between_boundaries,
     pressure_drop_between_design_facets,
+    resume_optimization_requested,
+    resume_vtk_series_path,
     ResilientVTKFile,
+    save_optimization_checkpoint,
 )
 from Utilities_DilgenPostprocess import (
     build_cell_area_normalized_field,
@@ -3130,66 +3137,95 @@ save_ipcs_residual_svgs = bool(globals().get("SAVE_IPCS_RESIDUAL_SVGS", False))
 ipcs_solve_counter = 0
 snes_ipcs_warm_start_done = False
 
-ensure_clean_dir(results_root)
-ensure_clean_dir(rho_dir)
-ensure_clean_dir(rho_p_dir)
-ensure_clean_dir(rho_topology_dir)
-ensure_clean_dir(u_dir)
-if save_dilgen_paper_data:
-    ensure_clean_dir(u_magnitude_dir)
-ensure_clean_dir(p_dir)
-ensure_clean_dir(nu_tilde_dir)
-if save_sa_clipping_diagnostics:
-    ensure_clean_dir(nu_tilde_raw_dir)
-    ensure_clean_dir(nu_tilde_preclip_dir)
-    ensure_clean_dir(nu_tilde_clip_floor_dir)
-    ensure_clean_dir(nu_tilde_clip_ceiling_dir)
-    ensure_clean_dir(nu_tilde_bound_floor_dir)
-    ensure_clean_dir(nu_tilde_bound_ceiling_dir)
-if save_dilgen_paper_data:
-    ensure_clean_dir(df0dx_dir)
-    ensure_clean_dir(df0dx_normalized_dir)
-ensure_clean_dir(df0dx_centered_dir)
-ensure_clean_dir(design_dir)
-if save_dilgen_paper_data:
-    ensure_clean_dir(paper_data_dir)
-if save_ipcs_residual_plots:
-    ensure_clean_dir(ipcs_residual_dir)
+checkpoint_path = optimization_checkpoint_path(results_root)
+resume_requested = resume_optimization_requested(globals())
+resume_checkpoint = load_optimization_checkpoint(checkpoint_path, COMM) if resume_requested else None
+resume_from_checkpoint = resume_checkpoint is not None
+resume_vtk_iteration = (
+    checkpoint_scalar(resume_checkpoint, "iter_count", scalar_type=int)
+    if resume_from_checkpoint
+    else None
+)
 
-rho_out = ResilientVTKFile(os.path.join(rho_dir, "plot_rho.pvd"), COMM)
-rhop_out = ResilientVTKFile(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), COMM)
-rho_topology_out = ResilientVTKFile(os.path.join(rho_topology_dir, "plot_rho_topology.pvd"), COMM)
-u_out = ResilientVTKFile(os.path.join(u_dir, "plot_u.pvd"), COMM)
+output_dirs = [
+    results_root,
+    rho_dir,
+    rho_p_dir,
+    rho_topology_dir,
+    u_dir,
+    p_dir,
+    nu_tilde_dir,
+    df0dx_centered_dir,
+    design_dir,
+]
 if save_dilgen_paper_data:
-    u_magnitude_out = ResilientVTKFile(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd"), COMM)
-p_out = ResilientVTKFile(os.path.join(p_dir, "plot_p.pvd"), COMM)
-nu_tilde_out = ResilientVTKFile(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd"), COMM)
+    output_dirs.extend([u_magnitude_dir, df0dx_dir, df0dx_normalized_dir, paper_data_dir])
+if save_sa_clipping_diagnostics:
+    output_dirs.extend([
+        nu_tilde_raw_dir,
+        nu_tilde_preclip_dir,
+        nu_tilde_clip_floor_dir,
+        nu_tilde_clip_ceiling_dir,
+        nu_tilde_bound_floor_dir,
+        nu_tilde_bound_ceiling_dir,
+    ])
+if save_ipcs_residual_plots:
+    output_dirs.append(ipcs_residual_dir)
+
+if resume_from_checkpoint:
+    root_print("Resuming optimization from checkpoint {}".format(checkpoint_path))
+    for output_dir in output_dirs:
+        ensure_dir(output_dir, COMM)
+else:
+    if resume_requested:
+        raise FileNotFoundError(
+            "RESUME_OPTIMIZATION was requested, but no checkpoint was found at {}.".format(
+                checkpoint_path
+            )
+        )
+    ensure_clean_dir(results_root)
+    for output_dir in output_dirs[1:]:
+        ensure_clean_dir(output_dir)
+
+
+def output_series_path(output_path):
+    return resume_vtk_series_path(output_path, resume_vtk_iteration)
+
+
+rho_out = ResilientVTKFile(output_series_path(os.path.join(rho_dir, "plot_rho.pvd")), COMM)
+rhop_out = ResilientVTKFile(output_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd")), COMM)
+rho_topology_out = ResilientVTKFile(output_series_path(os.path.join(rho_topology_dir, "plot_rho_topology.pvd")), COMM)
+u_out = ResilientVTKFile(output_series_path(os.path.join(u_dir, "plot_u.pvd")), COMM)
+if save_dilgen_paper_data:
+    u_magnitude_out = ResilientVTKFile(output_series_path(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd")), COMM)
+p_out = ResilientVTKFile(output_series_path(os.path.join(p_dir, "plot_p.pvd")), COMM)
+nu_tilde_out = ResilientVTKFile(output_series_path(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd")), COMM)
 if save_sa_clipping_diagnostics:
     nu_tilde_raw_out = ResilientVTKFile(
-        os.path.join(nu_tilde_raw_dir, "plot_nu_tilde_raw_sa_solve.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_raw_dir, "plot_nu_tilde_raw_sa_solve.pvd")), COMM
     )
     nu_tilde_preclip_out = ResilientVTKFile(
-        os.path.join(nu_tilde_preclip_dir, "plot_nu_tilde_relaxed_preclip.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_preclip_dir, "plot_nu_tilde_relaxed_preclip.pvd")), COMM
     )
     nu_tilde_floor_clip_mask_out = ResilientVTKFile(
-        os.path.join(nu_tilde_clip_floor_dir, "plot_nu_tilde_floor_clip_mask.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_clip_floor_dir, "plot_nu_tilde_floor_clip_mask.pvd")), COMM
     )
     nu_tilde_ceiling_clip_mask_out = ResilientVTKFile(
-        os.path.join(nu_tilde_clip_ceiling_dir, "plot_nu_tilde_ceiling_clip_mask.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_clip_ceiling_dir, "plot_nu_tilde_ceiling_clip_mask.pvd")), COMM
     )
     nu_tilde_floor_bound_mask_out = ResilientVTKFile(
-        os.path.join(nu_tilde_bound_floor_dir, "plot_nu_tilde_floor_bound_mask.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_bound_floor_dir, "plot_nu_tilde_floor_bound_mask.pvd")), COMM
     )
     nu_tilde_ceiling_bound_mask_out = ResilientVTKFile(
-        os.path.join(nu_tilde_bound_ceiling_dir, "plot_nu_tilde_ceiling_bound_mask.pvd"), COMM
+        output_series_path(os.path.join(nu_tilde_bound_ceiling_dir, "plot_nu_tilde_ceiling_bound_mask.pvd")), COMM
     )
 if save_dilgen_paper_data:
-    df0dx_out = ResilientVTKFile(os.path.join(df0dx_dir, "plot_df0dx.pvd"), COMM)
+    df0dx_out = ResilientVTKFile(output_series_path(os.path.join(df0dx_dir, "plot_df0dx.pvd")), COMM)
     df0dx_normalized_out = ResilientVTKFile(
-        os.path.join(df0dx_normalized_dir, "plot_df0dx_normalized.pvd"),
+        output_series_path(os.path.join(df0dx_normalized_dir, "plot_df0dx_normalized.pvd")),
         COMM,
     )
-df0dx_centered_out = ResilientVTKFile(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), COMM)
+df0dx_centered_out = ResilientVTKFile(output_series_path(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd")), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
@@ -3223,19 +3259,20 @@ def initialize_dilgen_fig8_metric_logs():
     MPI.barrier(COMM)
 
 
-initialize_optimization_log(
-    log_path,
-    pressure_drop_columns=optimization_log_quantity_columns,
-    objective_column=objective_log_column,
-    extra_columns=optimization_log_extra_columns,
-)
-initialize_dilgen_fig8_metric_logs()
-initialize_df0dx_log(df0dx_log_path)
-initialize_sensitivity_check_log(sensitivity_check_log_path)
-initialize_sensitivity_verification_table(sensitivity_verification_table_path)
-initialize_taylor_check_log(taylor_check_log_path)
-if save_sa_clipping_diagnostics:
-    initialize_sa_clipping_log(sa_clipping_log_path)
+if not resume_from_checkpoint:
+    initialize_optimization_log(
+        log_path,
+        pressure_drop_columns=optimization_log_quantity_columns,
+        objective_column=objective_log_column,
+        extra_columns=optimization_log_extra_columns,
+    )
+    initialize_dilgen_fig8_metric_logs()
+    initialize_df0dx_log(df0dx_log_path)
+    initialize_sensitivity_check_log(sensitivity_check_log_path)
+    initialize_sensitivity_verification_table(sensitivity_verification_table_path)
+    initialize_taylor_check_log(taylor_check_log_path)
+    if save_sa_clipping_diagnostics:
+        initialize_sa_clipping_log(sa_clipping_log_path)
 
 # ---------------------------------------------------------------
 # MMA setup.
@@ -3385,8 +3422,50 @@ def initialize_active_density_to_filtered_volume_target():
 
 
 initialize_design_filter_normalization()
-initialize_active_density_to_filtered_volume_target()
-xval[:, 0] = rho.vector().get_local()[ActiveDV]
+resume_stage_idx = 0
+resume_inner_count = 0
+resume_convergence_history = 0
+if resume_from_checkpoint:
+    rho_values = np.asarray(resume_checkpoint["rho"], dtype=float).reshape(rho.vector().get_local().shape)
+    rho.vector().set_local(np.clip(rho_values, density_lower_values, density_upper_values))
+    rho.vector().apply("insert")
+    xval = np.asarray(resume_checkpoint["xval"], dtype=float).reshape(xval.shape)
+    xold1 = np.asarray(resume_checkpoint["xold1"], dtype=float).reshape(xold1.shape)
+    xold2 = np.asarray(resume_checkpoint["xold2"], dtype=float).reshape(xold2.shape)
+    low = np.asarray(resume_checkpoint["low"], dtype=float).reshape(low.shape)
+    upp = np.asarray(resume_checkpoint["upp"], dtype=float).reshape(upp.shape)
+    iter_count = checkpoint_scalar(resume_checkpoint, "iter_count", scalar_type=int)
+    previous_objective = checkpoint_scalar(resume_checkpoint, "previous_objective")
+    objective_scale_candidate = checkpoint_scalar(
+        resume_checkpoint,
+        "objective_scale_reference",
+        default=np.nan,
+    )
+    initial_objective_candidate = checkpoint_scalar(
+        resume_checkpoint,
+        "initial_objective_reference",
+        default=np.nan,
+    )
+    objective_scale_reference = objective_scale_candidate if np.isfinite(objective_scale_candidate) else None
+    initial_objective_reference = initial_objective_candidate if np.isfinite(initial_objective_candidate) else None
+    resume_stage_idx = checkpoint_scalar(resume_checkpoint, "stage_idx", scalar_type=int)
+    resume_inner_count = checkpoint_scalar(resume_checkpoint, "inner_count", scalar_type=int)
+    resume_convergence_history = checkpoint_scalar(
+        resume_checkpoint,
+        "convergence_history",
+        default=0,
+        scalar_type=int,
+    )
+    root_print(
+        "Checkpoint state: next global iteration {}, stage {}, inner iteration {}.".format(
+            iter_count,
+            resume_stage_idx + 1,
+            resume_inner_count,
+        )
+    )
+else:
+    initialize_active_density_to_filtered_volume_target()
+    xval[:, 0] = rho.vector().get_local()[ActiveDV]
 
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
@@ -3439,14 +3518,17 @@ def update_stage_penalty_parameters(stage_idx):
 # ===============================================================
 optimization_start_time = time.perf_counter()
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    if stage_idx < resume_stage_idx:
+        continue
+
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     max_iters_now = MAX_INNER_ITERATIONS_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
     wall_alpha_now, nu_tilde_alpha_now = update_stage_penalty_parameters(stage_idx)
-    inner_count = 0
-    convergence_history = 0
+    inner_count = resume_inner_count if stage_idx == resume_stage_idx else 0
+    convergence_history = resume_convergence_history if stage_idx == resume_stage_idx else 0
     objective_converged = False
     root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}, wall_alpha = {:.3e}, nu_tilde_alpha = {:.3e}".format(
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
@@ -3725,6 +3807,32 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             objective_column=objective_log_column,
             extra_values=dilgen_fig8_metric_values,
             extra_columns=optimization_log_extra_columns,
+        )
+
+        checkpoint_next_iter = iter_count + 1
+        checkpoint_next_inner = inner_count + 1
+        checkpoint_next_stage = stage_idx
+        checkpoint_next_convergence_history = convergence_history
+        if objective_converged or checkpoint_next_inner >= max_iters_now:
+            checkpoint_next_stage = stage_idx + 1
+            checkpoint_next_inner = 0
+            checkpoint_next_convergence_history = 0
+        save_optimization_checkpoint(
+            checkpoint_path,
+            COMM,
+            iter_count=np.array(checkpoint_next_iter, dtype=np.int64),
+            stage_idx=np.array(checkpoint_next_stage, dtype=np.int64),
+            inner_count=np.array(checkpoint_next_inner, dtype=np.int64),
+            convergence_history=np.array(checkpoint_next_convergence_history, dtype=np.int64),
+            previous_objective=np.array(float(previous_objective)),
+            objective_scale_reference=np.array(float(objective_scale_reference)),
+            initial_objective_reference=np.array(float(initial_objective_reference)),
+            rho=rho.vector().get_local(),
+            xval=xval,
+            xold1=xold1,
+            xold2=xold2,
+            low=low,
+            upp=upp,
         )
 
         constraint_status_text = ""

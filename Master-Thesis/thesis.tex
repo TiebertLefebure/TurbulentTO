@@ -35,6 +35,7 @@
 	{Figures/Figures-Ch4/}%
 	{Figures/Figures-Ch5/}%
 	{Figures/Figures-Ch6/}%
+	{Figures/Figures-Ch7/}%
 	{Figures/Figures-AppA/}%
 	{Figures/Figures-AppB/}%
 	{Figures/Figures-AppC/}%
@@ -213,7 +214,9 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		$\gamma, \gamma_{raw}$ & Continuous and raw design variable (1 for fluid, 0 for solid) [-] \\
 		$\tilde{\gamma}, \bar{\gamma}$ & Filtered and Heaviside-projected design variables [-] \\
 		$\eta$ & Heaviside projection threshold [-] \\
-		$J$ & Objective function (Power Dissipation) [W] \\
+		$J$ & Generic objective function used in the optimization problem [problem dependent] \\
+		$J_D$ & Dissipation objective, evaluated from viscous dissipation [W, or W/m for two-dimensional unit-depth cases] \\
+		$J_p$ & Average inlet-pressure objective [Pa] \\
 		$q$ & RAMP penalization tuning parameter [-] \\
 		$r$ & Continuous Helmholtz filter radius [m] \\
 		$\mathbf{s}, \mathbf{s}^*$ & Monolithic forward state and continuous adjoint state vectors \\

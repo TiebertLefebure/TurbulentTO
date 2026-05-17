@@ -9,7 +9,7 @@
 \label{sec:ch6_introduction}
 Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026}. Both benchmarks use the final thesis formulation: reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and the frozen-turbulence adjoint.
 
-The chapter first verifies the implemented frozen sensitivity on the same pipe-bend configuration used for optimization with a Dilgen-style coordinate finite-difference check on selected design cells. The optimized pipe-bend and U-bend layouts are then interpreted through their projected density fields, velocity fields, convergence histories, and independent sharp-geometry CFD validation. This ordering keeps the derivative evidence close to the optimization result that uses it, while leaving the standalone forward-flow verification in Chapter~\ref{ch:sa_verification}.
+The chapter first verifies the implemented frozen sensitivity on the same pipe-bend configuration used for optimization with a Dilgen-style coordinate finite-difference check on selected design cells and a directional Taylor check. The optimized pipe-bend and U-bend layouts are then interpreted through their projected density fields, velocity fields, convergence histories, and independent sharp-geometry CFD validation. This ordering keeps the derivative evidence close to the optimization result that uses it, while leaving the standalone forward-flow verification in Chapter~\ref{ch:sa_verification}.
 
 The U-bend serves as a companion topology optimization benchmark with the same governing assumptions and objective structure, but with a more severe $180^\circ$ flow reversal. Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh} and \ref{tab:app_B_alexandersen_ubend_mesh}. Laminar-versus-turbulent comparisons are retained in Section~\ref{sec:app_C_alexandersen_pipebend} and Section~\ref{sec:app_C_alexandersen_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison} as supporting evidence for interpreting the optimized layouts.
 
@@ -28,7 +28,7 @@ Table~\ref{tab:ch6_benchmark_strategy} outlines the strategic role of the two be
 		\hline
 			\textbf{Case} & \textbf{Role in this thesis} & \textbf{Reference comparison} & \textbf{Validation scope} \\
 			\hline
-			Pipe bend & Primary verification and optimization case at $V_f=0.25$ & Pipe-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & Coordinate finite-difference check; FEniCS optimization; Ansys-SA and Ansys-SST validation; laminar-design comparison \\
+			Pipe bend & Primary verification and optimization case at $V_f=0.25$ & Pipe-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & Coordinate finite-difference and Taylor checks; FEniCS optimization; Ansys-SA and Ansys-SST validation; laminar-design comparison \\
 			U-bend & Companion curved-flow topology case at $V_f=0.27$ & U-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & FEniCS optimization; Ansys-SA and Ansys-SST validation; laminar-design comparison \\
 			\hline
 		\end{tabularx}
@@ -55,13 +55,14 @@ where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys
 \label{subsec:ch6_wall_distance_note}
 The two benchmark computations use one wall-distance and penalty convention throughout: the reciprocal wall-distance equation is penalized by the power term in Eq.~\ref{eq:penalized_eikonal}, and the SA working variable is suppressed by the power sink in Eq.~\ref{eq:penalized_sa}. The wall-distance field is updated in the forward loop, but it is treated as a frozen coefficient during the adjoint sensitivity solve. Thus, the sensitivity verification below checks the implemented frozen derivative for the same practical assumption used by the optimizer.
 
-\section{Pipe-Bend Benchmark}
+\section{Pipe Bend Benchmark}
 \label{sec:alexandersen_pipebend}
 The pipe-bend benchmark introduces a direct comparison with the turbulent topology optimization results of Bayat et al.~\cite{Bayat2026}. While the reference study employs a standard $k$-$\varepsilon$ RANS model with wall functions, the present framework tackles the same problem using a wall-resolved SA model under the frozen-turbulence assumption. This comparison tests whether the fundamental topological solution, a streamlined and separation-avoiding bend, remains consistent across different turbulence closures.
 
 \subsection{Geometry and Boundary Conditions}
 \label{subsec:alexandersen_pipebend_setup}
 The boundary conditions and geometric constraints replicate the setup shown in Fig.~10 of Bayat et al.~\cite{Bayat2026}, specifically targeting the $V_f=0.25$ volume-fraction case. The inlet is placed on the left side of the non-design extension, the outlet is placed along the lower boundary, and the outlet pressure is fixed to zero. The optimization minimizes the average pressure on this prescribed inlet boundary required to drive the flow through the evolving bend.
+The local benchmark geometry used for the present implementation is shown in Figure~\ref{fig:alexandersen_pipebend_setup}.
 
 \begin{figure}[!ht]
 	\centering
@@ -75,9 +76,9 @@ The boundary conditions and geometric constraints replicate the setup shown in F
 Before interpreting the optimized topology, the frozen adjoint is checked directly on the pipe-bend configuration. This is the relevant local test for the final thesis setup because it uses the same topology-dependent SA and wall-distance penalties, inlet-pressure objective, and frozen-turbulence adjoint used during the optimization. No full turbulence-adjoint or wall-distance-adjoint comparison is made; the purpose is to compare the derivative supplied to MMA with objective changes obtained by re-solving the perturbed velocity-pressure state.
 
 The check is performed at the initial pipe-bend design state, with base objective
-$J_0=1.8363345892928082$. In every perturbation, the SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ are held fixed. This matches the frozen-turbulence assumption used by the adjoint: the flow state is re-solved, but the turbulence and wall-distance updates are not differentiated.
+$J_0=1.8363$. In every perturbation, the SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ are held fixed. This matches the frozen-turbulence assumption used by the adjoint: the flow state is re-solved, but the turbulence and wall-distance updates are not differentiated.
 
-Five active $DG_0$ design cells are sampled deterministically from seed 13. For sampled cell $i$, the raw density vector $\boldsymbol{\gamma}$ is perturbed by $\pm\Delta h\,\mathbf{e}_i$, where $\mathbf{e}_i$ is the unit vector for that active design variable and $\Delta h=10^{-6}$. The central finite-difference derivative is
+Five active $DG_0$ design cells are sampled deterministically from seed 13. These sampled control volumes are labelled $CV_1$--$CV_5$ in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison}. For sampled cell $i$, the raw density vector $\boldsymbol{\gamma}$ is perturbed by $\pm\Delta h\,\mathbf{e}_i$, where $\mathbf{e}_i$ is the unit vector for that active design variable and $\Delta h=10^{-6}$. The central finite-difference derivative is
 \begin{equation}
 	S_i^{\mathrm{FD}}
 	=
@@ -92,7 +93,7 @@ Five active $DG_0$ design cells are sampled deterministically from seed 13. For 
 	}.
 	\label{eq:alexandersen_pipebend_fd_metric}
 \end{equation}
-The frozen-adjoint value for the same cell is denoted by $S_i^{\mathrm{fr}}$. The absolute and relative discrepancies are computed as
+The frozen-adjoint value for the same cell is denoted by $S_i^{\mathrm{fr}}$; the superscripts $\mathrm{FD}$ and $\mathrm{fr}$ denote finite-difference and frozen-adjoint quantities, respectively. The absolute and relative discrepancies are computed as
 \begin{equation}
 	\Delta_i^{\mathrm{abs}} =
 	\left|S_i^{\mathrm{fr}}-S_i^{\mathrm{FD}}\right|,
@@ -118,57 +119,84 @@ The frozen-adjoint value for the same cell is denoted by $S_i^{\mathrm{fr}}$. Th
 		\shortstack{\textbf{Absolute}\\\textbf{error}\\$\Delta_i^{\mathrm{abs}}$} &
 		\shortstack{\textbf{Relative}\\\textbf{error}\\$\varepsilon_i^{\mathrm{fr}}$} \\
 		\hline
-		$CV_1$ & $-2.7041\times10^{-5}$ & $-5.2364\times10^{-5}$ & $2.5323\times10^{-5}$ & $4.8359\times10^{-1}$ \\
-		$CV_2$ & $-2.1494\times10^{-6}$ & $-2.8564\times10^{-6}$ & $7.0704\times10^{-7}$ & $2.4752\times10^{-1}$ \\
-		$CV_3$ & $-1.6641\times10^{-4}$ & $-1.6641\times10^{-4}$ & $6.3979\times10^{-9}$ & $3.8445\times10^{-5}$ \\
-		$CV_4$ & $-1.7281\times10^{-5}$ & $-1.7824\times10^{-5}$ & $5.4339\times10^{-7}$ & $3.0487\times10^{-2}$ \\
-		$CV_5$ & $2.3808\times10^{-5}$ & $7.4164\times10^{-5}$ & $5.0356\times10^{-5}$ & $6.7898\times10^{-1}$ \\
+		$CV_1$ & $-2.7041\times10^{-5}$ & $-2.7042\times10^{-5}$ & $4.1371\times10^{-10}$ & $1.5299\times10^{-5}$ \\
+		$CV_2$ & $-2.1494\times10^{-6}$ & $-2.1491\times10^{-6}$ & $3.1679\times10^{-10}$ & $1.4738\times10^{-4}$ \\
+		$CV_3$ & $-1.6641\times10^{-4}$ & $-1.6641\times10^{-4}$ & $3.6170\times10^{-10}$ & $2.1735\times10^{-6}$ \\
+		$CV_4$ & $-1.7281\times10^{-5}$ & $-1.7281\times10^{-5}$ & $1.5118\times10^{-12}$ & $8.7488\times10^{-8}$ \\
+		$CV_5$ & $2.3808\times10^{-5}$ & $2.3808\times10^{-5}$ & $8.1272\times10^{-11}$ & $3.4136\times10^{-6}$ \\
 		\hline
 	\end{tabular}
 \end{table}
 
-The coordinate check is mixed. The third sampled cell agrees to $3.84\times10^{-5}$ relative error and the fourth cell is within approximately $3.05\%$, but the remaining sampled cells show relative discrepancies between $24.8\%$ and $67.9\%$. Thus, the coordinate data should be read as a Dilgen-style diagnostic of the current frozen-gradient implementation rather than as a uniformly successful finite-difference verification.
+The coordinate check shows close agreement between the frozen-adjoint derivative and the re-solved central finite differences. The largest absolute discrepancy is $4.14\times10^{-10}$, and the largest relative discrepancy is $1.47\times10^{-4}$ for $CV_2$. This relative error remains small and is amplified by the small magnitude of the $CV_2$ derivative, approximately $2.15\times10^{-6}$, which places the finite-difference objective change generated by a $10^{-6}$ perturbation close to roundoff.
 
-The check is intentionally limited to one representative case because it exercises the same frozen derivative pathway used by the U-bend. Repeating the same diagnostic on the U-bend would test the same algebraic implementation path rather than a fundamentally different adjoint formulation. Since there is no independent reference field for this SA frozen derivative, a spatial $dJ_p/d\gamma$ contour is not used as a verification metric; the relevant evidence is the sampled finite-difference comparison reported above.
+\begin{table}[!ht]
+	\centering
+	\scriptsize
+	\caption{Directional Taylor check for the frozen pipe-bend configuration. Values are taken from \texttt{TaylorCheckLog.tsv}. The same five sampled cells as in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison} are perturbed together.}
+	\label{tab:alexandersen_pipebend_taylor_check}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabular}{c c c c c c}
+		\hline
+		\textbf{Step} &
+		\shortstack{\textbf{Adjoint}\\\textbf{directional}\\\textbf{derivative}} &
+		\shortstack{\textbf{Central}\\\textbf{finite-difference}\\\textbf{directional}\\\textbf{derivative}} &
+		\shortstack{\textbf{Relative}\\\textbf{error}} &
+		\shortstack{\textbf{Symmetric}\\\textbf{Taylor}\\\textbf{remainder}} &
+		\shortstack{\textbf{Observed}\\\textbf{order}} \\
+		\hline
+		$1.0\times10^{-3}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $1.5795\times10^{-8}$ & $2.1515\times10^{-11}$ & -- \\
+		$3.0\times10^{-4}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $3.8379\times10^{-9}$ & $1.9358\times10^{-12}$ & $2.0003$ \\
+		$1.0\times10^{-4}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $1.5386\times10^{-8}$ & $2.1494\times10^{-13}$ & $2.0006$ \\
+		$3.0\times10^{-5}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $3.4657\times10^{-8}$ & $1.9096\times10^{-14}$ & $2.0107$ \\
+		\hline
+	\end{tabular}
+\end{table}
+
+The Taylor check provides a complementary directional test. Instead of perturbing one cell at a time, the test perturbs the same five sampled cells together along one fixed direction and checks whether the objective change follows the adjoint's first-order prediction as the step is reduced. The direction signs for $CV_1$--$CV_5$ are $(+,+,-,+,-)$, defining a combined perturbation of the coordinate-check cells rather than a separate set of locations. Table~\ref{tab:alexandersen_pipebend_taylor_check} shows that the central finite-difference directional derivatives agree with the adjoint value to a maximum relative error of $3.47\times10^{-8}$ over the tested steps. The Taylor remainders decrease with approximately second-order rates, which is the expected behavior when the implemented gradient captures the local first-order objective change.
+
+These tests therefore verify the implemented frozen-turbulence derivative for the pipe-bend setup used in the optimization. The conclusion is deliberately limited to that derivative: the SA working variable and reciprocal wall-distance field are held fixed during the checks, matching the optimization adjoint; consequently, the result should not be interpreted as validation of a fully coupled turbulence sensitivity. Repeating the same diagnostic on the U-bend would test the same algebraic implementation path rather than a fundamentally different adjoint formulation. Since there is no independent reference field for this SA frozen derivative, a spatial $dJ_p/d\gamma$ contour is not used as a verification metric; the relevant evidence is the coordinate finite-difference agreement and the second-order Taylor behavior reported above.
 
 \subsection{Optimization Results}
 \label{subsec:alexandersen_pipebend_fenics}
-Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected density field $\bar{\gamma}$ and the corresponding velocity magnitude. Despite the differing turbulence models, it is anticipated that the FEniCS-SA optimizer will converge on a broadly similar routing strategy as the $k$-$\varepsilon$ reference. The primary high-speed flow path should bypass the sharpest corners to minimize momentum loss, although subtle differences in the treatment of the boundary layer may result in variations in the exact gray-scale density distribution near the walls.
+Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected density field $\bar{\gamma}$ and the corresponding velocity magnitude. Despite the differing turbulence models, the FEniCS-SA topology is expected to follow the same broad routing strategy as the $k$-$\varepsilon$ reference: the primary high-speed path should bypass the sharpest corners to minimize momentum loss, while boundary-layer treatment can still affect the exact gray-scale density distribution near the walls.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Projected density field $\bar{\gamma}$, $V_f=0.25$}
-		\caption{Projected density. Final objective $J_p=0.3023$.}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Topology}
+		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_pipebend_topology}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Velocity-magnitude contours}
-		\caption{Velocity magnitude.}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Velocity}
+		\caption{Velocity magnitude field $u$.}
 		\label{fig:alexandersen_pipebend_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$.}
+	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$. Final objective function value $J_p= [TBD]$.}
 	\label{fig:alexandersen_pipebend_fenics_results}
 \end{figure}
 
-For the same $V_f=0.25$, $Re=5{,}000$ operating point, Bayat et al.~\cite{Bayat2026} report $J_p=0.4023$ for their conventional $k$-$\varepsilon$ topology optimization. The present FEniCS-SA value is therefore of the same order and lower for this run, but the difference should be interpreted as indicative rather than a direct model-to-model validation because the turbulence closures differ.
+For the same $V_f=0.25$, $Re=5{,}000$ operating point, Bayat et al.~\cite{Bayat2026} report $J_p=0.4023$ for their conventional $k$-$\varepsilon$ topology optimization. This value is used only as a reference scale, not as a direct validation target, because the turbulence closure and near-wall treatment differ from the present wall-resolved SA formulation.
+
+Figure~\ref{fig:alexandersen_pipebend_histories} reports the convergence behavior that accompanies the final topology, separating the inlet-pressure objective history in Figure~\ref{fig:alexandersen_pipebend_objective_history} from the enforced volume-fraction history in Figure~\ref{fig:alexandersen_pipebend_volume_history}.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Objective function vs. optimization iteration}
-		\caption{Objective function.}
+		\caption{Objective function $J$ vs. MMA iteration.}
 		\label{fig:alexandersen_pipebend_objective_history}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume constraint.}
+		\caption{Volume fraction vs. MMA iteration.}
 		\label{fig:alexandersen_pipebend_volume_history}
 	\end{subfigure}
 	\caption{Optimization convergence histories for the pipe-bend benchmark.}
@@ -207,6 +235,7 @@ The U-bend is the companion benchmark to the pipe bend. It uses the same frozen-
 \subsection{Geometry and Boundary Conditions}
 \label{subsec:alexandersen_ubend_setup}
 The geometry and boundary conditions follow Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. The square design region has side length $L$, with a non-design lead duct of length $0.2L$ on the left. The inlet and outlet ports both have height $0.2L$; the top port acts as the inlet and the lower port acts as the pressure outlet. A fixed internal separator bar of thickness $0.10L$ extends from the lead duct into the design domain, forcing the flow to turn around its rounded tip. The target volume fraction is $V_f=0.27$, and the Reynolds number is $Re=5{,}000$ based on the port height and maximum inlet velocity.
+Figure~\ref{fig:alexandersen_ubend_setup} shows the corresponding local geometry and boundary-condition layout used for this thesis benchmark.
 
 \begin{figure}[!ht]
 	\centering
@@ -217,42 +246,44 @@ The geometry and boundary conditions follow Fig.~11 and Table~4 of Bayat et al.~
 
 \subsection{Optimization Results}
 \label{subsec:alexandersen_ubend_fenics}
-Figure~\ref{fig:alexandersen_ubend_fenics_results} reports the final projected density and velocity-magnitude field for the U-bend. The main feature to assess is whether the design forms a rounded return passage around the separator tip, rather than a short path with tight local curvature. Because the objective is average inlet pressure, the optimized layout should reduce the pressure required to maintain the imposed inlet flow while respecting the prescribed volume fraction.
+Figure~\ref{fig:alexandersen_ubend_fenics_results} reports the final projected density and velocity-magnitude field for the U-bend. The main feature to assess is whether the design forms a rounded return passage around the separator tip, rather than a short path with tight local curvature. Because the objective is average inlet pressure, a successful layout reduces the pressure required to maintain the imposed inlet flow while respecting the prescribed volume fraction.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Projected density field $\bar{\gamma}$, $V_f=0.27$}
-		\caption{Projected density. Final objective $J_p=1.1792$.}
+		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_ubend_topology}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Velocity-magnitude contours}
-		\caption{Velocity magnitude.}
+		\caption{Velocity magnitude field $u$.}
 		\label{fig:alexandersen_ubend_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the U-bend benchmark at $V_f=0.27$.}
+	\caption{FEniCS-SA optimization result for the U-bend benchmark at $V_f=0.27$. Final objective function value $J_p= [TBD]$.}
 	\label{fig:alexandersen_ubend_fenics_results}
 \end{figure}
 
-For the matching $V_f=0.27$, $Re=5{,}000$ U-bend case, the conventional $k$-$\varepsilon$ result reported by Bayat et al.~\cite{Bayat2026} is $J_p=0.8327$. The present FEniCS-SA run gives a higher final inlet-pressure objective, so the comparison suggests a less favorable pressure-loss level for this topology while still remaining a qualitative comparison across different turbulence models.
+For the matching $V_f=0.27$, $Re=5{,}000$ U-bend case, the conventional $k$-$\varepsilon$ result reported by Bayat et al.~\cite{Bayat2026} is $J_p=0.8327$. As for the pipe bend, this value provides a reference scale only; the comparison remains qualitative because the present solver uses a different turbulence model and near-wall treatment.
+
+The U-bend convergence histories are collected in Figure~\ref{fig:alexandersen_ubend_histories}; the two panels separate the inlet-pressure objective history in Figure~\ref{fig:alexandersen_ubend_objective_history} from the enforced volume-fraction history in Figure~\ref{fig:alexandersen_ubend_volume_history}.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Objective function vs. optimization iteration}
-		\caption{Objective function.}
+		\caption{Objective function $J$ vs. MMA iteration.}
 		\label{fig:alexandersen_ubend_objective_history}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume constraint.}
+		\caption{Volume fraction vs. MMA iteration.}
 		\label{fig:alexandersen_ubend_volume_history}
 	\end{subfigure}
 	\caption{Optimization convergence histories for the U-bend benchmark.}
@@ -261,7 +292,7 @@ For the matching $V_f=0.27$, $Re=5{,}000$ U-bend case, the conventional $k$-$\va
 
 \subsection{CFD Validation}
 \label{subsec:alexandersen_ubend_cfd}
-The extracted U-bend topology is validated with the same sharp-geometry workflow as the pipe bend. The Ansys-SA solve checks cross-code consistency for the same turbulence closure family, while the Ansys SST $k$-$\omega$ solve tests whether the design remains robust under a two-equation model that is more sensitive to separation and adverse pressure gradients.
+The extracted U-bend topology is validated with the same sharp-geometry workflow as the pipe bend. The Ansys-SA solve checks cross-code consistency for the same turbulence closure family, while the Ansys SST $k$-$\omega$ solve tests whether the design remains robust under a two-equation model that is more sensitive to separation and adverse pressure gradients. The resulting validation metrics are summarized in Table~\ref{tab:alexandersen_ubend_validation_metrics}.
 
 \begin{table}[!ht]
 	\centering
@@ -286,6 +317,6 @@ The laminar-design comparison is reported in Section~\ref{sec:app_C_alexandersen
 
 \section{Conclusion}
 \label{sec:ch6_conclusion}
-This chapter centers the final thesis evidence on the pipe-bend and U-bend benchmarks from Bayat et al.~\cite{Bayat2026}. The sensitivity verification is performed on the same penalized wall-distance, topology-penalized SA, frozen-turbulence formulation used for the optimization, so the coordinate finite-difference comparison directly checks the derivative supplied to MMA. The pipe-bend and U-bend results then test the same framework on two distinct curved-flow layouts.
+This chapter centers the final thesis evidence on the pipe-bend and U-bend benchmarks from Bayat et al.~\cite{Bayat2026}. The sensitivity verification is performed on the same penalized wall-distance, topology-penalized SA, frozen-turbulence formulation used for the optimization; therefore, the coordinate finite-difference and Taylor checks directly test the derivative supplied to MMA. The pipe-bend and U-bend results then test the same framework on two distinct curved-flow layouts.
 
 The independent CFD validation using Ansys Fluent is therefore interpreted as a sharp-geometry check of the optimized designs, not merely as another internal FEniCS result. Testing the extracted topologies with both SA and SST $k$-$\omega$ quantifies how much of the optimized performance survives a change in turbulence closure. Together with the laminar comparisons, this chapter supports the thesis argument that high-Reynolds turbulence physics must be included directly in the optimization loop when designing viable internal-flow topologies.

@@ -9,6 +9,8 @@ import sys
 import tempfile
 from time import localtime, strftime
 
+import numpy as np
+
 from dolfin import (
     Constant,
     File,
@@ -97,6 +99,23 @@ def as_list(value):
     if isinstance(value, (list, tuple)):
         return list(value)
     return [value]
+
+
+def config_truthy(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def resume_optimization_requested(config_values):
+    for env_name in ("FLUIDTO_RESUME", "TURBULENTTO_RESUME"):
+        if env_name in os.environ:
+            return config_truthy(os.environ.get(env_name))
+    return config_truthy(config_values.get("RESUME_OPTIMIZATION", False))
 
 
 def _format_numeric_values(values):
@@ -537,6 +556,70 @@ def ensure_clean_dir(path, comm=MPI.comm_world):
             shutil.rmtree(path)
         os.makedirs(path)
     MPI.barrier(comm)
+
+
+def ensure_dir(path, comm=MPI.comm_world):
+    if MPI.rank(comm) == 0:
+        os.makedirs(path, exist_ok=True)
+    MPI.barrier(comm)
+
+
+def optimization_checkpoint_path(results_root, filename="OptimizationCheckpoint.npz"):
+    return os.path.join(results_root, str(filename))
+
+
+def _ranked_checkpoint_path(checkpoint_path, rank):
+    base_path, extension = os.path.splitext(checkpoint_path)
+    if not extension:
+        extension = ".npz"
+    return "{}_rank{:04d}{}".format(base_path, int(rank), extension)
+
+
+def save_optimization_checkpoint(checkpoint_path, comm=MPI.comm_world, **state):
+    rank = MPI.rank(comm)
+    size = MPI.size(comm)
+    local_checkpoint_path = checkpoint_path if size == 1 else _ranked_checkpoint_path(checkpoint_path, rank)
+    checkpoint_dir = os.path.dirname(os.path.abspath(local_checkpoint_path))
+    if checkpoint_dir:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+    tmp_path = local_checkpoint_path + ".tmp.npz"
+    np.savez_compressed(tmp_path, **state)
+    os.replace(tmp_path, local_checkpoint_path)
+    MPI.barrier(comm)
+    if size > 1 and rank == 0:
+        tmp_manifest_path = checkpoint_path + ".tmp.npz"
+        np.savez_compressed(
+            tmp_manifest_path,
+            checkpoint_format_version=np.array(1, dtype=np.int64),
+            mpi_size=np.array(size, dtype=np.int64),
+        )
+        os.replace(tmp_manifest_path, checkpoint_path)
+    MPI.barrier(comm)
+
+
+def load_optimization_checkpoint(checkpoint_path, comm=MPI.comm_world):
+    rank = MPI.rank(comm)
+    size = MPI.size(comm)
+    local_checkpoint_path = checkpoint_path if size == 1 else _ranked_checkpoint_path(checkpoint_path, rank)
+    if not os.path.isfile(local_checkpoint_path):
+        return None
+    with np.load(local_checkpoint_path, allow_pickle=False) as data:
+        return {name: data[name].copy() for name in data.files}
+
+
+def checkpoint_scalar(checkpoint_state, name, default=None, scalar_type=float):
+    if checkpoint_state is None or name not in checkpoint_state:
+        if default is None:
+            raise KeyError("Checkpoint is missing required value '{}'.".format(name))
+        return default
+    return scalar_type(np.asarray(checkpoint_state[name]).item())
+
+
+def resume_vtk_series_path(output_path, resume_iteration=None):
+    if resume_iteration is None:
+        return output_path
+    base_path, extension = os.path.splitext(output_path)
+    return "{}_resume_from_{:03d}{}".format(base_path, int(resume_iteration), extension)
 
 
 def reset_vtk_series(output_path, comm=MPI.comm_world):
@@ -1002,6 +1085,33 @@ def _format_optimization_log_row(
     return "   ".join(str(value).ljust(width) for value, (_, width) in zip(values, columns))
 
 
+def _convergence_history_paths(log_path):
+    results_dir = os.path.dirname(os.path.abspath(log_path))
+    return (
+        os.path.join(results_dir, "ObjectiveFunction_Convergence.txt"),
+        os.path.join(results_dir, "VolumeConstraint_Convergence.txt"),
+    )
+
+
+def _initialize_convergence_history_logs(log_path, objective_column="Objective"):
+    objective_history_path, volume_history_path = _convergence_history_paths(log_path)
+    if MPI.rank(MPI.comm_world) == 0:
+        with open(objective_history_path, "w") as txtout:
+            txtout.write("GlobalIter\t{}\n".format(str(objective_column)))
+        with open(volume_history_path, "w") as txtout:
+            txtout.write("GlobalIter\tVolFrac\n")
+    MPI.barrier(MPI.comm_world)
+
+
+def _append_convergence_history_entry(log_path, global_iter, objective, volume_fraction):
+    objective_history_path, volume_history_path = _convergence_history_paths(log_path)
+    if MPI.rank(MPI.comm_world) == 0:
+        with open(objective_history_path, "a") as txtout:
+            txtout.write("{:d}\t{:.16e}\n".format(int(global_iter), float(objective)))
+        with open(volume_history_path, "a") as txtout:
+            txtout.write("{:d}\t{:.16e}\n".format(int(global_iter), float(volume_fraction)))
+
+
 def initialize_optimization_log(
     log_path,
     include_ipcs_residuals=False,
@@ -1025,6 +1135,7 @@ def initialize_optimization_log(
                 extra_columns=extra_columns,
             ) + "\r\n")
     MPI.barrier(MPI.comm_world)
+    _initialize_convergence_history_logs(log_path, objective_column=objective_column)
 
 
 def append_optimization_log_entry(
@@ -1090,3 +1201,9 @@ def append_optimization_log_entry(
                     extra_columns=extra_columns,
                 ) + "\r\n"
             )
+        _append_convergence_history_entry(
+            log_path,
+            global_iter,
+            objective,
+            volume_fraction,
+        )

@@ -106,16 +106,16 @@ To guarantee that the numerical results were independent of the spatial discreti
 	\end{tabularx}
 \end{table}
 
-Visual confirmation of this spatial convergence is provided by the wall-normal velocity profiles plotted in Figure~\ref{fig:app_A_channel_mesh_independence}. The \texttt{Fine\_FEniCS} grid was consequently selected for the final verification against the Ansys Fluent baseline, while the coarser grids demonstrate that the wall-normal velocity profile is already asymptotically converged.
+Visual confirmation of this spatial convergence is provided by the wall-normal velocity profiles plotted in Figure~\ref{fig:app_A_channel_mesh_independence}. In each case, the profile is extracted at the streamwise mid-plane, $x=0.5L$, with the wall-normal coordinate $y$ varied across the full channel height. The \texttt{Fine\_FEniCS} grid was consequently selected for the final verification against the Ansys Fluent baseline, while the coarser grids demonstrate that the wall-normal velocity profile is already asymptotically converged.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.8\textwidth]{Channel-Grid-Independence-FEniCS} % Replace with your channel mesh independence velocity profile plot
-	\caption{Wall-normal velocity profiles for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
+	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
 	\label{fig:app_A_channel_mesh_independence}
 \end{figure}
 
-Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
+Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
 
 \begin{table}[htbp]
 	\centering
@@ -143,7 +143,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your Ansys channel mesh independence plot
-	\caption{Wall-normal velocity profiles for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
+	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
 	\label{fig:app_A_channel_mesh_indep_ansys}
 \end{figure}
 
@@ -224,12 +224,12 @@ Due to the adverse pressure gradients and secondary flow separation induced by t
 
 \subsection{Domain Truncation Study}
 \label{subsec:app_A_ubend_truncation}
-The original 3D Ansys VMFL048 benchmark utilizes highly extended straight legs measuring $1.555$ m to ensure fully developed flow. To reduce computational overhead for subsequent optimization stages, these legs were truncated to $30D$ ($0.840$ m). A preliminary sensitivity study was conducted in Ansys Fluent, comparing the full-length and truncated geometries. To mathematically prove that this reduction does not artificially alter the flow physics, the cross-sectional velocity profiles at the critical bend exit were extracted for both domains, as plotted in Figure~\ref{fig:app_A_ubend_truncation_proof}. The complete overlap of the profiles confirms that the $30D$ truncation successfully isolated the curvature physics without artificially impacting the boundary layer separation.
+The original 3D Ansys VMFL048 benchmark utilizes highly extended straight legs measuring $1.555$ m to ensure fully developed flow. To reduce computational overhead for subsequent optimization stages, these legs were truncated to $30D$ ($0.840$ m). A preliminary sensitivity study was conducted in Ansys Fluent, comparing the full-length and truncated geometries. To mathematically prove that this reduction does not artificially alter the flow physics, the cross-sectional velocity profiles at the critical bend exit were extracted across the pipe diameter $D=0.028$ m for both domains, as plotted in Figure~\ref{fig:app_A_ubend_truncation_proof}. The complete overlap of the profiles confirms that the $30D$ truncation successfully isolated the curvature physics without artificially impacting the boundary layer separation.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.8\textwidth]{UBend-Domain-Truncation-Ansys} % Replace with your U-bend truncation velocity comparison plot
-	\caption{Velocity profile comparison at the U-bend exit between the full Ansys domain ($1.555$ m legs) and the truncated computational domain ($30D$ legs). The complete overlap confirms the validity of the truncated geometry.}
+	\caption{Velocity profile comparison at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, between the full Ansys domain ($1.555$ m legs) and the truncated computational domain ($30D$ legs). The complete overlap confirms the validity of the truncated geometry.}
 	\label{fig:app_A_ubend_truncation_proof}
 \end{figure}
 
@@ -258,16 +258,16 @@ Managing the highly stretched, non-orthogonal inflation layers around the curved
 	\end{tabularx}
 \end{table}
 
-Convergence was visually verified by extracting the velocity profiles directly at the bend exit, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
+Convergence was visually verified by extracting the velocity profiles directly at the bend exit across the pipe diameter $D=0.028$ m, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your FEniCS U-bend mesh independence velocity profile plot
-	\caption{Velocity profiles at the U-bend exit for the Coarse, Medium, and Fine grids in FEniCS. The profiles demonstrate spatial convergence, justifying the selection of the Medium grid for the final verification.}
+	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine grids in FEniCS. The profiles demonstrate spatial convergence, justifying the selection of the Medium grid for the final verification.}
 	\label{fig:app_A_ubend_mesh_independence}
 \end{figure}
 
-Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were verified to be spatially converged. This ensures that the commercial baseline reference data is independent of grid resolution.
+Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were verified to be spatially converged. This ensures that the commercial baseline reference data is independent of grid resolution.
 
 \begin{table}[htbp]
 	\centering
@@ -293,7 +293,7 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your Ansys U-bend mesh independence velocity profile plot
-	\caption{Velocity profiles at the U-bend exit for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
+	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
 	\label{fig:app_A_ubend_mesh_indep_ansys}
 \end{figure}
 

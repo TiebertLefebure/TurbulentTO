@@ -137,12 +137,20 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 # Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
 # Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
 # when ALPHA_FLUID = 0, so q_penal = 1 / q_a.
-PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 30.0, 15.0]
-Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
-BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
+
+#PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 30.0, 15.0]
+#Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
+#BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
+#MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
+#MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
+
 # Alexandersen reports the continuation values but not the MMA move limit.
+
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0]
 MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
+MAX_INNER_ITERATIONS = [50, 60, 80, 100]
+
 MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
 
 # Keep the production pipe-bend run focused on topology optimization. The

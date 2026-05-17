@@ -21,11 +21,18 @@ from Utilities_SharedTO import (
     compute_filter_base_length_from_config,
     create_design_mesh_from_config,
     ensure_clean_dir,
+    ensure_dir,
     initialize_optimization_log,
+    checkpoint_scalar,
+    load_optimization_checkpoint,
     load_config_module_from_cli,
+    optimization_checkpoint_path,
     pressure_drop_between_boundaries,
     pressure_drop_between_design_facets,
+    resume_optimization_requested,
+    resume_vtk_series_path,
     reset_vtk_series,
+    save_optimization_checkpoint,
 )
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -549,17 +556,38 @@ u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
 design_dir = os.path.join(results_root, "design")
 
-ensure_clean_dir(results_root)
-ensure_clean_dir(rho_dir)
-ensure_clean_dir(rho_p_dir)
-ensure_clean_dir(u_dir)
-ensure_clean_dir(p_dir)
-ensure_clean_dir(design_dir)
+checkpoint_path = optimization_checkpoint_path(results_root)
+resume_requested = resume_optimization_requested(globals())
+resume_checkpoint = load_optimization_checkpoint(checkpoint_path, COMM) if resume_requested else None
+resume_from_checkpoint = resume_checkpoint is not None
+resume_vtk_iteration = (
+    checkpoint_scalar(resume_checkpoint, "iter_count", scalar_type=int)
+    if resume_from_checkpoint
+    else None
+)
 
-rho_out = File(reset_vtk_series(os.path.join(rho_dir, "plot_rho.pvd"), COMM))
-rhop_out = File(reset_vtk_series(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), COMM))
-u_out = File(reset_vtk_series(os.path.join(u_dir, "plot_u.pvd"), COMM))
-p_out = File(reset_vtk_series(os.path.join(p_dir, "plot_p.pvd"), COMM))
+if resume_from_checkpoint:
+    root_print("Resuming optimization from checkpoint {}".format(checkpoint_path))
+    for output_dir in (results_root, rho_dir, rho_p_dir, u_dir, p_dir, design_dir):
+        ensure_dir(output_dir, COMM)
+else:
+    if resume_requested:
+        raise FileNotFoundError(
+            "RESUME_OPTIMIZATION was requested, but no checkpoint was found at {}.".format(
+                checkpoint_path
+            )
+        )
+    ensure_clean_dir(results_root)
+    ensure_clean_dir(rho_dir)
+    ensure_clean_dir(rho_p_dir)
+    ensure_clean_dir(u_dir)
+    ensure_clean_dir(p_dir)
+    ensure_clean_dir(design_dir)
+
+rho_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_dir, "plot_rho.pvd"), resume_vtk_iteration), COMM))
+rhop_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), resume_vtk_iteration), COMM))
+u_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(u_dir, "plot_u.pvd"), resume_vtk_iteration), COMM))
+p_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(p_dir, "plot_p.pvd"), resume_vtk_iteration), COMM))
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 optimization_log_quantity_columns = (
@@ -568,11 +596,12 @@ optimization_log_quantity_columns = (
     "dP_nondesign_Pa",
     "dP_design_Pa",
 )
-initialize_optimization_log(
-    log_path,
-    pressure_drop_columns=optimization_log_quantity_columns,
-    objective_column=objective_log_column,
-)
+if not resume_from_checkpoint:
+    initialize_optimization_log(
+        log_path,
+        pressure_drop_columns=optimization_log_quantity_columns,
+        objective_column=objective_log_column,
+    )
 
 
 # ------------------------------------------------------------
@@ -672,8 +701,38 @@ def initialize_active_density_to_filtered_volume_target():
     )
 
 
-initialize_active_density_to_filtered_volume_target()
-xval[:, 0] = rho.vector().get_local()[ActiveDV]
+resume_stage_idx = 0
+resume_inner_count = 0
+resume_convergence_history = 0
+if resume_from_checkpoint:
+    rho_values = np.asarray(resume_checkpoint["rho"], dtype=float).reshape(rho.vector().get_local().shape)
+    rho.vector().set_local(np.clip(rho_values, density_lower_values, density_upper_values))
+    rho.vector().apply("insert")
+    xval = np.asarray(resume_checkpoint["xval"], dtype=float).reshape(xval.shape)
+    xold1 = np.asarray(resume_checkpoint["xold1"], dtype=float).reshape(xold1.shape)
+    xold2 = np.asarray(resume_checkpoint["xold2"], dtype=float).reshape(xold2.shape)
+    low = np.asarray(resume_checkpoint["low"], dtype=float).reshape(low.shape)
+    upp = np.asarray(resume_checkpoint["upp"], dtype=float).reshape(upp.shape)
+    iter_count = checkpoint_scalar(resume_checkpoint, "iter_count", scalar_type=int)
+    previous_objective = checkpoint_scalar(resume_checkpoint, "previous_objective")
+    resume_stage_idx = checkpoint_scalar(resume_checkpoint, "stage_idx", scalar_type=int)
+    resume_inner_count = checkpoint_scalar(resume_checkpoint, "inner_count", scalar_type=int)
+    resume_convergence_history = checkpoint_scalar(
+        resume_checkpoint,
+        "convergence_history",
+        default=0,
+        scalar_type=int,
+    )
+    root_print(
+        "Checkpoint state: next global iteration {}, stage {}, inner iteration {}.".format(
+            iter_count,
+            resume_stage_idx + 1,
+            resume_inner_count,
+        )
+    )
+else:
+    initialize_active_density_to_filtered_volume_target()
+    xval[:, 0] = rho.vector().get_local()[ActiveDV]
 
 if len(MOVE_LIMIT_SCHEDULE) != len(Q_PENAL_SCHEDULE):
     raise ValueError("MOVE_LIMIT_SCHEDULE must match Q_PENAL_SCHEDULE length.")
@@ -748,13 +807,16 @@ initialize_forward_guess_with_stokes()
 # ------------------------------------------------------------
 optimization_start_time = time.perf_counter()
 for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
+    if stage_idx < resume_stage_idx:
+        continue
+
     beta_val = float(BETA_PROJ_SCHEDULE[stage_idx])
     BETA_PROJ.assign(beta_val)
     move_limit_now = MOVE_LIMIT_SCHEDULE[stage_idx]
     max_iters_now = MAX_INNER_ITERATIONS_SCHEDULE[stage_idx]
     q_penal.assign(q_val)
-    inner_count = 0
-    convergence_history = 0
+    inner_count = resume_inner_count if stage_idx == resume_stage_idx else 0
+    convergence_history = resume_convergence_history if stage_idx == resume_stage_idx else 0
     objective_converged = False
     root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}".format(
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
@@ -880,6 +942,30 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             ),
             pressure_drop_columns=optimization_log_quantity_columns,
             objective_column=objective_log_column,
+        )
+
+        checkpoint_next_iter = iter_count + 1
+        checkpoint_next_inner = inner_count + 1
+        checkpoint_next_stage = stage_idx
+        checkpoint_next_convergence_history = convergence_history
+        if objective_converged or checkpoint_next_inner >= max_iters_now:
+            checkpoint_next_stage = stage_idx + 1
+            checkpoint_next_inner = 0
+            checkpoint_next_convergence_history = 0
+        save_optimization_checkpoint(
+            checkpoint_path,
+            COMM,
+            iter_count=np.array(checkpoint_next_iter, dtype=np.int64),
+            stage_idx=np.array(checkpoint_next_stage, dtype=np.int64),
+            inner_count=np.array(checkpoint_next_inner, dtype=np.int64),
+            convergence_history=np.array(checkpoint_next_convergence_history, dtype=np.int64),
+            previous_objective=np.array(float(previous_objective)),
+            rho=rho.vector().get_local(),
+            xval=xval,
+            xold1=xold1,
+            xold2=xold2,
+            low=low,
+            upp=upp,
         )
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
