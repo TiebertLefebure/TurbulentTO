@@ -152,11 +152,32 @@ solutions, residuals = run_steady_sa_ipcs_picard(
 domain_area = assemble(Constant(1.0) * dx)
 u_bulk = assemble(solutions["u"][0] * dx) / domain_area
 re_actual = u_bulk * REYNOLDS_LENGTH / KINEMATIC_VISCOSITY
+pressure_drop = (
+    pressure_drop_metric["INLET_PRESSURE"]
+    - pressure_drop_metric["OUTLET_PRESSURE"]
+)
+channel_length = mesh_width
+rho_kinematic_pressure = 1.0
+skin_friction_coefficient = (
+    pressure_drop * CHANNEL_HEIGHT
+    / (rho_kinematic_pressure * channel_length * u_bulk**2)
+)
 
 if IS_ROOT:
     print(
-        "Channel bulk diagnostics: U_bulk={:.6e} m/s, Re_H_actual={:.6e}".format(
+        "Channel bulk diagnostics: U_bulk={:.6e} m/s, Re_H_actual={:.6e}, C_f={:.6e}".format(
             u_bulk,
             re_actual,
+            skin_friction_coefficient,
+        )
+    )
+    print(
+        "Channel friction definition: C_f=Delta_p*H/(rho*L*U_bulk^2), "
+        "Delta_p={:.6e} Pa, H={:.6e} m, L={:.6e} m, rho={:.1f} "
+        "(kinematic-pressure convention).".format(
+            pressure_drop,
+            CHANNEL_HEIGHT,
+            channel_length,
+            rho_kinematic_pressure,
         )
     )

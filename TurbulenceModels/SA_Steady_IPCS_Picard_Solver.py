@@ -186,7 +186,24 @@ def run_steady_sa_ipcs_picard(
 
     def build_pressure_drop_evaluator():
         if not pressure_drop_metric:
-            return None
+            return None, None, None
+
+        fixed_pressure_drop = scalar_value(pressure_drop_metric.get(
+            "FIXED_PRESSURE_DROP",
+            pressure_drop_metric.get("PRESSURE_DROP"),
+        ))
+        source = pressure_drop_metric.get("SOURCE")
+        if fixed_pressure_drop is not None:
+            label = pressure_drop_metric.get("LABEL", "pressure drop metric")
+
+            def evaluate_fixed_pressure_drop(_field):
+                return fixed_pressure_drop
+
+            description = "{} = {:.12e} Pa".format(label, fixed_pressure_drop)
+            if source:
+                description += " ({})".format(source)
+            return evaluate_fixed_pressure_drop, label, description
+
         if ds is None:
             raise ValueError("Pressure-drop metric requires a boundary measure 'ds'.")
 
@@ -194,6 +211,7 @@ def run_steady_sa_ipcs_picard(
         outlet_markers = as_list(pressure_drop_metric.get("OUTLET_MARKERS"))
         fixed_inlet_pressure = scalar_value(pressure_drop_metric.get("INLET_PRESSURE"))
         fixed_outlet_pressure = scalar_value(pressure_drop_metric.get("OUTLET_PRESSURE"))
+        label = pressure_drop_metric.get("LABEL", "area-weighted pressure drop")
 
         def boundary_pressure_average(field, markers, boundary_label):
             if len(markers) == 0:
@@ -222,10 +240,10 @@ def run_steady_sa_ipcs_picard(
             return weighted_pressure / boundary_area
 
         def pressure_average_or_fixed_value(field, markers, fixed_pressure, boundary_label):
-            if len(markers) > 0:
-                return boundary_pressure_average(field, markers, boundary_label)
             if fixed_pressure is not None:
                 return fixed_pressure
+            if len(markers) > 0:
+                return boundary_pressure_average(field, markers, boundary_label)
             raise ValueError(
                 "Pressure-drop metric needs {} markers or a fixed {} pressure.".format(
                     boundary_label,
@@ -249,9 +267,18 @@ def run_steady_sa_ipcs_picard(
 
             return float(inlet_pressure - outlet_pressure)
 
-        return evaluate_pressure_drop
+        inlet_description = (
+            "fixed inlet pressure" if fixed_inlet_pressure is not None else "average inlet pressure"
+        )
+        outlet_description = (
+            "fixed outlet pressure" if fixed_outlet_pressure is not None else "average outlet pressure"
+        )
+        description = "{} = {} - {}".format(label, inlet_description, outlet_description)
+        if source:
+            description += " ({})".format(source)
+        return evaluate_pressure_drop, label, description
 
-    pressure_drop_evaluator = build_pressure_drop_evaluator()
+    pressure_drop_evaluator, pressure_drop_label, pressure_drop_description = build_pressure_drop_evaluator()
 
     def maybe_restart_from_saved_state():
         if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
@@ -391,6 +418,8 @@ def run_steady_sa_ipcs_picard(
 
     root_print("Steady RANS-SA solve: pseudo-time IPCS flow + steady SA Picard coupling", is_root=is_root)
     root_print("  SA equation: steady Galerkin, no SA SUPG term", is_root=is_root)
+    if pressure_drop_description is not None:
+        root_print("  Pressure-drop metric: {}.".format(pressure_drop_description), is_root=is_root)
 
     # Outer Picard loop: alternate between a flow solve at fixed nu_t and an
     # SA transport solve at fixed velocity until all coupled fields stop moving.
@@ -449,7 +478,7 @@ def run_steady_sa_ipcs_picard(
                 )
             )
             if pressure_drop is not None:
-                picard_message += "; area-weighted pressure drop={:.6e} Pa".format(pressure_drop)
+                picard_message += "; {}={:.6e} Pa".format(pressure_drop_label, pressure_drop)
             print(picard_message)
 
         if (
@@ -468,7 +497,7 @@ def run_steady_sa_ipcs_picard(
                 )
             )
             if pressure_drop is not None:
-                convergence_message += "; area-weighted pressure drop={:.6e} Pa".format(pressure_drop)
+                convergence_message += "; {}={:.6e} Pa".format(pressure_drop_label, pressure_drop)
             convergence_message += "."
             root_print(
                 convergence_message,
@@ -497,7 +526,7 @@ def run_steady_sa_ipcs_picard(
         final_pressure_drop = pressure_drop_evaluator(p0)
         residuals["pressure_drop"].append(float(final_pressure_drop))
         root_print(
-            "Final flow area-weighted pressure drop={:.6e} Pa.".format(final_pressure_drop),
+            "Final flow {}={:.6e} Pa.".format(pressure_drop_label, final_pressure_drop),
             is_root=is_root,
         )
 

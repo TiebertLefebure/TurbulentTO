@@ -4,8 +4,8 @@ import os
 # Mesh and output paths.
 # Medium_WallResolved is the default SA channel validation mesh. Use
 # Coarse_WallResolved for quick diagnostics or Fine_WallResolved for final runs.
-MESH_DIRECTORY = "Meshes/Channel/Fine_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/Channel/Fine_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/Channel/Coarse_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/Channel/Coarse_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -56,6 +56,7 @@ REYNOLDS_NUMBER = INLET_BULK_VELOCITY * REYNOLDS_LENGTH / KINEMATIC_VISCOSITY
 
 
 # SA field initialization.
+#INITIAL_VELOCITY = (0.0, 0.0) 
 INITIAL_VELOCITY = (INLET_BULK_VELOCITY, 0.0)
 INITIAL_PRESSURE = 2.0
 INITIAL_NU_TILDE = 5.0e-3
@@ -90,7 +91,7 @@ QUADRATURE_DEGREE = 2
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 200
+COUPLED_PICARD_MAX_STEPS = 400
 COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-6
 COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-6
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6

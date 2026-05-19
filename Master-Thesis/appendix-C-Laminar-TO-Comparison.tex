@@ -13,7 +13,7 @@ Each benchmark is solved twice. The laminar reference design is optimized at $Re
 
 Because these FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables in this appendix. The additional tables reported here are therefore limited to the Ansys mesh-independence studies for the extracted laminar geometries and the final CFD metric comparisons against the turbulent-design results from Chapter~\ref{ch:benchmark_results}.
 
-After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. The key performance metrics are viscous dissipation and pressure drop, reported with both SA and SST $k$-$\omega$ turbulence models when available. The purpose of this appendix is not merely to show that the topologies look different, but to test whether the turbulent topology actually performs better when both designs are exposed to the same turbulent flow.
+After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST, the laminar-design comparison in this appendix is evaluated with the higher-fidelity SST $k$-$\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop. The purpose of this appendix is not merely to show that the topologies look different, but to test whether the turbulent topology actually performs better when both designs are exposed to the same turbulent flow.
 
 For fairness, the extracted laminar geometries receive their own Ansys mesh-independence checks. The turbulent-design grid studies are reported in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} and Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend} in Appendix~\ref{app:B_validation_configurations}; this appendix adds the corresponding laminar-design mesh tables and final laminar-vs-turbulent performance comparisons.
 
@@ -30,15 +30,15 @@ Figure~\ref{fig:app_C_alexandersen_pipebend_topologies} compares the laminar and
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Projected density: laminar pipe-bend design ($Re=1$)}
-		\caption{Laminar-optimized topology.}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Laminar-Topology}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized topology ($Re=1$).}
 		\label{fig:app_C_alexandersen_pipebend_lam_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{Projected density: turbulent pipe-bend design (SA)}
-		\caption{Turbulent-optimized topology.}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Topology}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized topology.}
 		\label{fig:app_C_alexandersen_pipebend_turb_topo}
 	\end{subfigure}
 	\caption{Laminar and turbulent topology comparison for the pipe-bend benchmark.}
@@ -69,33 +69,36 @@ Figure~\ref{fig:app_C_alexandersen_pipebend_velocity_comparison} presents the co
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_pipebend_lam_mesh}
 Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar pipe-bend design. This table is separate from the turbulent-design mesh study in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} because the laminar and turbulent topologies generally produce different wall shapes and near-wall mesh requirements.
+All Fluent runs were continued until the scaled residuals fell below $10^{-7}$ and the monitored integral quantities were stationary. Specifically, the static pressure drop was required to change by less than $5\times10^{-4}$ over $100$ iterations, while the viscous dissipation was required to change by less than $10^{-3}$ over $100$ iterations. Mass conservation was additionally checked from the inlet and outlet mass-flow reports.
 
 \begin{table}[htbp]
 	\centering
-	\footnotesize
+	\scriptsize
 	\caption{Ansys mesh-independence table for the extracted laminar pipe-bend design.}
 	\label{tab:app_C_alexandersen_pipebend_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+	\setlength{\tabcolsep}{4pt}
+	\begin{tabular}{@{}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
+		Mesh method & Triangles & Triangles & Triangles \\
+		Bulk face element size [m] & $6.50 \times 10^{-3}$ & $4.50 \times 10^{-3}$ & $3.00 \times 10^{-3}$ \\
+		Curvature angle & $12^\circ$ & $8^\circ$ & $5^\circ$ \\
+		First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ \\
+		Inflation layers & $10$ & $12$ & $14$ \\
+		Growth rate & $1.08$ & $1.06$ & $1.05$ \\
+		Inflation thickness [m] & $1.74 \times 10^{-2}$ & $2.02 \times 10^{-2}$ & $2.35 \times 10^{-2}$ \\
+		Elements / cells & $18{,}570$ & [TBD] & [TBD] \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & [TBD]\% \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & [TBD]\% \\
 		Selected comparison mesh & \multicolumn{3}{c}{[TBD]} \\
 		\hline
-	\end{tabularx}
+	\end{tabular}
 \end{table}
 
 \subsection{Performance Comparison}
@@ -112,8 +115,6 @@ The final comparison in Table~\ref{tab:app_C_alexandersen_pipebend_perf} evaluat
 		\hline
 		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
 		\hline
-		Laminar TO, $Re=1$ & SA & [TBD] & [TBD] & Baseline \\
-		Turbulent TO, SA & SA & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
 		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		\hline
@@ -191,12 +192,8 @@ Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} reports the Ansys mesh-indepen
 		Inflation layers & [TBD] & [TBD] & [TBD] \\
 		Growth rate & [TBD] & [TBD] & [TBD] \\
 		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
 		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
 		Selected comparison mesh & \multicolumn{3}{c}{[TBD]} \\
 		\hline
@@ -205,7 +202,7 @@ Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} reports the Ansys mesh-indepen
 
 \subsection{Performance Comparison}
 \label{subsec:app_C_alexandersen_ubend_performance}
-Table~\ref{tab:app_C_alexandersen_ubend_perf} compares the extracted laminar and turbulent U-bend topologies under identical turbulent operating conditions. If the turbulent design lowers $\Delta p$ and $\Phi_D$ across both SA and SST $k$-$\omega$ evaluations, the result supports the thesis claim that high-Reynolds topology optimization should include turbulence directly in the design loop.
+Table~\ref{tab:app_C_alexandersen_ubend_perf} compares the extracted laminar and turbulent U-bend topologies under identical turbulent operating conditions. If the turbulent design lowers $\Delta p$ and $\Phi_D$ under the SST $k$-$\omega$ evaluation, the result supports the thesis claim that high-Reynolds topology optimization should include turbulence directly in the design loop.
 
 \begin{table}[!ht]
 	\centering
@@ -217,8 +214,6 @@ Table~\ref{tab:app_C_alexandersen_ubend_perf} compares the extracted laminar and
 		\hline
 		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
 		\hline
-		Laminar TO, $Re=1$ & SA & [TBD] & [TBD] & Baseline \\
-		Turbulent TO, SA & SA & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
 		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		\hline

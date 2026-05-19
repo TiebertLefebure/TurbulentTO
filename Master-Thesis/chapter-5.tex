@@ -5,7 +5,7 @@
 \label{sec:sa_verification_introduction}
 Chapter~\ref{ch:fenics_implementation} introduced the numerical implementation of the Spalart-Allmaras (SA) model in FEniCS. Before using this solver inside the topology optimization framework, the forward fluid solver is verified against independent Ansys Fluent calculations on two benchmark flows. The first benchmark is a fully developed turbulent channel, which isolates wall damping, turbulence production, and Picard coupling in a simple geometry. The second benchmark is a curved U-bend, which tests the same implementation under strong convection, streamline curvature, and separation.
 
-This chapter focuses on the verification evidence rather than the full simulation setup. For the channel benchmark, the physical setup is listed in Table~\ref{tab:app_A_channel_physical}, the FEniCS solver settings in Table~\ref{tab:app_A_channel_numerical}, and the mesh studies in Tables~\ref{tab:app_A_channel_meshes} and \ref{tab:app_A_channel_meshes_ansys} of Section~\ref{sec:app_A_channel}. For the U-bend benchmark, the corresponding geometry, numerical settings, truncation study, and mesh studies are documented in Tables~\ref{tab:app_A_ubend_physical}, \ref{tab:app_A_ubend_numerical}, \ref{tab:app_A_ubend_meshes}, and \ref{tab:app_A_ubend_meshes_ansys}, together with Figure~\ref{fig:app_A_ubend_truncation_proof} in Section~\ref{sec:app_A_ubend}. The purpose here is to show that the FEniCS-SA implementation reproduces the relevant Ansys-SA flow behavior well enough to serve as the forward model for the topology optimization studies in Chapter~\ref{ch:benchmark_results}.
+This chapter focuses on the verification evidence rather than the full simulation setup. For the channel benchmark, the physical setup is listed in Table~\ref{tab:app_A_channel_physical}, the FEniCS solver settings in Table~\ref{tab:app_A_channel_numerical}, and the mesh studies in Tables~\ref{tab:app_A_channel_meshes} and \ref{tab:app_A_channel_meshes_ansys} of Section~\ref{sec:app_A_channel}. For the U-bend benchmark, the corresponding geometry, numerical settings, and mesh studies are documented in Tables~\ref{tab:app_A_ubend_physical}, \ref{tab:app_A_ubend_numerical}, \ref{tab:app_A_ubend_meshes}, and \ref{tab:app_A_ubend_meshes_ansys} of Section~\ref{sec:app_A_ubend}. The purpose here is to show that the FEniCS-SA implementation reproduces the relevant Ansys-SA flow behavior well enough to serve as the forward model for the topology optimization studies in Chapter~\ref{ch:benchmark_results}.
 
 \section{Channel Verification Benchmark}
 \label{sec:sa_channel_verification}
@@ -107,7 +107,7 @@ This agreement supports the verification that the core Navier-Stokes solver, rel
 \label{sec:sa_ubend_verification}
 Following the channel flow verification, the solver was tested on the highly convective separating U-bend flow evaluated in Chapter~\ref{ch:turbulence_modeling}. This case is closer to the curved internal-flow topologies studied later in the thesis because the flow experiences strong streamline curvature and pressure-gradient-driven redistribution.
 
-As discussed in Section~\ref{subsec:app_A_ubend_truncation} of Appendix~\ref{app:A_baseline_configurations}, the verification used a modified computational domain for efficiency. First, the domain was reduced to a 2D geometry corresponding to the symmetry mid-plane of the full 3D case. Since the FEniCS domain is mathematically a 2D planar approximation, it cannot resolve true 3D Dean secondary vortices. Instead, this benchmark validates the 2D symmetry-plane approximation and the solver's ability to capture curvature-induced separation and momentum redistribution. Second, the extended straight inlet and outlet sections of the standard benchmark were truncated to $30D$ to reduce unnecessary computational cost. The mathematical justification for this truncation is plotted in Figure~\ref{fig:app_A_ubend_truncation_proof}.
+The verification used a 2D geometry corresponding to the symmetry mid-plane of the full 3D VMFL048 case. Since the FEniCS domain is mathematically a 2D planar approximation, it cannot resolve true 3D Dean secondary vortices. Instead, this benchmark validates the 2D symmetry-plane approximation and the solver's ability to capture curvature-induced separation and momentum redistribution. The straight inlet and outlet legs are shorter than in the original VMFL048 Ansys mesh to reduce meshing and computational effort; both the FEniCS and Ansys verification runs use this same short-leg U-bend geometry.
 
 To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the domain is 2D, the 3D physical pipe diameter ($D = 0.028$ m) and radius of curvature ($R_c = 0.125$ m) were retained as the characteristic length scales. This preserves the target Reynolds number ($Re_D \approx 44{,}700$) and Dean number ($De \approx 15{,}000$) of the 3D Ansys reference case. The physical setup and boundary conditions are listed in Table~\ref{tab:app_A_ubend_physical} of Section~\ref{subsec:app_A_ubend_physical} in Appendix~\ref{app:A_baseline_configurations}.
 
@@ -123,7 +123,7 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{UBend-Ansys-Velocity}
 		\caption{Ansys Fluent SA contour}
 		\label{fig:ubend_ansys}
 	\end{subfigure}
@@ -163,7 +163,7 @@ and
 	{\int_{\Gamma_D} |\mathbf{u}_{\mathrm{Ansys}}|^2\,\mathrm{d}s}
 	\right)^{1/2}\times 100\%,
 \end{equation}
-where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers.
+where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers. Since the FEniCS formulation solves for kinematic pressure, its pressure drop is converted to physical static pressure using $\rho=997$ kg/m$^3$ before comparison; equivalently, the fine Ansys pressure drop of $797.972$ Pa corresponds to $\Delta p/\rho = 0.8004$ m$^2$/s$^2$.
 
 \begin{table}[!ht]
 	\centering
@@ -175,17 +175,15 @@ where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ 
 		\hline
 		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Rel. diff.} \\
 		\hline
-		Pressure drop ($\Delta p$) [Pa] & [TBD] & $2.820$ & [TBD]\% \\
+		Pressure drop ($\Delta p$) [Pa] & $797.972$ & $731.798$ & $8.29\%$ \\
 		Max pointwise velocity discrepancy ($E_\infty$) & -- & -- & [TBD]\% \\
 		Relative $L_2$ velocity discrepancy ($E_{L_2}$) & -- & -- & [TBD]\% \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-This general agreement in localized velocity gradients and global pressure-drop behavior indicates that the framework provides a credible forward-flow basis for the pressure-drop minimization objectives in the subsequent topology optimization campaigns.
-
 \section{Conclusion}
 \label{sec:sa_verification_conclusion}
-The two verification cases establish the practical operating range of the custom FEniCS-SA solver before it is embedded in the topology optimization loop. The periodic channel confirms that the solver reproduces canonical wall-bounded turbulent behavior, while the U-bend checks the same implementation in a curved, separation-prone internal flow.
+The two verification cases establish the practical operating range of the custom FEniCS-SA solver before it is embedded in the topology optimization loop. The periodic channel confirms that the solver reproduces canonical wall-bounded turbulent behavior, while the U-bend checks the same implementation in a curved, separation-prone internal flow. The localized velocity-gradient agreement and interim pressure-drop metric indicate that the framework provides a credible forward-flow basis for the pressure-drop minimization objectives in the subsequent topology optimization campaigns.
 
 These results do not remove the known limitations of a 2D SA model: secondary Dean vortices, anisotropic Reynolds stresses, and full three-dimensional separation physics remain outside the present solver scope. They do, however, show that the implemented SA equations, wall-distance calculation, and segregated coupling strategy are sufficiently consistent with Ansys Fluent to support the topology optimization methodology and results presented in Chapters~\ref{ch:topology_optimization_methodology} and \ref{ch:benchmark_results}.

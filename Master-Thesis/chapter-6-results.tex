@@ -7,36 +7,38 @@
 
 \section{Introduction}
 \label{sec:ch6_introduction}
-Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026}. Both benchmarks use the final thesis formulation: reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and the frozen-turbulence adjoint.
+Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026}. Both cases use reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and a frozen-turbulence adjoint.
 
 The chapter first verifies the implemented frozen sensitivity on the same pipe-bend configuration used for optimization with a Dilgen-style coordinate finite-difference check on selected design cells and a directional Taylor check. The optimized pipe-bend and U-bend layouts are then interpreted through their projected density fields, velocity fields, convergence histories, and independent sharp-geometry CFD validation. This ordering keeps the derivative evidence close to the optimization result that uses it, while leaving the standalone forward-flow verification in Chapter~\ref{ch:sa_verification}.
 
-The U-bend serves as a companion topology optimization benchmark with the same governing assumptions and objective structure, but with a more severe $180^\circ$ flow reversal. Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh} and \ref{tab:app_B_alexandersen_ubend_mesh}. Laminar-versus-turbulent comparisons are retained in Section~\ref{sec:app_C_alexandersen_pipebend} and Section~\ref{sec:app_C_alexandersen_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison} as supporting evidence for interpreting the optimized layouts.
+Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh} and \ref{tab:app_B_alexandersen_ubend_mesh}. Laminar-versus-turbulent comparisons are retained in Section~\ref{sec:app_C_alexandersen_pipebend} and Section~\ref{sec:app_C_alexandersen_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison} as supporting evidence for interpreting the optimized layouts.
 
-\section{Benchmark Strategy and Evaluation Metrics}
+\section{Benchmark Cases and Evaluation Metrics}
 \label{sec:ch6_strategy_metrics}
 
-Table~\ref{tab:ch6_benchmark_strategy} outlines the strategic role of the two benchmarks. The pipe bend receives the finite-difference sensitivity verification because it is the first final-configuration optimization case. The U-bend is then used to test whether the same methodology remains robust for a longer turning path with stronger flow reversal.
+The two benchmarks cover curved internal flows with different turning severity. The pipe bend targets the $V_f=0.25$, $Re=5{,}000$ case from Bayat et al.~\cite{Bayat2026}, while the U-bend targets their $V_f=0.27$, $Re=5{,}000$ case with a $180^\circ$ flow reversal. Table~\ref{tab:ch6_benchmark_cases} summarizes the operating point and analyses reported for each case.
 
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Benchmark strategy used in Chapter~\ref{ch:benchmark_results}. Detailed physical and numerical parameters are listed in Sections~\ref{sec:app_B_config_alexandersen_pipebend} and \ref{sec:app_B_config_alexandersen_ubend} of Appendix~\ref{app:B_validation_configurations}.}
-		\label{tab:ch6_benchmark_strategy}
+	\caption{Benchmark cases evaluated in Chapter~\ref{ch:benchmark_results}. Detailed physical and numerical parameters are listed in Appendix~\ref{app:B_validation_configurations}.}
+	\label{tab:ch6_benchmark_cases}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X X X}
+	\begin{tabularx}{\textwidth}{l c c X}
 		\hline
-			\textbf{Case} & \textbf{Role in this thesis} & \textbf{Reference comparison} & \textbf{Validation scope} \\
-			\hline
-			Pipe bend & Primary verification and optimization case at $V_f=0.25$ & Pipe-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & Coordinate finite-difference and Taylor checks; FEniCS optimization; Ansys-SA and Ansys-SST validation; laminar-design comparison \\
-			U-bend & Companion curved-flow topology case at $V_f=0.27$ & U-bend setup and optimized fields from Bayat et al.~\cite{Bayat2026} & FEniCS optimization; Ansys-SA and Ansys-SST validation; laminar-design comparison \\
-			\hline
-		\end{tabularx}
-	\end{table}
+		\textbf{Case} & \textbf{$V_f$} & \textbf{$Re$} & \textbf{Analyses reported} \\
+		\hline
+		Pipe bend & $0.25$ & $5{,}000$ & FEniCS optimization; finite-difference and Taylor sensitivity verification; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
+		U-bend & $0.27$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
+		\hline
+	\end{tabularx}
+\end{table}
 
 \subsection{Optimization and Validation Metrics}
 \label{subsec:ch6_metrics}
 Throughout the optimization process, both benchmarks minimize the average inlet-pressure objective $J_p$ defined in Eq.~\ref{eq:inlet_pressure_objective}. This pressure is averaged over the physical inlet boundary of the fixed non-design extension, where the inlet velocity is prescribed. The outlet pressure is fixed to zero, so reducing $J_p$ directly reduces the pressure level required to drive the prescribed inlet flow through the evolving topology. The optimization problem is still solved on a diffuse Brinkman domain, but once a design is extracted for Ansys Fluent, the Brinkman penalty is removed and the solid-fluid interface becomes a sharp wall.
+
+Both benchmark cases use the power-law SA sink, the power-law reciprocal wall-distance penalty, the inlet-pressure objective, and the frozen-turbulence adjoint introduced in Chapter~\ref{ch:topology_optimization_methodology}.
 
 Bayat et al.~\cite{Bayat2026} report corresponding final average inlet-pressure objectives for their standard $k$-$\varepsilon$ computations in Table~7. Their ``conventional'' method is the density-based turbulent topology optimization formulation without the proposed implicit wall-functions: solid regions are imposed through Brinkman/body-force penalization, including damping of $k$ and $\varepsilon$ toward zero in solid material, on the same diffuse optimization mesh. It is therefore distinct from the body-fitted re-simulations with explicit wall-functions that they use for validation. Since the present thesis uses a wall-resolved SA model instead of $k$-$\varepsilon$, the conventional values from Bayat et al. are used only as scale comparisons in the individual benchmark discussions below.
 
@@ -50,10 +52,6 @@ To bridge this gap, the primary validation metric is the physical viscous dissip
 	\label{eq:ch6_validation_dissipation}
 \end{equation}
 where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys. The effective viscosity is $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent evaluations and $\mu_{\mathrm{eff}}=\mu$ for laminar reference solves. Furthermore, because pressure drop is the most direct and practical engineering interpretation of these flow losses, $\Delta p$ is also reported from the Ansys validation runs. All two-dimensional dissipation quantities are evaluated per unit depth.
-
-\subsection{Wall-Distance and SA Penalization Conventions}
-\label{subsec:ch6_wall_distance_note}
-The two benchmark computations use one wall-distance and penalty convention throughout: the reciprocal wall-distance equation is penalized by the power term in Eq.~\ref{eq:penalized_eikonal}, and the SA working variable is suppressed by the power sink in Eq.~\ref{eq:penalized_sa}. The wall-distance field is updated in the forward loop, but it is treated as a frozen coefficient during the adjoint sensitivity solve. Thus, the sensitivity verification below checks the implemented frozen derivative for the same practical assumption used by the optimizer.
 
 \section{Pipe Bend Benchmark}
 \label{sec:alexandersen_pipebend}
@@ -165,7 +163,7 @@ Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected 
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Topology}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_pipebend_topology}
 	\end{subfigure}
@@ -235,7 +233,7 @@ The U-bend is the companion benchmark to the pipe bend. It uses the same frozen-
 \subsection{Geometry and Boundary Conditions}
 \label{subsec:alexandersen_ubend_setup}
 The geometry and boundary conditions follow Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. The square design region has side length $L$, with a non-design lead duct of length $0.2L$ on the left. The inlet and outlet ports both have height $0.2L$; the top port acts as the inlet and the lower port acts as the pressure outlet. A fixed internal separator bar of thickness $0.10L$ extends from the lead duct into the design domain, forcing the flow to turn around its rounded tip. The target volume fraction is $V_f=0.27$, and the Reynolds number is $Re=5{,}000$ based on the port height and maximum inlet velocity.
-Figure~\ref{fig:alexandersen_ubend_setup} shows the corresponding local geometry and boundary-condition layout used for this thesis benchmark.
+Figure~\ref{fig:alexandersen_ubend_setup} shows the corresponding local geometry and boundary-condition layout used for this benchmark.
 
 \begin{figure}[!ht]
 	\centering

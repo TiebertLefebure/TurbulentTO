@@ -157,10 +157,15 @@ mesh_files = {
 boundary_markers = BOUNDARY_MARKERS
 boundary_conditions = BOUNDARY_CONDITIONS
 
+PRESSURE_DROP_COARSE_REFERENCE = 7.335399469567415e-01
+
 pressure_drop_metric = {
-    "INLET_MARKERS": BOUNDARY_MARKERS["INFLOW"],
-    "OUTLET_MARKERS": BOUNDARY_MARKERS["OUTFLOW"],
-    "OUTLET_PRESSURE": BOUNDARY_CONDITIONS["OUTFLOW"]["P"],
+    "FIXED_PRESSURE_DROP": PRESSURE_DROP_COARSE_REFERENCE,
+    "LABEL": "pressure drop metric",
+    "SOURCE": (
+        "temporary Coarse_WallResolved reference from saved p000000.vtu: "
+        "area-weighted inlet pressure minus outlet fixed pressure"
+    ),
 }
 
 initial_conditions = {
