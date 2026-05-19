@@ -1,15 +1,15 @@
-\chapter{Configuration and Grid Independence of the Alexandersen Benchmarks}
+\chapter{Configuration and Grid Independence of the Topology Optimization Benchmarks}
 \label{app:B_validation_configurations}
 
 \providecommand{\meshplaceholder}[1]{%
 	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
 }
 
-This appendix collects the detailed setup information for the Alexandersen topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. Only the Alexandersen pipe bend and Alexandersen U-bend are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
+This appendix collects the detailed setup information for the topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. The Alexandersen pipe bend, Alexandersen U-bend, and Yoon diffuser are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
 
 \section{Validation and Meshing Strategy}
 \label{sec:app_B_mesh_strategy}
-The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. In both cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
+The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. The Yoon diffuser uses a wall-resolved rectangular-coordinate triangular mesh over the square diffuser domain, refined around the full-height inlet, the center-third outlet, and the no-slip walls. In all cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
 
 For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. The reported validation metrics in Chapter~\ref{ch:benchmark_results} should be taken from a mesh for which both viscous dissipation and pressure drop have become insensitive to further refinement. The selected mesh should be reported explicitly for each case.
 
@@ -212,6 +212,105 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 	\footnotesize
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Alexandersen U-bend geometry.}
 	\label{tab:app_B_alexandersen_ubend_mesh}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\hline
+		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
+		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
+		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
+		Inflation layers & [TBD] & [TBD] & [TBD] \\
+		Growth rate & [TBD] & [TBD] & [TBD] \\
+		Elements / cells & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
+		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
+		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\section{Yoon Diffuser}
+\label{sec:app_B_config_yoon_diffuser}
+
+The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the Alexandersen cases, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Geometric, physical, and boundary-condition parameters for the Yoon diffuser case.}
+	\label{tab:app_B_yoon_diffuser_physical}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Parameter} & \textbf{Setting} \\
+		\hline
+		Reference case & Diffuser benchmark from Yoon~\cite{Yoon2016} \\
+		Reference figures for setup and topology & Yoon Fig.~20--22 \\
+		Reference turbulence model & Spalart-Allmaras \\
+		Turbulence model in this thesis & Spalart-Allmaras with frozen-turbulence adjoint \\
+		Design-domain dimensions & Square design region $L\times L$ with $L=1~\mathrm{m}$ \\
+		Full computational domain & $x/L\in[0,1]$, $y/L\in[0,1]$ \\
+		Inlet geometry & Full left boundary, $x/L=0$, $y/L\in[0,1]$ \\
+		Outlet geometry & Center third of the right boundary, $x/L=1$, $y/L\in[1/3,2/3]$ \\
+		Volume fraction & $V_f=0.30$ fluid, corresponding to Yoon's $70\%$ solid mass usage \\
+		Reynolds number & $Re=3{,}000$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ \\
+		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$, $\mu=1.0~\mathrm{Pa\,s}$ \\
+		Inlet condition & Parabolic velocity profile with $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$; $\tilde{\nu}=1$ \\
+		Outlet condition & Prescribed parabolic outflow profile with $U_{\max,\mathrm{out}}=9~\mathrm{m/s}$; $\tilde{\nu}=1$; pressure pinned at $(0,0)$ for gauge fixing \\
+		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on the top and bottom walls and on the right boundary outside the outlet \\
+		Brinkman solid resistance & $\alpha_{\mathrm{solid}}=10^9$, $\alpha_{\mathrm{fluid}}=0$ \\
+		Optimization objective & Dissipation objective $J_D$, including physical viscous dissipation and Brinkman drag over the design domain \\
+		Validation metrics & $J_D$, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Numerical FEniCS solver and topology-optimization parameters for the Yoon diffuser.}
+	\label{tab:app_B_yoon_diffuser_numerical}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l c X}
+		\hline
+		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
+		\hline
+		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
+		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
+		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
+		Reference FEniCS mesh & -- & \texttt{mesh\_yoon\_yplus1.xdmf}; wall-resolved triangular mesh with $38{,}745$ vertices, $76{,}704$ triangles, far-field $h_{\max}=L/180=5.56\times10^{-3}L$, and first-cell width $1.82\times10^{-3}L$ \\
+		Objective & $J_D$ & Dissipation objective over the design domain \\
+		Initial design density & $\gamma_0$ & $V_f=0.30$, matched to the filtered volume \\
+		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^9$ \\
+		RAMP continuation & $q$ & $[0.01,\ 0.02,\ 0.04,\ 0.08]$ \\
+		Projection continuation & $\beta$ & $[1,\ 2,\ 4,\ 8]$ with threshold $\eta=0.50$ \\
+		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
+		Maximum optimization iterations & -- & Four continuation stages with $[50,\ 60,\ 80,\ 100]$ MMA iterations; stop if objective change is below $10^{-5}$ for five iterations \\
+		Filter radius & $r_f$ & $4h_{\max}=2.22\times10^{-2}L$ \\
+		SA working-variable penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
+		Wall-distance penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
+		Wall-distance equation & -- & Reciprocal penalized relaxed Eikonal equation with $\sigma_w=0.1$ and $G_0=20$ \\
+		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
+		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.15$ \\
+		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
+		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Yoon diffuser geometry.}
+	\label{tab:app_B_yoon_diffuser_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
 		\hline

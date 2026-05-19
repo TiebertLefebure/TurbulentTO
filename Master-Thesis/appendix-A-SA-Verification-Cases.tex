@@ -103,9 +103,9 @@ To guarantee that the numerical results were independent of the spatial discreti
 		Growth ratio & $1.45$ & $1.35$ & $1.25$ \\
 		Vertices & $473$ & $1{,}092$ & $2{,}829$ \\
 		Triangular elements & $840$ & $2{,}040$ & $5{,}440$ \\
-		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & [TBD] & [TBD] & $18.419$ \\
-		Relative difference $U_{\mathrm{bulk}}$, coa-med [\%] & -- & [TBD] & -- \\
-		Relative difference $U_{\mathrm{bulk}}$, med-fin [\%] & -- & -- & [TBD] \\
+		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $16.953$ & $18.500$ & $18.479$ \\
+		Relative difference $U_{\mathrm{bulk}}$, coa-med [\%] & -- & $8.362$ & -- \\
+		Relative difference $U_{\mathrm{bulk}}$, med-fin [\%] & -- & -- & $0.114$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -115,11 +115,11 @@ Visual confirmation of this spatial convergence is provided by the wall-normal v
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.8\textwidth]{example-image} % Replace with your channel mesh independence velocity profile plot
-	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
+	\caption{FEniCS wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
 	\label{fig:app_A_channel_mesh_independence}
 \end{figure}
 
-Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. In addition to the residual monitors, the bulk velocity was monitored and required to change by less than $10^{-3}$ over $1000$ iterations before accepting a converged solution. Mass conservation was also checked from the inlet and outlet mass-flow reports, using the same procedure as in the laminar-design Ansys validation runs. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
+Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. In addition to the residual monitors, the bulk velocity was monitored and required to change by less than $10^{-3}$ over $500$ iterations before accepting a converged solution. The continuity residual criterion was set to $1.0 \times 10^{-5}$, while the momentum and SA working-variable residual criteria were set to $1.0 \times 10^{-6}$. Mass conservation was also checked from the inlet and outlet mass-flow reports. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
 
 \begin{table}[htbp]
 	\centering
@@ -230,26 +230,30 @@ Due to the adverse pressure gradients and secondary flow separation induced by t
 \label{subsec:app_A_ubend_mesh}
 Managing the highly stretched, non-orthogonal inflation layers around the curved arcs of the U-bend required custom mesh generation via Gmsh. A spatial grid independence study was conducted across three refined unstructured grids. The node counts, element densities, and inflation layer parameters for these generated meshes are explicitly documented in Table~\ref{tab:app_A_ubend_meshes}. Similar to the channel benchmark, the wall-adjacent element height was strictly maintained at $1.20 \times 10^{-5}$ m to satisfy the low-Reynolds SA wall constraints, while the internal element sizing was systematically refined.
 
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Wall-resolved U-bend mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the bulk element size and inflation-layer resolution are refined.}
-	\label{tab:app_A_ubend_meshes}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{lccc}
-		\hline
-		\textbf{Parameter} & \textbf{Coarse\_FEniCS} & \textbf{Medium\_FEniCS} & \textbf{Fine\_FEniCS} \\
-		\hline
-		Bulk element size [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
-		First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
-		Inflation layers & $10$ & $14$ & $18$ \\
-		Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
-		Inflation thickness [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
-		Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
-		Triangular elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
-		\hline
-	\end{tabularx}
-\end{table}
+	\begin{table}[htbp]
+		\centering
+		\scriptsize
+		\caption{Wall-resolved U-bend mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the bulk element size and inflation-layer resolution are refined.}
+		\label{tab:app_A_ubend_meshes}
+		\renewcommand{\arraystretch}{1.2}
+		\setlength{\tabcolsep}{4pt}
+		\begin{tabular}{@{}lccc@{}}
+			\hline
+			\textbf{Parameter} & \textbf{Coarse\_FEniCS} & \textbf{Medium\_FEniCS} & \textbf{Fine\_FEniCS} \\
+			\hline
+			Bulk element size [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
+			First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
+			Inflation layers & $10$ & $14$ & $18$ \\
+			Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
+			Inflation thickness [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
+			Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
+			Triangular elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
+			Static pressure drop $\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+			Relative difference $\Delta p_{\mathrm{coa-med}}$ [\%] & -- & \textit{TBD} & -- \\
+			Relative difference $\Delta p_{\mathrm{med-fin}}$ [\%] & -- & -- & \textit{TBD} \\
+			\hline
+		\end{tabular}
+	\end{table}
 
 Convergence was visually verified by extracting the velocity profiles directly at the bend exit across the pipe diameter $D=0.028$ m, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
 
@@ -260,7 +264,7 @@ Convergence was visually verified by extracting the velocity profiles directly a
 	\label{fig:app_A_ubend_mesh_independence}
 \end{figure}
 
-Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were verified to be spatially converged. The \texttt{Fine\_Ansys} grid is therefore selected as the commercial verification baseline, ensuring that the reference data is independent of grid resolution.
+Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were verified to be spatially converged. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is therefore selected as the commercial verification baseline, ensuring that the reference data is independent of grid resolution.
 
 \begin{table}[htbp]
 	\centering

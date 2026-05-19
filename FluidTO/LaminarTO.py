@@ -13,6 +13,7 @@ except ModuleNotFoundError:
 
 from mma import mmasub
 from Utilities_SharedTO import (
+    append_df0dx_log_entry,
     append_optimization_log_entry,
     as_list,
     boundary_average_functional,
@@ -22,6 +23,7 @@ from Utilities_SharedTO import (
     create_design_mesh_from_config,
     ensure_clean_dir,
     ensure_dir,
+    initialize_df0dx_log,
     initialize_optimization_log,
     checkpoint_scalar,
     load_optimization_checkpoint,
@@ -119,6 +121,7 @@ unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
+df0dx_centered_plot = Function(DensitySpace)
 
 
 def _as_density_function(value, density_space):
@@ -258,19 +261,30 @@ root_print(
     )
 )
 
-dx = Measure("dx", domain=mesh)
-ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
-dS = Measure("dS", domain=mesh)
+if "QUADRATURE_DEGREE" in globals():
+    quadrature_degree = int(QUADRATURE_DEGREE)
+    parameters["form_compiler"]["quadrature_degree"] = quadrature_degree
+    measure_metadata = {"quadrature_degree": quadrature_degree}
+    dx = Measure("dx", domain=mesh, metadata=measure_metadata)
+    ds = Measure("ds", domain=mesh, subdomain_data=boundaries, metadata=measure_metadata)
+    dS = Measure("dS", domain=mesh, metadata=measure_metadata)
+else:
+    measure_metadata = {}
+    dx = Measure("dx", domain=mesh)
+    ds = Measure("ds", domain=mesh, subdomain_data=boundaries)
+    dS = Measure("dS", domain=mesh)
 design_pressure_drop_facets, design_pressure_drop_mark = build_design_pressure_drop_markers(mesh, globals())
 dS_design_pressure = Measure(
     "dS",
     domain=mesh,
     subdomain_data=design_pressure_drop_facets,
+    metadata=measure_metadata,
 )
 ds_design_pressure = Measure(
     "ds",
     domain=mesh,
     subdomain_data=design_pressure_drop_facets,
+    metadata=measure_metadata,
 )
 
 inlet_profiles, outlet_profiles = globals()["build_velocity_profile_sets"]()
@@ -555,6 +569,10 @@ rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
 design_dir = os.path.join(results_root, "design")
+df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
+save_df0dx_vector = bool(globals().get("SAVE_DF0DX_VECTOR", False))
+log_df0dx_stats = bool(globals().get("LOG_DF0DX_STATS", save_df0dx_vector))
+save_df0dx_centered_field = bool(globals().get("SAVE_DF0DX_CENTERED_FIELD", log_df0dx_stats))
 
 checkpoint_path = optimization_checkpoint_path(results_root)
 resume_requested = resume_optimization_requested(globals())
@@ -568,7 +586,10 @@ resume_vtk_iteration = (
 
 if resume_from_checkpoint:
     root_print("Resuming optimization from checkpoint {}".format(checkpoint_path))
-    for output_dir in (results_root, rho_dir, rho_p_dir, u_dir, p_dir, design_dir):
+    output_dirs = [results_root, rho_dir, rho_p_dir, u_dir, p_dir, design_dir]
+    if save_df0dx_centered_field:
+        output_dirs.append(df0dx_centered_dir)
+    for output_dir in output_dirs:
         ensure_dir(output_dir, COMM)
 else:
     if resume_requested:
@@ -583,13 +604,23 @@ else:
     ensure_clean_dir(u_dir)
     ensure_clean_dir(p_dir)
     ensure_clean_dir(design_dir)
+    if save_df0dx_centered_field:
+        ensure_clean_dir(df0dx_centered_dir)
 
 rho_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_dir, "plot_rho.pvd"), resume_vtk_iteration), COMM))
 rhop_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), resume_vtk_iteration), COMM))
 u_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(u_dir, "plot_u.pvd"), resume_vtk_iteration), COMM))
 p_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(p_dir, "plot_p.pvd"), resume_vtk_iteration), COMM))
+if save_df0dx_centered_field:
+    df0dx_centered_out = File(
+        reset_vtk_series(
+            resume_vtk_series_path(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), resume_vtk_iteration),
+            COMM,
+        )
+    )
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
+df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
 optimization_log_quantity_columns = (
     "ViscousDissipation_nondesign_W_per_m",
     "ViscousDissipation_design_W_per_m",
@@ -602,6 +633,8 @@ if not resume_from_checkpoint:
         pressure_drop_columns=optimization_log_quantity_columns,
         objective_column=objective_log_column,
     )
+    if log_df0dx_stats:
+        initialize_df0dx_log(df0dx_log_path)
 
 
 # ------------------------------------------------------------
@@ -615,6 +648,8 @@ initialize_design_filter_normalization()
 
 iter_count = 0
 previous_objective = 0.0
+objective_scale_reference = None
+initial_objective_reference = None
 
 num_mma = int(ActiveDV.size)
 active_density_lower_values = density_lower_values[ActiveDV]
@@ -715,6 +750,18 @@ if resume_from_checkpoint:
     upp = np.asarray(resume_checkpoint["upp"], dtype=float).reshape(upp.shape)
     iter_count = checkpoint_scalar(resume_checkpoint, "iter_count", scalar_type=int)
     previous_objective = checkpoint_scalar(resume_checkpoint, "previous_objective")
+    objective_scale_candidate = checkpoint_scalar(
+        resume_checkpoint,
+        "objective_scale_reference",
+        default=np.nan,
+    )
+    initial_objective_candidate = checkpoint_scalar(
+        resume_checkpoint,
+        "initial_objective_reference",
+        default=np.nan,
+    )
+    objective_scale_reference = objective_scale_candidate if np.isfinite(objective_scale_candidate) else None
+    initial_objective_reference = initial_objective_candidate if np.isfinite(initial_objective_candidate) else None
     resume_stage_idx = checkpoint_scalar(resume_checkpoint, "stage_idx", scalar_type=int)
     resume_inner_count = checkpoint_scalar(resume_checkpoint, "inner_count", scalar_type=int)
     resume_convergence_history = checkpoint_scalar(
@@ -864,6 +911,17 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         p_out << w_fwd.sub(1)
 
         f0val = assemble(ObjFunctional)
+        if objective_scale_reference is None:
+            initial_objective_reference = float(f0val)
+            if abs(initial_objective_reference) <= float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)):
+                raise ValueError("Initial objective is too close to zero for MMA objective scaling.")
+            objective_scale_reference = max(
+                abs(float(f0val)),
+                float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)),
+            )
+            root_print("MMA objective scale: initial objective {:.6e}.".format(objective_scale_reference))
+        # MMA sees scaled values; logs keep the physical objective.
+        f0val_mma = float(f0val) / objective_scale_reference
         viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
@@ -892,20 +950,50 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
         # Constraint and constraint gradient
-        fval[0, 0] = assemble(vol_constraint)
+        fval[0, 0] = assemble(vol_constraint) / volume
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
         filtered_s_vol = pde_filter_design_gradient(unfiltered_s_vol, filtered_s_vol)
         vol_fraction_now = assemble(VolumeRegion * rho_effective * dx) / volume
-        vol_residual_now = float(fval[0, 0]) / max(volume, 1.0e-12)
+        vol_residual_now = float(fval[0, 0])
 
-        df0dx[:, 0] = filtered_gradient.vector().get_local()[ActiveDV]
-        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV]
+        objective_gradient_active_unscaled = filtered_gradient.vector().get_local()[ActiveDV].copy()
+        df0dx[:, 0] = objective_gradient_active_unscaled / objective_scale_reference
+        dfdx[0, :] = filtered_s_vol.vector().get_local()[ActiveDV] / volume
+        if save_df0dx_centered_field or save_df0dx_vector:
+            df0dx_centered = df0dx[:, 0] - np.mean(df0dx[:, 0])
+            if save_df0dx_centered_field:
+                df0dx_centered_values = np.zeros_like(filtered_gradient.vector().get_local())
+                df0dx_centered_values[ActiveDV] = df0dx_centered
+                df0dx_centered_plot.vector().set_local(df0dx_centered_values)
+                df0dx_centered_plot.vector().apply("insert")
+                df0dx_centered_plot.rename("df0dx_centered", "df0dx_centered")
+                df0dx_centered_out << df0dx_centered_plot
+            if save_df0dx_vector:
+                np.savetxt(os.path.join(design_dir, "df0dx_{:03}.txt".format(iter_count)), df0dx[:, 0])
+                np.savetxt(
+                    os.path.join(design_dir, "df0dx_unscaled_{:03}.txt".format(iter_count)),
+                    objective_gradient_active_unscaled,
+                )
+                np.savetxt(
+                    os.path.join(design_dir, "df0dx_centered_{:03}.txt".format(iter_count)),
+                    df0dx_centered,
+                )
+        if log_df0dx_stats:
+            append_df0dx_log_entry(
+                df0dx_log_path,
+                stage_idx + 1,
+                q_val,
+                beta_val,
+                inner_count,
+                iter_count,
+                df0dx[:, 0],
+            )
 
         # MMA update
         root_print("  [MMA update]")
         (xmma, _ymma, _zmma, _lam, _xsi, _eta, _mu_mma, _zet, _s, low, upp) = mmasub(
             mmma, num_mma, iter_count, xval, xmin, xmax, xold1, xold2,
-            f0val, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
+            f0val_mma, df0dx, fval, dfdx, low, upp, a0, a, c, d, move_limit_now,
         )
 
         xold2 = xold1.copy()
@@ -960,6 +1048,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             inner_count=np.array(checkpoint_next_inner, dtype=np.int64),
             convergence_history=np.array(checkpoint_next_convergence_history, dtype=np.int64),
             previous_objective=np.array(float(previous_objective)),
+            objective_scale_reference=np.array(float(objective_scale_reference)),
+            initial_objective_reference=np.array(float(initial_objective_reference)),
             rho=rho.vector().get_local(),
             xval=xval,
             xold1=xold1,

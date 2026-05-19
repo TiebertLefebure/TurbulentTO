@@ -1065,6 +1065,94 @@ def _optimization_log_columns(
     return columns
 
 
+DF0DX_LOG_COLUMNS = [
+    ("Stage", 5),
+    ("Q", 6),
+    ("Beta", 5),
+    ("InnerIter", 9),
+    ("GlobalIter", 10),
+    ("Count", 7),
+    ("FiniteCount", 11),
+    ("Min", 18),
+    ("Max", 18),
+    ("Range", 18),
+    ("Mean", 18),
+    ("Std", 18),
+    ("Rms", 18),
+    ("Linf", 18),
+    ("AbsMean", 18),
+    ("RelStdAbsMean", 18),
+    ("PosFrac", 18),
+    ("NegFrac", 18),
+    ("Timestamp", 24),
+]
+
+
+def fixed_width_log_row(values, columns):
+    widths = [width for _name, width in columns]
+    cells = [str(value).ljust(width) for value, width in zip(values, widths)]
+    return " ".join(cells).rstrip() + "\n"
+
+
+def initialize_df0dx_log(log_path):
+    if MPI.rank(MPI.comm_world) == 0:
+        with open(log_path, "w") as txtout:
+            txtout.write(
+                fixed_width_log_row(
+                    [name for name, _width in DF0DX_LOG_COLUMNS],
+                    DF0DX_LOG_COLUMNS,
+                )
+            )
+    MPI.barrier(MPI.comm_world)
+
+
+def append_df0dx_log_entry(log_path, stage_idx, q_value, beta_value, inner_iter, global_iter, values):
+    values = np.asarray(values, dtype=float).ravel()
+    finite_values = values[np.isfinite(values)]
+    count = int(values.size)
+    finite_count = int(finite_values.size)
+    if finite_count:
+        min_value = float(np.min(finite_values))
+        max_value = float(np.max(finite_values))
+        mean_value = float(np.mean(finite_values))
+        std_value = float(np.std(finite_values))
+        rms_value = float(np.sqrt(np.mean(finite_values**2)))
+        linf_value = float(np.max(np.abs(finite_values)))
+        abs_mean_value = float(np.mean(np.abs(finite_values)))
+        rel_std_abs_mean = std_value / max(abs_mean_value, 1.0e-300)
+        pos_frac = float(np.count_nonzero(finite_values > 0.0)) / finite_count
+        neg_frac = float(np.count_nonzero(finite_values < 0.0)) / finite_count
+    else:
+        min_value = max_value = mean_value = std_value = np.nan
+        rms_value = linf_value = abs_mean_value = rel_std_abs_mean = np.nan
+        pos_frac = neg_frac = np.nan
+
+    if MPI.rank(MPI.comm_world) == 0:
+        row_values = [
+            "{:d}".format(int(stage_idx)),
+            "{:.3f}".format(float(q_value)),
+            "{:.2f}".format(float(beta_value)),
+            "{:d}".format(int(inner_iter)),
+            "{:d}".format(int(global_iter)),
+            "{:d}".format(count),
+            "{:d}".format(finite_count),
+            "{:.10e}".format(min_value),
+            "{:.10e}".format(max_value),
+            "{:.10e}".format(max_value - min_value),
+            "{:.10e}".format(mean_value),
+            "{:.10e}".format(std_value),
+            "{:.10e}".format(rms_value),
+            "{:.10e}".format(linf_value),
+            "{:.10e}".format(abs_mean_value),
+            "{:.10e}".format(rel_std_abs_mean),
+            "{:.10e}".format(pos_frac),
+            "{:.10e}".format(neg_frac),
+            strftime("%a, %d %b %Y %H:%M:%S", localtime()),
+        ]
+        with open(log_path, "a") as txtout:
+            txtout.write(fixed_width_log_row(row_values, DF0DX_LOG_COLUMNS))
+
+
 def _format_optimization_log_row(
     values,
     include_ipcs_residuals=False,

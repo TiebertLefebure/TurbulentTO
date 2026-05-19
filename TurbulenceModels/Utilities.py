@@ -207,16 +207,37 @@ def setup_simulation_log(saving_directory, script_name=None, filename="Simulatio
     print("Simulation log: {}".format(os.path.abspath(log_path)))
     return log_path
 
+def _function_with_denormals_zeroed(f, threshold=1.0e-300):
+    '''Return a writable copy of f with denormal near-zero values set to zero.'''
+    sanitized = Function(f.function_space())
+    sanitized.assign(f)
+
+    vec = sanitized.vector()
+    local_values = vec.get_local()
+    tiny_nonzero = (local_values != 0.0) & (np.abs(local_values) < threshold)
+    if np.any(tiny_nonzero):
+        local_values[tiny_nonzero] = 0.0
+        vec.set_local(local_values)
+        vec.apply("insert")
+
+    try:
+        sanitized.rename(f.name(), f.label())
+    except Exception:
+        pass
+
+    return sanitized
+
+
 def save_pvd_file(f, directory):
     '''Saves function f as .pvd file (to inspect in ParaView)'''
     os.makedirs(os.path.dirname(directory), exist_ok=True)
-    File(directory) << f
+    File(directory) << _function_with_denormals_zeroed(f)
 
 def save_h5_file(f, directory):
     '''Saves function f as .h5 file (to load back to FEniCS)'''
     os.makedirs(os.path.dirname(directory), exist_ok=True)
     fFile = HDF5File(MPI.COMM_WORLD, directory, "w")
-    fFile.write(f,"/f")
+    fFile.write(_function_with_denormals_zeroed(f), "/f")
     fFile.close()
 
 def load_h5_file(f, directory, dataset="/f"):
