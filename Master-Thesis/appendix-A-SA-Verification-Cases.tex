@@ -114,12 +114,12 @@ Visual confirmation of this spatial convergence is provided by the wall-normal v
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=0.8\textwidth]{example-image} % Replace with your channel mesh independence velocity profile plot
+	\includegraphics[width=\textwidth]{Channel-FEniCS-Mesh-Independence} % Replace with your channel mesh independence velocity profile plot
 	\caption{FEniCS wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
 	\label{fig:app_A_channel_mesh_independence}
 \end{figure}
 
-Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. In addition to the residual monitors, the bulk velocity was monitored and required to change by less than $10^{-3}$ over $500$ iterations before accepting a converged solution. The continuity residual criterion was set to $1.0 \times 10^{-5}$, while the momentum and SA working-variable residual criteria were set to $1.0 \times 10^{-6}$. Mass conservation was also checked from the inlet and outlet mass-flow reports. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
+Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. In addition to the residual monitors, the bulk velocity was monitored and required to change by less than $1.0 \times 10^{-3}$ over $500$ iterations before accepting a converged solution. The continuity residual criterion was set to $1.0 \times 10^{-5}$, while the momentum and SA working-variable residual criteria were set to $1.0 \times 10^{-6}$. Mass conservation was also checked from the inlet and outlet mass-flow reports. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
 
 \begin{table}[htbp]
 	\centering
@@ -296,7 +296,7 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=0.95\textwidth]{UBend-Ansys-Mesh-Independence} % Replace with your Ansys U-bend mesh independence velocity profile plot
+	\includegraphics[width=\textwidth]{UBend-Ansys-Mesh-Independence} % Replace with your Ansys U-bend mesh independence velocity profile plot
 	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
 	\label{fig:app_A_ubend_mesh_indep_ansys}
 \end{figure}

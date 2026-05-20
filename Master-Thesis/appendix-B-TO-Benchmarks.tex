@@ -5,26 +5,26 @@
 	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
 }
 
-This appendix collects the detailed setup information for the topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. The Alexandersen pipe bend, Alexandersen U-bend, and Yoon diffuser are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
+This appendix collects the detailed setup information for the topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. The pipe-bend benchmark, U-bend benchmark, and diffuser benchmark are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
 
 \section{Validation and Meshing Strategy}
 \label{sec:app_B_mesh_strategy}
-The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. The Yoon diffuser uses a wall-resolved rectangular-coordinate triangular mesh over the square diffuser domain, refined around the full-height inlet, the center-third outlet, and the no-slip walls. In all cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
+The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. The diffuser benchmark from Yoon~\cite{Yoon2016} uses a wall-resolved rectangular-coordinate triangular mesh over the square diffuser domain, refined around the full-height inlet, the center-third outlet, and the no-slip walls. In all cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
 
 For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. The reported validation metrics in Chapter~\ref{ch:benchmark_results} should be taken from a mesh for which both viscous dissipation and pressure drop have become insensitive to further refinement. The selected mesh should be reported explicitly for each case.
 
 Both SA and SST $k$-$\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
 
-\section{Shared Alexandersen Topology Optimization Conventions}
+\section{Shared Pipe-Bend and U-Bend Topology Optimization Conventions}
 \label{sec:app_B_alexandersen_shared_conventions}
-Both Alexandersen cases use the same turbulence-topology coupling conventions. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The design density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}.
+The pipe-bend and U-bend benchmarks use the same turbulence-topology coupling conventions. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The design density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}.
 
 The pipe-bend finite-difference sensitivity verification in Chapter~\ref{ch:benchmark_results} is not assigned a separate configuration table. It uses the same geometry, physical parameters, wall-distance convention, penalty settings, objective, filter, and solver setup as the pipe-bend topology optimization run. The only additional settings are the finite-difference sampling parameters listed in Table~\ref{tab:app_B_alexandersen_pipebend_numerical}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Shared wall-distance and SA topology-penalty conventions for the Alexandersen cases.}
+	\caption{Shared wall-distance and SA topology-penalty conventions for the pipe-bend and U-bend benchmarks.}
 	\label{tab:app_B_alexandersen_shared_conventions}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
@@ -45,7 +45,7 @@ The pipe-bend finite-difference sensitivity verification in Chapter~\ref{ch:benc
 
 \FloatBarrier
 
-\section{Alexandersen Pipe Bend}
+\section{Pipe Bend Benchmark}
 \label{sec:app_B_config_alexandersen_pipebend}
 
 The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The reference paper uses a standard $k$-$\varepsilon$ model with wall functions; the present thesis uses the wall-resolved SA implementation and evaluates the $V_f=0.25$ design.
@@ -53,7 +53,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Alexandersen pipe-bend case.}
+	\caption{Geometric, physical, and boundary-condition parameters for the pipe-bend benchmark.}
 	\label{tab:app_B_alexandersen_pipebend_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
@@ -83,7 +83,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver, topology-optimization, and sensitivity-verification parameters for the Alexandersen pipe bend.}
+	\caption{Numerical FEniCS solver, topology-optimization, and sensitivity-verification parameters for the pipe-bend benchmark.}
 	\label{tab:app_B_alexandersen_pipebend_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
@@ -116,7 +116,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Alexandersen pipe-bend geometry.}
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent pipe-bend benchmark geometry.}
 	\label{tab:app_B_alexandersen_pipebend_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
@@ -143,7 +143,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 
 \FloatBarrier
 
-\section{Alexandersen U-Bend}
+\section{U-Bend Benchmark}
 \label{sec:app_B_config_alexandersen_ubend}
 
 The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It uses the same turbulent topology optimization framework as the pipe bend, but forces a $180^\circ$ return path around a fixed internal separator.
@@ -151,7 +151,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Alexandersen U-bend case.}
+	\caption{Geometric, physical, and boundary-condition parameters for the U-bend benchmark.}
 	\label{tab:app_B_alexandersen_ubend_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
@@ -180,7 +180,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the Alexandersen U-bend.}
+	\caption{Numerical FEniCS solver and topology-optimization parameters for the U-bend benchmark.}
 	\label{tab:app_B_alexandersen_ubend_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
@@ -210,7 +210,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Alexandersen U-bend geometry.}
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent U-bend benchmark geometry.}
 	\label{tab:app_B_alexandersen_ubend_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
@@ -237,15 +237,15 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 
 \FloatBarrier
 
-\section{Yoon Diffuser}
+\section{Diffuser Benchmark}
 \label{sec:app_B_config_yoon_diffuser}
 
-The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the Alexandersen cases, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$.
+The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-bend and U-bend benchmarks, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the Yoon diffuser case.}
+	\caption{Geometric, physical, and boundary-condition parameters for the diffuser benchmark.}
 	\label{tab:app_B_yoon_diffuser_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
@@ -276,7 +276,7 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the Alexan
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the Yoon diffuser.}
+	\caption{Numerical FEniCS solver and topology-optimization parameters for the diffuser benchmark.}
 	\label{tab:app_B_yoon_diffuser_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
@@ -309,7 +309,7 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the Alexan
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent Yoon diffuser geometry.}
+	\caption{Ansys Fluent mesh-independence table for the extracted turbulent diffuser benchmark geometry.}
 	\label{tab:app_B_yoon_diffuser_mesh}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}

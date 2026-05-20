@@ -7,11 +7,11 @@
 
 \section{Introduction}
 \label{sec:ch6_introduction}
-Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}. The Bayat cases use reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and a frozen-turbulence adjoint. The Yoon diffuser uses the same frozen-SA topology optimization machinery, but it minimizes the dissipation objective $J_D$.
+Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}. The Bayat cases use reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and a frozen-turbulence adjoint. The diffuser benchmark uses the same frozen-SA topology optimization machinery, but it minimizes the dissipation objective $J_D$.
 
 The chapter first verifies the implemented frozen sensitivity on the same pipe-bend configuration used for optimization with a Dilgen-style coordinate finite-difference check on selected design cells and a directional Taylor check. The optimized pipe-bend, U-bend, and diffuser layouts are then interpreted through their projected density fields, velocity fields, convergence histories, and independent sharp-geometry CFD validation. This ordering keeps the derivative evidence close to the optimization result that uses it, while leaving the standalone forward-flow verification in Chapter~\ref{ch:sa_verification}.
 
-Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The Yoon diffuser setup is listed in Tables~\ref{tab:app_B_yoon_diffuser_physical} and \ref{tab:app_B_yoon_diffuser_numerical} of Section~\ref{sec:app_B_config_yoon_diffuser}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh}, \ref{tab:app_B_alexandersen_ubend_mesh}, and \ref{tab:app_B_yoon_diffuser_mesh}. Laminar-versus-turbulent comparisons are retained in Section~\ref{sec:app_C_alexandersen_pipebend}, Section~\ref{sec:app_C_alexandersen_ubend}, and Section~\ref{sec:app_C_yoon_diffuser} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison} as supporting evidence for interpreting the optimized layouts.
+Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The diffuser benchmark setup is listed in Tables~\ref{tab:app_B_yoon_diffuser_physical} and \ref{tab:app_B_yoon_diffuser_numerical} of Section~\ref{sec:app_B_config_yoon_diffuser}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh}, \ref{tab:app_B_alexandersen_ubend_mesh}, and \ref{tab:app_B_yoon_diffuser_mesh}. The corresponding laminar-design grid studies are retained in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}, while the topology and SST metric comparisons are reported directly in the benchmark sections below.
 
 \section{Benchmark Cases and Evaluation Metrics}
 \label{sec:ch6_strategy_metrics}
@@ -30,7 +30,7 @@ The three benchmarks cover curved internal flows and a diffuser with a prescribe
 		\hline
 		Pipe bend & $0.25$ & $5{,}000$ & FEniCS optimization; finite-difference and Taylor sensitivity verification; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
 		U-bend & $0.27$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
-		Yoon diffuser & $0.30$ & $3{,}000$ & FEniCS optimization with $J_D$; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
+		Diffuser & $0.30$ & $3{,}000$ & FEniCS optimization with $J_D$; Ansys-SA and Ansys-SST CFD validation; laminar-design comparison \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -39,11 +39,11 @@ The three benchmarks cover curved internal flows and a diffuser with a prescribe
 \label{subsec:ch6_metrics}
 Throughout the optimization process, the pipe-bend and U-bend benchmarks minimize the average inlet-pressure objective $J_p$ defined in Eq.~\ref{eq:inlet_pressure_objective}. This pressure is averaged over the physical inlet boundary of the fixed non-design extension, where the inlet velocity is prescribed. The outlet pressure is fixed to zero, so reducing $J_p$ directly reduces the pressure level required to drive the prescribed inlet flow through the evolving topology. The optimization problem is still solved on a diffuse Brinkman domain, but once a design is extracted for Ansys Fluent, the Brinkman penalty is removed and the solid-fluid interface becomes a sharp wall.
 
-The Yoon diffuser instead minimizes the dissipation objective $J_D$ defined in Eq.~\ref{eq:dissipation_objective}. This matches the objective used by Yoon~\cite{Yoon2016}: physical viscous dissipation plus Brinkman drag is integrated over the design domain and minimized subject to the volume constraint. This distinction matters because the diffuser uses prescribed parabolic velocity profiles at both inlet and outlet, so the most direct optimization loss is the domain-integrated energy loss rather than an inlet-pressure boundary average.
+The diffuser benchmark instead minimizes the dissipation objective $J_D$ defined in Eq.~\ref{eq:dissipation_objective}. This matches the objective used by Yoon~\cite{Yoon2016}: physical viscous dissipation plus Brinkman drag is integrated over the design domain and minimized subject to the volume constraint. This distinction matters because the diffuser uses prescribed parabolic velocity profiles at both inlet and outlet, so the most direct optimization loss is the domain-integrated energy loss rather than an inlet-pressure boundary average.
 
 All three benchmark cases use the power-law SA sink, the power-law reciprocal wall-distance penalty, and the frozen-turbulence adjoint introduced in Chapter~\ref{ch:topology_optimization_methodology}.
 
-Bayat et al.~\cite{Bayat2026} report corresponding final average inlet-pressure objectives for their standard $k$-$\varepsilon$ computations in Table~7. Their ``conventional'' method is the density-based turbulent topology optimization formulation without the proposed implicit wall-functions: solid regions are imposed through Brinkman/body-force penalization, including damping of $k$ and $\varepsilon$ toward zero in solid material, on the same diffuse optimization mesh. It is therefore distinct from the body-fitted re-simulations with explicit wall-functions that they use for validation. Since the present thesis uses a wall-resolved SA model instead of $k$-$\varepsilon$, the conventional values from Bayat et al. are used only as scale comparisons in the individual Bayat benchmark discussions below. For the Yoon diffuser, the reference comparison is qualitative because the paper reports the laminar and turbulent diffuser layouts and post-processing behavior rather than a directly matching $J_D$ table for the diffuser.
+Bayat et al.~\cite{Bayat2026} report corresponding final average inlet-pressure objectives for their standard $k$-$\varepsilon$ computations in Table~7. Their ``conventional'' method is the density-based turbulent topology optimization formulation without the proposed implicit wall-functions: solid regions are imposed through Brinkman/body-force penalization, including damping of $k$ and $\varepsilon$ toward zero in solid material, on the same diffuse optimization mesh. It is therefore distinct from the body-fitted re-simulations with explicit wall-functions that they use for validation. Since the present thesis uses a wall-resolved SA model instead of $k$-$\varepsilon$, the conventional values from Bayat et al. are used only as scale comparisons in the individual Bayat benchmark discussions below. For the diffuser benchmark, the reference comparison is qualitative because Yoon~\cite{Yoon2016} reports the laminar and turbulent diffuser layouts and post-processing behavior rather than a directly matching $J_D$ table for the diffuser.
 
 To bridge this gap, the primary validation metric is the physical viscous dissipation integrated over the full exported CFD domain, including the non-design inlet, outlet, and fixed regions that are retained in the final geometry,
 \begin{equation}
@@ -173,15 +173,15 @@ Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected 
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Velocity}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Velocity-FEniCS}
 		\caption{Velocity magnitude field $u$.}
 		\label{fig:alexandersen_pipebend_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$. Final objective function value $J_p= [TBD]$.}
+	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$. Final objective function value $J_p= 0.2032$ Pa.}
 	\label{fig:alexandersen_pipebend_fenics_results}
 \end{figure}
 
-For the same $V_f=0.25$, $Re=5{,}000$ operating point, Bayat et al.~\cite{Bayat2026} report $J_p=0.4023$ for their conventional $k$-$\varepsilon$ topology optimization. This value is used only as a reference scale, not as a direct validation target, because the turbulence closure and near-wall treatment differ from the present wall-resolved SA formulation.
+For the same $V_f=0.25$, $Re=5{,}000$ operating point, Bayat et al.~\cite{Bayat2026} report $J_p=0.4023$ Pa for their conventional $k$-$\varepsilon$ topology optimization. This value is used only as a reference scale, not as a direct validation target, because the turbulence closure and near-wall treatment differ from the present wall-resolved SA formulation.
 
 Figure~\ref{fig:alexandersen_pipebend_histories} reports the convergence behavior that accompanies the final topology, separating the inlet-pressure objective history in Figure~\ref{fig:alexandersen_pipebend_objective_history} from the enforced volume-fraction history in Figure~\ref{fig:alexandersen_pipebend_volume_history}.
 
@@ -218,7 +218,7 @@ The structural robustness of the extracted pipe-bend topology is verified in Tab
 		\hline
 		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
 		\hline
-		FEniCS diffuse design & SA & [TBD] & [TBD] & Optimization state \\
+		FEniCS diffuse design & SA & 0.0147 & 0.2032 & Optimization state \\
 		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
 		Ansys sharp geometry & SST $k$-$\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
 		\hline
@@ -227,7 +227,67 @@ The structural robustness of the extracted pipe-bend topology is verified in Tab
 
 \subsection{Comparison with Laminar Design}
 \label{subsec:alexandersen_pipebend_laminar}
-The laminar-design comparison is reported in Section~\ref{sec:app_C_alexandersen_pipebend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. The expected distinction is that a laminar bend optimized at $Re=1$ can minimize wall length and viscous shear in the creeping-flow limit, but may produce a sharper or less separation-aware turn when evaluated at the target turbulent Reynolds number. The comparison is therefore interpreted under identical turbulent operating conditions, rather than by comparing the laminar and turbulent optimization objectives directly.
+The laminar reference uses the same pipe-bend mesh, design-domain restrictions, inlet and outlet treatment, objective type, and volume fraction, but replaces the SA turbulent state equations by the laminar flow formulation and is optimized at $Re=1$. The expected distinction is that a laminar bend can minimize wall length and viscous shear in the creeping-flow limit, but may produce a sharper or less separation-aware turn when evaluated at the target turbulent Reynolds number. The comparison is therefore interpreted under identical turbulent operating conditions, rather than by comparing the laminar and turbulent optimization objectives directly.
+
+Figure~\ref{fig:alexandersen_pipebend_laminar_topologies} compares the laminar and turbulent optimized topologies before sharp-geometry extraction. The laminar-design mesh-independence study supporting the SST $k$-$\omega$ result is reported in Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Laminar-Topology}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized pipe-bend topology ($Re=1$).}
+		\label{fig:alexandersen_pipebend_laminar_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Topology}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized pipe-bend topology.}
+		\label{fig:alexandersen_pipebend_turbulent_topo}
+	\end{subfigure}
+	\caption{Laminar and turbulent topology comparison for the pipe-bend benchmark.}
+	\label{fig:alexandersen_pipebend_laminar_topologies}
+\end{figure}
+
+Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the corresponding SST velocity contours through the extracted laminar and turbulent pipe-bend designs. These contours provide the flow-field evidence behind the scalar metrics: sharper turns and corners in the laminar design are expected to promote stronger local separation and momentum loss when the geometry is operated at the turbulent Reynolds number.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Laminar-Velocity-Ansys}
+		\caption{Velocity magnitude field $u$: laminar-optimized design.}
+		\label{fig:alexandersen_pipebend_laminar_velocity_sst}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{SST $k$-$\omega$ velocity contour through turbulent pipe-bend design}
+		\caption{Velocity magnitude field $u$: turbulent-optimized design.}
+		\label{fig:alexandersen_pipebend_turbulent_velocity_sst}
+	\end{subfigure}
+	\caption{Velocity-contour comparison for the extracted pipe-bend designs under identical turbulent operating conditions (SST $k$-$\omega$ model).}
+	\label{fig:alexandersen_pipebend_laminar_velocity_comparison}
+\end{figure}
+
+The final SST $k$-$\omega$ comparison in Table~\ref{tab:alexandersen_pipebend_laminar_perf} evaluates the extracted laminar and turbulent pipe-bend designs under identical turbulent operating conditions. A lower pressure drop and lower viscous dissipation for the turbulent design would support the need for a turbulent topology optimization framework rather than a laminar surrogate.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Performance comparison of the extracted pipe-bend topologies under identical turbulent operating conditions.}
+	\label{tab:alexandersen_pipebend_laminar_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c X}
+		\hline
+		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
+		\hline
+		Laminar TO, $Re=1$ & SST $k$-$\omega$ & $0.0313$ & $0.5444$ & Baseline \\
+		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
+		\hline
+	\end{tabularx}
+\end{table}
 
 \section{U-Bend Benchmark}
 \label{sec:alexandersen_ubend}
@@ -314,9 +374,69 @@ The extracted U-bend topology is validated with the same sharp-geometry workflow
 
 \subsection{Comparison with Laminar Design}
 \label{subsec:alexandersen_ubend_laminar}
-The laminar-design comparison is reported in Section~\ref{sec:app_C_alexandersen_ubend} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. The laminar reference uses the same U-bend mesh, inlet and outlet ports, separator geometry, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent layouts are then evaluated under the same target turbulent operating conditions. This comparison is expected to show whether the laminar optimizer creates an overly tight return path around the separator tip, while the turbulent optimizer allocates fluid volume to reduce separation and momentum loss through the $180^\circ$ turn.
+The laminar reference uses the same U-bend mesh, inlet and outlet ports, separator geometry, objective type, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent layouts are then evaluated under the same target turbulent operating conditions. This comparison is expected to show whether the laminar optimizer creates an overly tight return path around the separator tip, while the turbulent optimizer allocates fluid volume to reduce separation and momentum loss through the $180^\circ$ turn.
 
-\section{Yoon Diffuser Benchmark}
+Figure~\ref{fig:alexandersen_ubend_laminar_topologies} compares the laminar and turbulent optimized U-bend topologies. The laminar-design mesh-independence study supporting the SST result is reported in Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Alexandersen-UBend-Laminar-Topology}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized U-bend topology ($Re=1$).}
+		\label{fig:alexandersen_ubend_laminar_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized U-bend topology.}
+		\label{fig:alexandersen_ubend_turbulent_topo}
+	\end{subfigure}
+	\caption{Laminar and turbulent topology comparison for the U-bend benchmark.}
+	\label{fig:alexandersen_ubend_laminar_topologies}
+\end{figure}
+
+Figure~\ref{fig:alexandersen_ubend_laminar_velocity_comparison} shows the SST velocity contours for the extracted U-bend designs. In this case the comparison is especially useful near the separator tip, where a laminar-optimized shortcut can create a tighter return path, stronger adverse-pressure-gradient effects, and larger separated or low-momentum regions than the turbulent design.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Alexandersen-UBend-Laminar-Velocity-Ansys}
+		\caption{SST velocity magnitude field $u$: laminar-optimized design.}
+		\label{fig:alexandersen_ubend_laminar_velocity_sst}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{SST velocity contour through turbulent U-bend design}
+		\caption{SST velocity magnitude field $u$: turbulent-optimized design.}
+		\label{fig:alexandersen_ubend_turbulent_velocity_sst}
+	\end{subfigure}
+	\caption{SST velocity-contour comparison for the extracted U-bend designs under identical turbulent operating conditions.}
+	\label{fig:alexandersen_ubend_laminar_velocity_comparison}
+\end{figure}
+
+Table~\ref{tab:alexandersen_ubend_laminar_perf} compares the extracted laminar and turbulent U-bend topologies under identical turbulent operating conditions. If the turbulent design lowers $\Delta p$ and $\Phi_D$ under the SST $k$-$\omega$ evaluation, the result supports the thesis claim that high-Reynolds topology optimization should include turbulence directly in the design loop.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Performance comparison of the extracted U-bend topologies under identical turbulent operating conditions.}
+	\label{tab:alexandersen_ubend_laminar_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c X}
+		\hline
+		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
+		\hline
+		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
+		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\section{Diffuser Benchmark}
 \label{sec:yoon_diffuser}
 The diffuser benchmark follows the third numerical example of Yoon~\cite{Yoon2016}. It differs from the Bayat benchmarks in two important ways. First, the inlet and outlet are both prescribed by parabolic velocity profiles, with the outlet placed only on the center third of the right boundary. Second, the optimization objective is the dissipation objective $J_D$, not the average inlet-pressure objective $J_p$. The benchmark therefore tests whether the frozen-SA implementation can reproduce the expected turbulent diffuser behavior while optimizing the same energy-loss functional used in the reference formulation.
 
@@ -340,18 +460,18 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Yoon-Diffuser-Topology}
+		\includegraphics[width=\textwidth]{Yoon-Diffuser-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:yoon_diffuser_topology}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Yoon-Diffuser-Velocity}
+		\includegraphics[width=\textwidth]{Yoon-Diffuser-Turbulent-Velocity-FEniCS}
 		\caption{Velocity magnitude field $u$.}
 		\label{fig:yoon_diffuser_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the Yoon diffuser benchmark at $V_f=0.30$. Final objective function value $J_D=6.2274\times10^5~\mathrm{W/m}$.}
+	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective function value $J_D=6.2274\times10^5~\mathrm{W/m}$.}
 	\label{fig:yoon_diffuser_fenics_results}
 \end{figure}
 
@@ -374,7 +494,7 @@ The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuse
 		\caption{Volume fraction vs. MMA iteration.}
 		\label{fig:yoon_diffuser_volume_history}
 	\end{subfigure}
-	\caption{Optimization convergence histories for the Yoon diffuser benchmark.}
+	\caption{Optimization convergence histories for the diffuser benchmark.}
 	\label{fig:yoon_diffuser_histories}
 \end{figure}
 
@@ -385,7 +505,7 @@ The extracted diffuser topology is validated with the same sharp-geometry workfl
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{CFD validation metrics for the extracted Yoon diffuser topology.}
+	\caption{CFD validation metrics for the extracted diffuser topology.}
 	\label{tab:yoon_diffuser_validation_metrics}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c c c X}
@@ -401,7 +521,67 @@ The extracted diffuser topology is validated with the same sharp-geometry workfl
 
 \subsection{Comparison with Laminar Design}
 \label{subsec:yoon_diffuser_laminar}
-The laminar-design comparison is reported in Section~\ref{sec:app_C_yoon_diffuser} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}. The laminar reference uses the same diffuser mesh, inlet and outlet profile shapes, objective type, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent layouts are then evaluated under the same target turbulent operating conditions. This comparison is expected to show whether the laminar cone-like diffuser remains competitive once turbulent eddy viscosity and the outlet contraction are considered.
+The laminar reference uses the same diffuser mesh, inlet and outlet profile shapes, objective type, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent layouts are then evaluated under the same target turbulent operating conditions. This comparison is expected to show whether the laminar cone-like diffuser remains competitive once turbulent eddy viscosity and the outlet contraction are considered.
+
+Figure~\ref{fig:yoon_diffuser_laminar_topologies} compares the laminar and turbulent optimized diffuser topologies. The expected distinction follows Yoon~\cite{Yoon2016}: the laminar design tends toward a cone-like diffuser, while the turbulent design should allocate additional fluid area near the inlet and outlet where eddy-viscosity effects increase the local loss. The laminar-design mesh-independence study supporting the SST result is reported in Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Yoon-Diffuser-Laminar-Topology}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized diffuser topology ($Re=1$).}
+		\label{fig:yoon_diffuser_laminar_topo}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Yoon-Diffuser-Turbulent-Topology}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized diffuser topology.}
+		\label{fig:yoon_diffuser_turbulent_topo}
+	\end{subfigure}
+	\caption{Laminar and turbulent topology comparison for the diffuser benchmark.}
+	\label{fig:yoon_diffuser_laminar_topologies}
+\end{figure}
+
+Figure~\ref{fig:yoon_diffuser_laminar_velocity_comparison} shows the corresponding SST velocity contours through the extracted diffuser designs. The contour comparison complements the topology plot by indicating whether the cone-like laminar layout accelerates or separates near the contraction, while the turbulent layout distributes the expansion more smoothly near the inlet and outlet.
+
+\begin{figure}[!ht]
+	\centering
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{SST velocity contour through laminar diffuser design}
+		\caption{SST velocity magnitude field $u$: laminar-optimized design.}
+		\label{fig:yoon_diffuser_laminar_velocity_sst}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.47\textwidth}
+		\centering
+		\validationplaceholder{SST velocity contour through turbulent diffuser design}
+		\caption{SST velocity magnitude field $u$: turbulent-optimized design.}
+		\label{fig:yoon_diffuser_turbulent_velocity_sst}
+	\end{subfigure}
+	\caption{SST velocity-contour comparison for the extracted diffuser designs under identical turbulent operating conditions.}
+	\label{fig:yoon_diffuser_laminar_velocity_comparison}
+\end{figure}
+
+Table~\ref{tab:yoon_diffuser_laminar_perf} compares the extracted laminar and turbulent diffuser topologies under identical turbulent operating conditions. Because the diffuser was optimized with $J_D$, lower $\Phi_D$ is the primary performance indicator, while the static pressure drop remains the most direct hydraulic interpretation of the extracted sharp geometry.
+
+\begin{table}[!ht]
+	\centering
+	\footnotesize
+	\caption{Performance comparison of the extracted diffuser topologies under identical turbulent operating conditions.}
+	\label{tab:yoon_diffuser_laminar_perf}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{X c c c X}
+		\hline
+		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
+		\hline
+		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
+		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
+		\hline
+	\end{tabularx}
+\end{table}
 
 \section{Conclusion}
 \label{sec:ch6_conclusion}

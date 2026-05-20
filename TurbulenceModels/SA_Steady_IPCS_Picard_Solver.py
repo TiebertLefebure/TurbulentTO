@@ -186,7 +186,18 @@ def run_steady_sa_ipcs_picard(
 
     def build_pressure_drop_evaluator():
         if not pressure_drop_metric:
-            return None, None, None
+            return None, None, None, None
+
+        pressure_scale = scalar_value(pressure_drop_metric.get(
+            "PRESSURE_SCALE",
+            pressure_drop_metric.get("PRESSURE_TO_PA", 1.0),
+        ))
+        if pressure_scale is None:
+            pressure_scale = 1.0
+        pressure_unit = pressure_drop_metric.get("UNIT", "Pa")
+
+        def reported_pressure_drop(value):
+            return float(pressure_scale * value)
 
         fixed_pressure_drop = scalar_value(pressure_drop_metric.get(
             "FIXED_PRESSURE_DROP",
@@ -195,14 +206,19 @@ def run_steady_sa_ipcs_picard(
         source = pressure_drop_metric.get("SOURCE")
         if fixed_pressure_drop is not None:
             label = pressure_drop_metric.get("LABEL", "pressure drop metric")
+            fixed_reported_pressure_drop = reported_pressure_drop(fixed_pressure_drop)
 
             def evaluate_fixed_pressure_drop(_field):
-                return fixed_pressure_drop
+                return fixed_reported_pressure_drop
 
-            description = "{} = {:.12e} Pa".format(label, fixed_pressure_drop)
+            description = "{} = {:.12e} {}".format(
+                label,
+                fixed_reported_pressure_drop,
+                pressure_unit,
+            )
             if source:
                 description += " ({})".format(source)
-            return evaluate_fixed_pressure_drop, label, description
+            return evaluate_fixed_pressure_drop, label, description, pressure_unit
 
         if ds is None:
             raise ValueError("Pressure-drop metric requires a boundary measure 'ds'.")
@@ -265,7 +281,7 @@ def run_steady_sa_ipcs_picard(
                 "outlet",
             )
 
-            return float(inlet_pressure - outlet_pressure)
+            return reported_pressure_drop(inlet_pressure - outlet_pressure)
 
         inlet_description = (
             "fixed inlet pressure" if fixed_inlet_pressure is not None else "average inlet pressure"
@@ -274,11 +290,18 @@ def run_steady_sa_ipcs_picard(
             "fixed outlet pressure" if fixed_outlet_pressure is not None else "average outlet pressure"
         )
         description = "{} = {} - {}".format(label, inlet_description, outlet_description)
+        if abs(pressure_scale - 1.0) > 1.0e-15:
+            description += ", scaled by {:.6e} to {}".format(pressure_scale, pressure_unit)
         if source:
             description += " ({})".format(source)
-        return evaluate_pressure_drop, label, description
+        return evaluate_pressure_drop, label, description, pressure_unit
 
-    pressure_drop_evaluator, pressure_drop_label, pressure_drop_description = build_pressure_drop_evaluator()
+    (
+        pressure_drop_evaluator,
+        pressure_drop_label,
+        pressure_drop_description,
+        pressure_drop_unit,
+    ) = build_pressure_drop_evaluator()
 
     def maybe_restart_from_saved_state():
         if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
@@ -478,7 +501,11 @@ def run_steady_sa_ipcs_picard(
                 )
             )
             if pressure_drop is not None:
-                picard_message += "; {}={:.6e} Pa".format(pressure_drop_label, pressure_drop)
+                picard_message += "; {}={:.6e} {}".format(
+                    pressure_drop_label,
+                    pressure_drop,
+                    pressure_drop_unit,
+                )
             print(picard_message)
 
         if (
@@ -497,7 +524,11 @@ def run_steady_sa_ipcs_picard(
                 )
             )
             if pressure_drop is not None:
-                convergence_message += "; {}={:.6e} Pa".format(pressure_drop_label, pressure_drop)
+                convergence_message += "; {}={:.6e} {}".format(
+                    pressure_drop_label,
+                    pressure_drop,
+                    pressure_drop_unit,
+                )
             convergence_message += "."
             root_print(
                 convergence_message,
@@ -526,7 +557,11 @@ def run_steady_sa_ipcs_picard(
         final_pressure_drop = pressure_drop_evaluator(p0)
         residuals["pressure_drop"].append(float(final_pressure_drop))
         root_print(
-            "Final flow {}={:.6e} Pa.".format(pressure_drop_label, final_pressure_drop),
+            "Final flow {}={:.6e} {}.".format(
+                pressure_drop_label,
+                final_pressure_drop,
+                pressure_drop_unit,
+            ),
             is_root=is_root,
         )
 

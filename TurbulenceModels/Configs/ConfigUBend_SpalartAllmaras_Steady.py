@@ -35,6 +35,7 @@ PIPE_RADIUS = 0.014 # [m]
 HYDRAULIC_DIAMETER = 2.0 * PIPE_RADIUS # [m]
 INLET_BULK_VELOCITY = 1.42 # [m/s]
 KINEMATIC_VISCOSITY = 8.9e-7 # [m^2/s]
+FLUID_DENSITY = 997.0 # [kg/m^3]
 BODY_FORCE = (0.0, 0.0)
 REYNOLDS_NUMBER = INLET_BULK_VELOCITY * HYDRAULIC_DIAMETER / KINEMATIC_VISCOSITY
 
@@ -84,7 +85,7 @@ QUADRATURE_DEGREE = 4
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 400
+COUPLED_PICARD_MAX_STEPS = 200
 COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
 COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
@@ -157,14 +158,15 @@ mesh_files = {
 boundary_markers = BOUNDARY_MARKERS
 boundary_conditions = BOUNDARY_CONDITIONS
 
-PRESSURE_DROP_COARSE_REFERENCE = 7.335399469567415e-01
-
 pressure_drop_metric = {
-    "FIXED_PRESSURE_DROP": PRESSURE_DROP_COARSE_REFERENCE,
-    "LABEL": "pressure drop metric",
+    "INLET_MARKERS": BOUNDARY_MARKERS["INFLOW"],
+    "OUTLET_MARKERS": BOUNDARY_MARKERS["OUTFLOW"],
+    "PRESSURE_SCALE": FLUID_DENSITY,
+    "UNIT": "Pa",
+    "LABEL": "static pressure drop",
     "SOURCE": (
-        "temporary Coarse_WallResolved reference from saved p000000.vtu: "
-        "area-weighted inlet pressure minus outlet fixed pressure"
+        "area-weighted inlet static pressure minus area-weighted outlet static pressure; "
+        "FEniCS pressure is kinematic, so multiply by density"
     ),
 }
 
@@ -176,6 +178,7 @@ initial_conditions = {
 
 physical_prm = {
     "VISCOSITY": KINEMATIC_VISCOSITY,
+    "DENSITY": FLUID_DENSITY,
     "FORCE": BODY_FORCE,
 }
 
