@@ -86,8 +86,14 @@ SA_WALL_G_FLOOR = 1.0e-8
 # corresponds to a maximum fluid volume fraction of 30%.
 OBJECTIVE_TYPE = "dissipation"
 VOL_FRAC = 0.30
-OBJECTIVE_CONVERGENCE_TOL = 1e-5
-OBJECTIVE_STREAK_TO_STOP = 5
+OBJECTIVE_CONVERGENCE_TOL = 1e-6
+OBJECTIVE_STREAK_TO_STOP = 10
+
+# Final-stage reference values from the laminar Yoon diffuser TO run. These are
+# reporting thresholds only; they do not drive MMA or convergence.
+FINAL_DESIGN_PRESSURE_DROP_TARGET_PA = 1.1831e4
+FINAL_DESIGN_VISCOUS_DISSIPATION_TARGET_W_PER_M = 3.4299e4
+REPORT_FINAL_METRIC_TARGETS = True
 
 # Yoon Fig. 20 gives n_u = 0.01-0.1 for the Brinkman interpolation.
 
@@ -95,10 +101,25 @@ OBJECTIVE_STREAK_TO_STOP = 5
 #MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.015]
 #MAX_INNER_ITERATIONS_SCHEDULE = [45, 40, 50, 70]
 
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100]
+# Keep the first four stages identical to older runs. A checkpoint saved after
+# the old stage 4 will resume into the q=0.08 polishing hold below, then proceed
+# into progressively stronger Brinkman/projection continuation.
+Q_PENAL_SCHEDULE = [
+    0.01, 0.02, 0.04, 0.08,
+    0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00,
+]
+BETA_PROJ_SCHEDULE = [
+    1.0, 2.0, 4.0, 8.0,
+    8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0,
+]
+MOVE_LIMIT_SCHEDULE = [
+    0.05, 0.04, 0.03, 0.02,
+    0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010,
+]
+MAX_INNER_ITERATIONS_SCHEDULE = [
+    50, 60, 80, 100,
+    200, 180, 220, 260, 260, 220, 260, 360,
+]
 
 # Thesis-standard solver path: use the same projection/filter continuation as
 # the Alexandersen pipe-bend case, even though Yoon used direct element

@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -85,14 +85,14 @@ QUADRATURE_DEGREE = 4
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 200
+COUPLED_PICARD_MAX_STEPS = 350 #200
 COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
 COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
-COUPLED_PICARD_SA_SWEEPS_PER_STEP = 1
+COUPLED_PICARD_SA_SWEEPS_PER_STEP = 1 #2
 # The wall-resolved mesh is stiff near the wall. Keep the SA fixed-point update
 # damped so a single SA solve cannot inject a large turbulent-viscosity jump.
-COUPLED_PICARD_SA_RELAXATION = 0.01
+COUPLED_PICARD_SA_RELAXATION = 0.05 #0.01
 SA_NU_TILDE_FLOOR = 1.0e-12
 
 # Inner pseudo-time flow solve used inside each outer Picard step.
@@ -133,7 +133,8 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 # Restart controls. Keep this enabled for the current medium-mesh recovery run so
 # the solver resumes from the previously saved HDF5 state instead of starting cold.
 # Set RESTART_FROM_SAVED_STATE = False for a clean run from the initial condition.
-RESTART_FROM_SAVED_STATE = False
+
+RESTART_FROM_SAVED_STATE = True #False
 RESTART_REQUIRE_FILES = True
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 
@@ -226,3 +227,4 @@ post_processing = {
     "PLOT": PLOT_RESULTS,
     "SAVE": SAVE_RESULTS,
 }
+

@@ -11,9 +11,9 @@ This appendix collects the detailed setup information for the topology optimizat
 \label{sec:app_B_mesh_strategy}
 The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. The diffuser benchmark from Yoon~\cite{Yoon2016} uses a wall-resolved rectangular-coordinate triangular mesh over the square diffuser domain, refined around the full-height inlet, the center-third outlet, and the no-slip walls. In all cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
 
-For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. The reported validation metrics in Chapter~\ref{ch:benchmark_results} should be taken from a mesh for which both viscous dissipation and pressure drop have become insensitive to further refinement. The selected mesh should be reported explicitly for each case.
+For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. Both SA and SST $k$-$\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
 
-Both SA and SST $k$-$\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
+All Fluent mesh-independence runs in this appendix use the same convergence and acceptance criteria. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation for both SA and SST $k$-$\omega$. The reported refinement differences are computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{coarse}}|/|\phi_{\mathrm{coarse}}|$ and $|\phi_{\mathrm{fine}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{medium}}|$ for each validation metric.
 
 \section{Shared Pipe-Bend and U-Bend Topology Optimization Conventions}
 \label{sec:app_B_alexandersen_shared_conventions}
@@ -113,32 +113,44 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 	\end{tabularx}
 \end{table}
 
+The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patch-conforming triangular bulk mesh and wall-resolved inflation on all no-slip walls. The first-layer height is kept fixed from the smooth-wall $y^+\approx1$ estimate, while the mesh hierarchy refines the bulk face size, curvature angle, and inflation distribution.
+
 \begin{table}[htbp]
 	\centering
-	\footnotesize
+	\scriptsize
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent pipe-bend benchmark geometry.}
 	\label{tab:app_B_alexandersen_pipebend_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+	\setlength{\tabcolsep}{4pt}
+	\begin{tabular}{@{}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
-		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
+		Mesh method & Triangles & Triangles & Triangles \\
+		Bulk face element size [m] & $7.50 \times 10^{-3}$ & $5.00 \times 10^{-3}$ & $3.25 \times 10^{-3}$ \\
+		Curvature angle & $10^\circ$ & $7^\circ$ & $4.5^\circ$ \\
+		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
+		First-layer height $\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
+		Inflation layers & $12$ & $14$ & $18$ \\
+		Growth rate & $1.12$ & $1.10$ & $1.08$ \\
+		Inflation thickness [m] & $1.45 \times 10^{-2}$ & $1.68 \times 10^{-2}$ & $2.25 \times 10^{-2}$ \\
+		Nodes & $10{,}825$ & $21{,}343$ & $44{,}042$ \\
+		Elements & $15{,}834$ & $32{,}780$ & $68{,}743$ \\
+		Viscous dissipation $\Phi_D^{\mathrm{SA}}$ [W/m] & $0.0149$ & $0.0151$ & $0.0153$ \\
+		Relative change $\Phi_D^{\mathrm{SA}}$, Coarse--Medium & -- & $1.34\%$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SA}}$, Medium--Fine & -- & -- & $1.32\%$ \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.0161$ & $0.0164$ & $0.0166$ \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $1.86\%$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $1.22\%$ \\
+		Static pressure drop $\Delta p^{\mathrm{SA}}$ [Pa] & $0.1442$ & $0.1449$ & $0.1457$ \\
+		Relative change $\Delta p^{\mathrm{SA}}$, Coarse--Medium & -- & $0.49\%$ & -- \\
+		Relative change $\Delta p^{\mathrm{SA}}$, Medium--Fine & -- & -- & $0.55\%$ \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $0.1512$ & $0.1516$ & $0.1522$ \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $0.26\%$ & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.40\%$ \\
+		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
-	\end{tabularx}
+	\end{tabular}
 \end{table}
 
 \FloatBarrier
@@ -258,13 +270,13 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-b
 		Turbulence model in this thesis & Spalart-Allmaras with frozen-turbulence adjoint \\
 		Design-domain dimensions & Square design region $L\times L$ with $L=1~\mathrm{m}$ \\
 		Full computational domain & $x/L\in[0,1]$, $y/L\in[0,1]$ \\
-		Inlet geometry & Full left boundary, $x/L=0$, $y/L\in[0,1]$ \\
-		Outlet geometry & Center third of the right boundary, $x/L=1$, $y/L\in[1/3,2/3]$ \\
+		Inlet geometry & Exported Fluent inlet segment from $(1.16\times10^{-3},1.38\times10^{-2})$ to $(1.16\times10^{-3},0.979)$, with $H_{\mathrm{in}}=0.96558~\mathrm{m}$ \\
+		Outlet geometry & Exported Fluent outlet segment from $(0.999,0.336)$ to $(0.999,0.670)$, with $H_{\mathrm{out}}=0.33333~\mathrm{m}$ \\
 		Volume fraction & $V_f=0.30$ fluid, corresponding to Yoon's $70\%$ solid mass usage \\
 		Reynolds number & $Re=3{,}000$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ \\
 		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$, $\mu=1.0~\mathrm{Pa\,s}$ \\
-		Inlet condition & Parabolic velocity profile with $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$; $\tilde{\nu}=1$ \\
-		Outlet condition & Prescribed parabolic outflow profile with $U_{\max,\mathrm{out}}=9~\mathrm{m/s}$; $\tilde{\nu}=1$; pressure pinned at $(0,0)$ for gauge fixing \\
+		Inlet condition & Shifted parabolic velocity profile with $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$; $\tilde{\nu}=1$ for the FEniCS-SA solve \\
+		Outlet condition & Shifted parabolic outflow profile with the maximum velocity set by incompressible flow-rate conservation; $\tilde{\nu}=1$ for the FEniCS-SA solve; pressure pinned at $(0,0)$ for gauge fixing \\
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on the top and bottom walls and on the right boundary outside the outlet \\
 		Brinkman solid resistance & $\alpha_{\mathrm{solid}}=10^9$, $\alpha_{\mathrm{fluid}}=0$ \\
 		Optimization objective & Dissipation objective $J_D$, including physical viscous dissipation and Brinkman drag over the design domain \\
@@ -272,6 +284,8 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-b
 		\hline
 	\end{tabularx}
 \end{table}
+
+For the body-fitted Fluent evaluations, the parabolic inlet and outlet velocity profiles are shifted to the extracted inlet and outlet segments. The listed heights are used as the profile heights, while the lower vertices define the local profile origins. The inlet maximum velocity is kept at $3~\mathrm{m/s}$ so that the nominal Reynolds number remains $Re=3{,}000$; the outlet maximum velocity is adjusted by incompressible flow-rate conservation.
 
 \begin{table}[htbp]
 	\centering
@@ -306,30 +320,42 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-b
 	\end{tabularx}
 \end{table}
 
+The extracted turbulent diffuser geometry is meshed with the same wall-resolved triangular strategy as the laminar diffuser comparison in Table~\ref{tab:app_C_yoon_diffuser_lam_mesh}, but with a distinct coarse--medium--fine hierarchy. The first-layer height is kept fixed at $\Delta y_1=1.50\times10^{-3}~\mathrm{m}$ to match the laminar-design diffuser meshes, while the bulk size, curvature angle, and inflation-layer distribution are refined independently for the turbulent topology.
+
 \begin{table}[htbp]
 	\centering
-	\footnotesize
+	\scriptsize
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent diffuser benchmark geometry.}
 	\label{tab:app_B_yoon_diffuser_mesh}
 	\renewcommand{\arraystretch}{1.2}
+	\setlength{\tabcolsep}{4pt}
 	\begin{tabularx}{\textwidth}{X c c c}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k$-$\omega$ & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
-		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
+		Mesh method & Triangles & Triangles & Triangles \\
+		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
+		Bulk face element size [m] & $7.50 \times 10^{-3}$ & $5.00 \times 10^{-3}$ & $3.50 \times 10^{-3}$ \\
+		Curvature angle & $9^\circ$ & $6^\circ$ & $4^\circ$ \\
+		First-layer height $\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
+		Inflation layers & $10$ & $14$ & $18$ \\
+		Growth rate & $1.11$ & $1.09$ & $1.07$ \\
+		Inflation thickness [m] & $2.51 \times 10^{-2}$ & $3.90 \times 10^{-2}$ & $5.10 \times 10^{-2}$ \\
+		Nodes & $8{,}206$ & [TBD] & [TBD] \\
+		Elements & $12{,}453$ & [TBD] & [TBD] \\
+		Viscous dissipation $\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Phi_D^{\mathrm{SA}}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Phi_D^{\mathrm{SA}}$, Medium--Fine & -- & -- & [TBD]\% \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & [TBD]\% \\
+		Static pressure drop $\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Delta p^{\mathrm{SA}}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Delta p^{\mathrm{SA}}$, Medium--Fine & -- & -- & [TBD]\% \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & [TBD]\% & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & [TBD]\% \\
+		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys, pending metric confirmation} \\
 		\hline
 	\end{tabularx}
 \end{table}

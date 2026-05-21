@@ -20,6 +20,8 @@ mesh_files = {
     "CELL_DIRECTORY": os.path.join(REPO_ROOT, "Meshes/UBendAlexandersen/cell_yplus1.xdmf"),
 }
 
+RESUME_OPTIMIZATION = True
+
 DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 

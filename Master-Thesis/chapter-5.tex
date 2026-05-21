@@ -149,7 +149,16 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 
 As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and separation regions observed in the qualitative velocity contours demonstrate visual agreement. To provide a more robust assessment, velocity data are extracted along a cross-sectional line probe positioned at the bend exit, spanning the full pipe diameter $D=0.028$ m from the inner wall to the outer wall. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary-layer growth and the momentum shift toward the outer wall.
 
-For the U-bend, the inlet velocity is prescribed rather than produced by a fixed pressure gradient, so pressure drop remains a meaningful global comparison metric. A channel-style friction coefficient is not retained because the curved geometry does not have a single fully developed wall-shear relation equivalent to the periodic channel. The retained local comparison metrics are the same bend-exit profile discrepancies used for the channel,
+For the U-bend, the inlet velocity is prescribed rather than produced by a fixed pressure gradient, so pressure drop remains a meaningful global comparison metric. A channel-style friction coefficient is not retained because the curved geometry does not have a single fully developed wall-shear relation equivalent to the periodic channel. In FEniCS, the pressure-drop diagnostic is evaluated from boundary-measure-weighted mean pressures on the inlet and outlet facets,
+\begin{equation}
+	\Delta p_{\mathrm{FEniCS}}
+	= \rho\left[
+	\frac{1}{|\Gamma_{\mathrm{in}}|}\int_{\Gamma_{\mathrm{in}}} p_k \, \mathrm{d}\Gamma
+	-
+	\frac{1}{|\Gamma_{\mathrm{out}}|}\int_{\Gamma_{\mathrm{out}}} p_k \, \mathrm{d}\Gamma
+	\right],
+\end{equation}
+where $p_k$ is the kinematic pressure solved by the IPCS formulation, $\rho=997$ kg/m$^3$, and $|\Gamma|=\int_\Gamma 1\,\mathrm{d}\Gamma$. The inlet and outlet integrals correspond to the marked FEniCS facets \texttt{ds(2)} and \texttt{ds(3)}, respectively, so the reported value is the area-averaged inlet static pressure minus the area-averaged outlet static pressure, converted to pascals. The retained local comparison metrics are the same bend-exit profile discrepancies used for the channel,
 \begin{equation}
 	E_{\infty} =
 	\frac{\max_i \left||\mathbf{u}_{\mathrm{FEniCS}}(s_i)|-|\mathbf{u}_{\mathrm{Ansys}}(s_i)|\right|}
@@ -175,7 +184,7 @@ where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ 
 		\hline
 		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Rel. diff.} \\
 		\hline
-		Pressure drop ($\Delta p$) [Pa] & $797.972$ & $731.798$ & $8.29\%$ \\
+		Pressure drop ($\Delta p$) [Pa] & $797.972$ & $[TBD]$ & $TBD\%$ \\
 		Max pointwise velocity discrepancy ($E_\infty$) & -- & -- & [TBD]\% \\
 		Relative $L_2$ velocity discrepancy ($E_{L_2}$) & -- & -- & [TBD]\% \\
 		\hline

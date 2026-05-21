@@ -3478,6 +3478,8 @@ if isinstance(_max_iters_raw, (list, tuple)):
     MAX_INNER_ITERATIONS_SCHEDULE = [int(x) for x in _max_iters_raw]
 else:
     MAX_INNER_ITERATIONS_SCHEDULE = [int(_max_iters_raw)] * len(Q_PENAL_SCHEDULE)
+if len(MAX_INNER_ITERATIONS_SCHEDULE) != len(Q_PENAL_SCHEDULE):
+    raise ValueError("MAX_INNER_ITERATIONS_SCHEDULE must match Q_PENAL_SCHEDULE length.")
 
 
 def stage_schedule_value(schedule_name, fallback_value, stage_idx):
@@ -3511,6 +3513,41 @@ def update_stage_penalty_parameters(stage_idx):
     sa_nu_tilde_penalty_alpha.assign(nu_tilde_alpha_now)
     return wall_alpha_now, nu_tilde_alpha_now
 
+
+def final_stage_metric_target_status(stage_idx, viscous_dissipation_design_value, pressure_drop_design_value):
+    """Return configured final-stage physical metric target status for logging."""
+    if (
+        not bool(globals().get("REPORT_FINAL_METRIC_TARGETS", False))
+        or int(stage_idx) != len(Q_PENAL_SCHEDULE) - 1
+    ):
+        return True, ""
+
+    checks = []
+    pressure_drop_target = globals().get("FINAL_DESIGN_PRESSURE_DROP_TARGET_PA", None)
+    if pressure_drop_target is not None:
+        checks.append(("dP_design", float(pressure_drop_design_value), float(pressure_drop_target), "Pa"))
+
+    viscous_dissipation_target = globals().get(
+        "FINAL_DESIGN_VISCOUS_DISSIPATION_TARGET_W_PER_M",
+        None,
+    )
+    if viscous_dissipation_target is not None:
+        checks.append((
+            "ViscousDissipation_design",
+            float(viscous_dissipation_design_value),
+            float(viscous_dissipation_target),
+            "W/m",
+        ))
+
+    if not checks:
+        return True, ""
+
+    target_status = "targets " + " ".join(
+        "{}={:.4e}/{:.4e} {}".format(label, value, target, unit)
+        for label, value, target, unit in checks
+    )
+    return all(value <= target for _label, value, target, _unit in checks), target_status
+
 # ===============================================================
 # Continuation and MMA optimization loop.
 # Each iteration: filter design -> update wall distance -> Picard flow/SA
@@ -3530,6 +3567,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
     inner_count = resume_inner_count if stage_idx == resume_stage_idx else 0
     convergence_history = resume_convergence_history if stage_idx == resume_stage_idx else 0
     objective_converged = False
+    last_metric_targets_met = True
+    last_metric_target_status = ""
     root_print("Starting continuation stage {}/{}: q = {:.3f}, beta = {:.2f}, move = {:.4f}, wall_alpha = {:.3e}, nu_tilde_alpha = {:.3e}".format(
         stage_idx + 1, len(Q_PENAL_SCHEDULE), q_val, beta_val, move_limit_now,
         wall_alpha_now, nu_tilde_alpha_now,
@@ -3648,6 +3687,13 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             design_pressure_drop_mark["outlet"],
         )
         obj_conv = abs((f0val - previous_objective) / max(abs(f0val), 1e-12))
+        metric_targets_met, metric_target_status = final_stage_metric_target_status(
+            stage_idx,
+            viscous_dissipation_design_now,
+            pressure_drop_design_now,
+        )
+        last_metric_targets_met = metric_targets_met
+        last_metric_target_status = metric_target_status
 
         if obj_conv < OBJECTIVE_CONVERGENCE_TOL:
             convergence_history += 1
@@ -3838,6 +3884,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         constraint_status_text = ""
         if mass_flow_status:
             constraint_status_text = " " + " ".join(mass_flow_status)
+        if metric_target_status:
+            constraint_status_text += " " + metric_target_status
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time
@@ -3863,6 +3911,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         root_print("Stage {}/{} reached max iterations ({}).".format(
             stage_idx + 1, len(Q_PENAL_SCHEDULE), max_iters_now,
         ))
+        if last_metric_target_status and not last_metric_targets_met:
+            root_print(
+                "Warning: final metric targets were not met at the stage iteration cap: {}.".format(
+                    last_metric_target_status,
+                )
+            )
 
 root_print("Writing final post-update density output.")
 rho_f = pde_filter_design_density(rho, rho_f)

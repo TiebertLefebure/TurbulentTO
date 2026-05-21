@@ -219,11 +219,13 @@ The structural robustness of the extracted pipe-bend topology is verified in Tab
 		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
 		\hline
 		FEniCS diffuse design & SA & 0.0147 & 0.2032 & Optimization state \\
-		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
-		Ansys sharp geometry & SST $k$-$\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
+		Ansys sharp geometry & SA & 0.0153 & 0.1457 & Cross-code comparison \\
+		Ansys sharp geometry & SST $k$-$\omega$ & 0.0166 & 0.1522 & Turbulence-model sensitivity \\
 		\hline
 	\end{tabularx}
 \end{table}
+
+Using the Ansys-SA result as the reference, the SST $k$-$\omega$ evaluation increases the pressure drop by approximately $4.5\%$ and the viscous dissipation by approximately $8.5\%$. The SST model therefore predicts slightly higher losses, as expected for a closure that is more sensitive to adverse pressure gradients, but the changes remain modest. This suggests that the optimized pipe-bend geometry is robust under a change of turbulence closure, rather than being tuned only to the SA model.
 
 \subsection{Comparison with Laminar Design}
 \label{subsec:alexandersen_pipebend_laminar}
@@ -263,7 +265,7 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the cor
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{SST $k$-$\omega$ velocity contour through turbulent pipe-bend design}
+		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Velocity-Ansys}
 		\caption{Velocity magnitude field $u$: turbulent-optimized design.}
 		\label{fig:alexandersen_pipebend_turbulent_velocity_sst}
 	\end{subfigure}
@@ -284,7 +286,7 @@ The final SST $k$-$\omega$ comparison in Table~\ref{tab:alexandersen_pipebend_la
 		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
 		\hline
 		Laminar TO, $Re=1$ & SST $k$-$\omega$ & $0.0313$ & $0.5444$ & Baseline \\
-		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
+		Turbulent TO, SA & SST $k$-$\omega$ & $0.0166$ & $0.1522$ & $47.0\%$ lower $\Phi_D$; $72.0\%$ lower $\Delta p$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -404,14 +406,14 @@ Figure~\ref{fig:alexandersen_ubend_laminar_velocity_comparison} shows the SST ve
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Alexandersen-UBend-Laminar-Velocity-Ansys}
-		\caption{SST velocity magnitude field $u$: laminar-optimized design.}
+		\caption{Velocity magnitude field $u$: laminar-optimized design.}
 		\label{fig:alexandersen_ubend_laminar_velocity_sst}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\validationplaceholder{SST velocity contour through turbulent U-bend design}
-		\caption{SST velocity magnitude field $u$: turbulent-optimized design.}
+		\caption{Velocity magnitude field $u$: turbulent-optimized design.}
 		\label{fig:alexandersen_ubend_turbulent_velocity_sst}
 	\end{subfigure}
 	\caption{SST velocity-contour comparison for the extracted U-bend designs under identical turbulent operating conditions.}
@@ -550,15 +552,15 @@ Figure~\ref{fig:yoon_diffuser_laminar_velocity_comparison} shows the correspondi
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{SST velocity contour through laminar diffuser design}
-		\caption{SST velocity magnitude field $u$: laminar-optimized design.}
+		\includegraphics[width=\textwidth]{Yoon-Diffuser-Laminar-Velocity-Ansys}
+		\caption{Velocity magnitude field $u$: laminar-optimized design.}
 		\label{fig:yoon_diffuser_laminar_velocity_sst}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\validationplaceholder{SST velocity contour through turbulent diffuser design}
-		\caption{SST velocity magnitude field $u$: turbulent-optimized design.}
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{Velocity magnitude field $u$: turbulent-optimized design.}
 		\label{fig:yoon_diffuser_turbulent_velocity_sst}
 	\end{subfigure}
 	\caption{SST velocity-contour comparison for the extracted diffuser designs under identical turbulent operating conditions.}
@@ -577,7 +579,7 @@ Table~\ref{tab:yoon_diffuser_laminar_perf} compares the extracted laminar and tu
 		\hline
 		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
 		\hline
-		Laminar TO, $Re=1$ & SST $k$-$\omega$ & [TBD] & [TBD] & Baseline \\
+		Laminar TO, $Re=1$ & SST $k$-$\omega$ & $1.1831 \times 10^{4}$ & $3.4299 \times 10^{4}$ & Baseline \\
 		Turbulent TO, SA & SST $k$-$\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		\hline
 	\end{tabularx}

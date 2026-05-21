@@ -11,6 +11,8 @@ Because these FEniCS physical and numerical settings are inherited directly from
 
 After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST, the laminar-design comparison uses the higher-fidelity SST $k$-$\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
 
+All Fluent mesh-independence studies in this appendix use the same convergence and acceptance criteria as Appendix~\ref{app:B_validation_configurations}, but only for the SST $k$-$\omega$ model. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation. Mass conservation is additionally checked from the inlet and outlet mass-flow reports.
+
 For fairness, the extracted laminar geometries receive their own Ansys mesh-independence checks. The turbulent-design grid studies are reported in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend}, Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend}, and Table~\ref{tab:app_B_yoon_diffuser_mesh} of Section~\ref{sec:app_B_config_yoon_diffuser} in Appendix~\ref{app:B_validation_configurations}; this appendix adds the corresponding laminar-design mesh tables.
 
 \section{Pipe Bend Benchmark}
@@ -22,7 +24,6 @@ The topology-level comparison and final SST performance table are reported in Se
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_pipebend_lam_mesh}
 Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar pipe-bend design. This table is separate from the turbulent-design mesh study in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} because the laminar and turbulent topologies generally produce different wall shapes and near-wall mesh requirements.
-All Fluent runs were continued until the scaled residuals fell below $10^{-7}$ and the monitored integral quantities were stationary. Specifically, the static pressure drop was required to change by less than $5\times10^{-4}$ over $100$ iterations, while the viscous dissipation was required to change by less than $10^{-3}$ over $100$ iterations. Mass conservation was additionally checked from the inlet and outlet mass-flow reports.
 
 \begin{table}[htbp]
 	\centering
@@ -67,7 +68,6 @@ The topology-level comparison and final SST performance table are reported in Se
 \label{subsec:app_C_alexandersen_ubend_lam_mesh}
 Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar U-bend design. The turbulent U-bend mesh study is reported separately in Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend}.
 For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and $U_{\mathrm{in}}=1~\mathrm{m\,s^{-1}}$, giving $\nu=4.0\times10^{-5}~\mathrm{m^2\,s^{-1}}$. Using the same smooth-wall estimate as the FEniCS mesh generator gives $u_\tau\approx6.59\times10^{-2}~\mathrm{m\,s^{-1}}$ and a wall distance of $y_{+}=1$ at $6.07\times10^{-4}~\mathrm{m}$. The Ansys mesh hierarchy therefore keeps the first layer fixed at $6.00\times10^{-4}~\mathrm{m}$ and refines the bulk triangular mesh, curvature resolution, and inflation-layer distribution around the separator tip and $180^\circ$ return wall.
-All Fluent runs were continued until the scaled residuals fell below $10^{-7}$ and the monitored integral quantities were stationary. The static pressure drop was required to change by less than $5\times10^{-4}$ over $100$ iterations, while the viscous dissipation was required to change by less than $10^{-3}$ over $100$ iterations. Mass conservation was additionally checked from the inlet and outlet mass-flow reports.
 
 \begin{table}[htbp]
 	\centering
@@ -110,7 +110,7 @@ The topology-level comparison and final SST performance table are reported in Se
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_yoon_diffuser_lam_mesh}
-Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar diffuser design. The turbulent diffuser mesh study is reported separately in Table~\ref{tab:app_B_yoon_diffuser_mesh} of Section~\ref{sec:app_B_config_yoon_diffuser}.
+Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar diffuser design. The turbulent diffuser mesh study is reported separately in Table~\ref{tab:app_B_yoon_diffuser_mesh} of Section~\ref{sec:app_B_config_yoon_diffuser}. The Fluent solves use the same shifted inlet and outlet parabolic velocity-profile convention as the turbulent diffuser validation setup.
 
 \begin{table}[htbp]
 	\centering
@@ -120,18 +120,25 @@ Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine & \multicolumn{3}{c}{[TBD]\%} \\
-		Selected comparison mesh & \multicolumn{3}{c}{[TBD]} \\
+		Mesh method & Triangles & Triangles & Triangles \\
+		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
+		Bulk face element size [m] & $8.00 \times 10^{-3}$ & $5.50 \times 10^{-3}$ & $3.75 \times 10^{-3}$ \\
+		Curvature angle & $10^\circ$ & $7^\circ$ & $5^\circ$ \\
+		First-layer height $\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
+		Inflation layers & $8$ & $12$ & $16$ \\
+		Growth rate & $1.12$ & $1.10$ & $1.08$ \\
+		Inflation thickness [m] & $1.85 \times 10^{-2}$ & $3.19 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
+		Nodes & $6{,}941$ & $13{,}490$ & $25{,}414$ \\
+		Elements & $10{,}985$ & $21{,}036$ & $39{,}561$ \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $1.1608 \times 10^{4}$ & $1.1749 \times 10^{4}$ & $1.1831 \times 10^{4}$ \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $1.21\%$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.70\%$ \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $3.4552 \times 10^{4}$ & $3.4513 \times 10^{4}$ & $3.4299 \times 10^{4}$ \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $0.11\%$ & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.62\%$ \\
+		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabularx}
 \end{table}
