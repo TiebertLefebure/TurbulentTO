@@ -112,10 +112,20 @@ OBJECTIVE_STREAK_TO_STOP = 5
 #MOVE_LIMIT_SCHEDULE = [0.08, 0.06, 0.04, 0.03]
 #MAX_INNER_ITERATIONS_SCHEDULE = [30, 50, 50, 50]
 
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100]
+# Use the same long, damped continuation pattern as the Yoon diffuser run:
+# hold the first sharp stage, then increase q/beta while reducing MMA moves.
+Q_PENAL_SCHEDULE = [
+    0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00
+]
+BETA_PROJ_SCHEDULE = [
+    1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0
+]
+MOVE_LIMIT_SCHEDULE = [
+    0.05, 0.04, 0.03, 0.02, 0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010
+]
+MAX_INNER_ITERATIONS_SCHEDULE = [
+    50, 60, 80, 100, 200, 180, 220, 260, 260, 220, 260, 360
+]
 
 # Yoon uses direct element design variables; disable the projective sharpening.
 USE_HEAVISIDE_PROJECTION = True
