@@ -438,7 +438,6 @@ rho_f = Function(DensitySpace)         # PDE-filtered density
 nu_tilde_frozen = Function(TurbulenceSpace)  # SA working variable, frozen during NS/adjoint
 
 rho_proj_plot = Function(DensitySpace)    # projected rho for visualisation only
-rho_topology_plot = Function(DensitySpace)  # thresholded topology for visualisation only
 unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
 df0dx_plot = Function(DensitySpace)
@@ -451,7 +450,6 @@ filtered_constraint_gradient = Function(DensitySpace)
 rho.rename("rho", "rho")
 rho_f.rename("rho_filtered", "rho_filtered")
 rho_proj_plot.rename("rho_projected", "rho_projected")
-rho_topology_plot.rename("rho_topology", "rho_topology")
 
 
 def _as_density_function(value, density_space):
@@ -960,22 +958,6 @@ def pde_filter_design_gradient(input_field, output_field):
     output_field.vector().set_local(output_values)
     output_field.vector().apply("insert")
     return output_field
-
-
-def update_topology_plot_field():
-    """Build a binary fluid/solid field from the projected density for plotting."""
-    threshold = float(globals().get("TOPOLOGY_PLOT_THRESHOLD", 0.5))
-    projected_values = rho_proj_plot.vector().get_local()
-    topology_values = np.where(projected_values >= threshold, 1.0, 0.0)
-    fixed_cells = (density_upper_values - density_lower_values) <= 1.0e-12
-    topology_values[fixed_cells] = np.where(
-        density_lower_values[fixed_cells] >= threshold,
-        1.0,
-        0.0,
-    )
-    rho_topology_plot.vector().set_local(topology_values)
-    rho_topology_plot.vector().apply("insert")
-    return rho_topology_plot
 
 
 def enforce_density_bounds_inplace(density_field):
@@ -3107,7 +3089,6 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 results_root = os.path.join(THIS_DIR, globals().get("RESULTS_ROOT_NAME", "Results_Frozen/Results_Frozen"))
 rho_dir = os.path.join(results_root, "rho")
 rho_p_dir = os.path.join(results_root, "rho_projected")
-rho_topology_dir = os.path.join(results_root, "rho_topology")
 u_dir = os.path.join(results_root, "u")
 u_magnitude_dir = os.path.join(results_root, "u_magnitude")
 p_dir = os.path.join(results_root, "p")
@@ -3151,7 +3132,6 @@ output_dirs = [
     results_root,
     rho_dir,
     rho_p_dir,
-    rho_topology_dir,
     u_dir,
     p_dir,
     nu_tilde_dir,
@@ -3194,7 +3174,6 @@ def output_series_path(output_path):
 
 rho_out = ResilientVTKFile(output_series_path(os.path.join(rho_dir, "plot_rho.pvd")), COMM)
 rhop_out = ResilientVTKFile(output_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd")), COMM)
-rho_topology_out = ResilientVTKFile(output_series_path(os.path.join(rho_topology_dir, "plot_rho_topology.pvd")), COMM)
 u_out = ResilientVTKFile(output_series_path(os.path.join(u_dir, "plot_u.pvd")), COMM)
 if save_dilgen_paper_data:
     u_magnitude_out = ResilientVTKFile(output_series_path(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd")), COMM)
@@ -3584,13 +3563,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         solver_log("  [Filter] design density")
         rho_f = pde_filter_design_density(rho, rho_f)
         rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-        update_topology_plot_field()
         solver_log("  [Wall distance] update")
         update_wall_distance_field()
 
         rho_out << rho
         rhop_out << rho_proj_plot
-        rho_topology_out << rho_topology_plot
 
         if iter_count == 0:
             solver_log("  [Warm start] Stokes-Brinkman and initial SA field")
@@ -3921,10 +3898,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 root_print("Writing final post-update density output.")
 rho_f = pde_filter_design_density(rho, rho_f)
 rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-update_topology_plot_field()
 rho_out << rho
 rhop_out << rho_proj_plot
-rho_topology_out << rho_topology_plot
 np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
 optimization_elapsed = time.perf_counter() - optimization_start_time

@@ -74,7 +74,7 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 ALPHA_FLUID = 0.0
-ALPHA_SOLID = 100.0
+ALPHA_SOLID = 1.0e5
 
 # ==============================================================================================
 # Reynolds number: Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
@@ -108,22 +108,22 @@ SA_PSEUDO_TIME_STABILIZATION = False
 SA_PSEUDO_DT = 1.0e-4
 SA_PSEUDO_TIME_STEPS = 3
 
-SAVE_SA_CLIPPING_DIAGNOSTICS = False
+SAVE_SA_CLIPPING_DIAGNOSTICS = True
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
 # The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
 # P_con=4 are used here as the closest SA analogues: penalty amplitude and
 # solid-indicator exponent for both wall-distance and nu_tilde damping.
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e3
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [1.0e3] * 4
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e5
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [1.0e5] * 7
 SA_NU_TILDE_PENALTY_N = 4.0
 SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 
 SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_SIGMA = 0.01
 SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e3
-SA_WALL_PENALTY_ALPHA_SCHEDULE = [1.0e3] * 4
+SA_WALL_PENALTY_ALPHA = 1.0e5
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [1.0e5] * 7
 SA_WALL_PENALTY_N = 4.0
 SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
@@ -157,12 +157,13 @@ FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
 #MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
 #MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
 
-# Alexandersen reports the continuation values but not the MMA move limit.
-
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100]
+# Stabilized pressure-drop continuation for frozen-SA bend optimization.
+# The late hold stage and smaller move limits damp MMA oscillations after
+# projection and Brinkman penalization become stiff.
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
+MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.012, 0.008, 0.005, 0.003]
+MAX_INNER_ITERATIONS_SCHEDULE = [80, 100, 140, 200, 200, 240, 260]
 
 LINEAR_SOLVER = "mumps"
 
@@ -240,7 +241,7 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
 # ============================================================================ #
 
 PICARD_STEPS = 3
-TURBULENCE_RELAXATION = 0.20
+TURBULENCE_RELAXATION = 0.15
 
 # =========================================================================== #
 # IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs".
