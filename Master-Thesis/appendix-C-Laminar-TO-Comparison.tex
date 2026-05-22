@@ -1,7 +1,7 @@
 \chapter{Laminar-Design Mesh Independence for Benchmark Topologies}
 \label{app:C_laminar_turbulent_topology_comparison}
 
-This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result.
+This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST $k-\omega$ metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result.
 
 \section{Methodology and Evaluation Pipeline}
 \label{sec:app_C_lam_vs_turb_methodology}
@@ -9,9 +9,9 @@ Each benchmark is solved twice. The laminar reference design is optimized at $Re
 
 Because these FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables in this appendix. The additional tables reported here are therefore limited to the Ansys mesh-independence studies for the extracted laminar geometries.
 
-After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST, the laminar-design comparison uses the higher-fidelity SST $k$-$\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
+After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST $k-\omega$, the laminar-design comparison uses the higher-fidelity SST $k-\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
 
-All Fluent mesh-independence studies in this appendix use the same convergence and acceptance criteria as Appendix~\ref{app:B_validation_configurations}, but only for the SST $k$-$\omega$ model. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation. Mass conservation is additionally checked from the inlet and outlet mass-flow reports.
+All Fluent mesh-independence studies in this appendix use the same convergence and acceptance criteria as Appendix~\ref{app:B_validation_configurations}, but only for the SST $k-\omega$ model. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation. Mass conservation is additionally checked from the inlet and outlet mass-flow reports.
 
 For fairness, the extracted laminar geometries receive their own Ansys mesh-independence checks. The turbulent-design grid studies are reported in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend}, Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend}, and Table~\ref{tab:app_B_yoon_diffuser_mesh} of Section~\ref{sec:app_B_config_yoon_diffuser} in Appendix~\ref{app:B_validation_configurations}; this appendix adds the corresponding laminar-design mesh tables.
 
@@ -19,7 +19,7 @@ For fairness, the extracted laminar geometries receive their own Ansys mesh-inde
 \label{sec:app_C_alexandersen_pipebend}
 
 The pipe bend tests whether a topology optimized under turbulent conditions produces a more separation-aware $90^\circ$ turning path than a laminar topology optimized at $Re=1$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.25$ design.
-The topology-level comparison and final SST performance table are reported in Section~\ref{subsec:alexandersen_pipebend_laminar}.
+The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:alexandersen_pipebend_laminar}.
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_pipebend_lam_mesh}
@@ -37,20 +37,20 @@ Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-inde
 		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 		\hline
 		Mesh method & Triangles & Triangles & Triangles \\
-		Bulk face element size [m] & $4.50 \times 10^{-3}$ & $3.00 \times 10^{-3}$ & $2.00 \times 10^{-3}$ \\
-		Curvature angle & $8^\circ$ & $5^\circ$ & $3^\circ$ \\
+		Bulk face element size [m] & $4.50 \times 10^{-3}$ & $2.60 \times 10^{-3}$ & $2.00 \times 10^{-3}$ \\
+		Curvature angle & $8^\circ$ & $4^\circ$ & $3^\circ$ \\
 		First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ \\
-		Inflation layers & $12$ & $14$ & $16$ \\
-		Growth rate & $1.06$ & $1.05$ & $1.04$ \\
-		Inflation thickness [m] & $2.02 \times 10^{-2}$ & $2.35 \times 10^{-2}$ & $2.62 \times 10^{-2}$ \\
-		Nodes & $22{,}494$ & $44{,}443$ & $89{,}804$ \\
-		Elements & $35{,}948$ & $73{,}287$ & $153{,}163$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.0293$ & $0.0308$ & $0.0313$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $5.12\%$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $1.62\%$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $0.5229$ & $0.5378$ & $0.5444$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $2.87\%$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $1.12\%$ \\
+		Inflation layers & $12$ & $15$ & $16$ \\
+		Growth rate & $1.06$ & $1.045$ & $1.04$ \\
+		Inflation thickness [m] & $2.02 \times 10^{-2}$ & $2.49 \times 10^{-2}$ & $2.62 \times 10^{-2}$ \\
+		Nodes & $22{,}494$ & $56{,}468$ & $89{,}804$ \\
+		Elements & $35{,}948$ & $93{,}828$ & $153{,}163$ \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.0293$ & $0.0310$ & $0.0313$ \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $5.82$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.95$ \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $0.5229$ & $0.5420$ & $0.5444$ \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $3.65$ & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.45$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular}
@@ -62,7 +62,7 @@ Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-inde
 \label{sec:app_C_alexandersen_ubend}
 
 The U-bend tests whether the turbulent optimizer remains advantageous when the flow must complete a $180^\circ$ return path around a fixed separator. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.27$ design.
-The topology-level comparison and final SST performance table are reported in Section~\ref{subsec:alexandersen_ubend_laminar}.
+The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:alexandersen_ubend_laminar}.
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_ubend_lam_mesh}
@@ -90,11 +90,11 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 		Nodes & $16{,}106$ & $32{,}580$ & $62{,}622$ \\
 		Elements & $24{,}460$ & $50{,}067$ & $98{,}084$ \\
 		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.101$ & $0.105$ & $0.107$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $3.96\%$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $1.90\%$ \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $3.96$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $1.90$ \\
 		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $1.125$ & $1.141$ & $1.150$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $1.42\%$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.79\%$ \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $1.42$ & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.79$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular}
@@ -106,7 +106,7 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 \label{sec:app_C_yoon_diffuser}
 
 The diffuser benchmark tests whether the turbulent optimizer remains advantageous when the design must diffuse a full-height inflow into a center-third outflow while minimizing the dissipation objective $J_D$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.30$, $Re=3{,}000$ design from Yoon~\cite{Yoon2016}.
-The topology-level comparison and final SST performance table are reported in Section~\ref{subsec:yoon_diffuser_laminar}.
+The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:yoon_diffuser_laminar}.
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_yoon_diffuser_lam_mesh}
@@ -124,20 +124,20 @@ Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence
 		\hline
 		Mesh method & Triangles & Triangles & Triangles \\
 		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
-		Bulk face element size [m] & $8.00 \times 10^{-3}$ & $5.50 \times 10^{-3}$ & $3.75 \times 10^{-3}$ \\
-		Curvature angle & $10^\circ$ & $7^\circ$ & $5^\circ$ \\
+		Bulk face element size [m] & $1.20 \times 10^{-2}$ & $5.50 \times 10^{-3}$ & $3.75 \times 10^{-3}$ \\
+		Curvature angle & $15^\circ$ & $7^\circ$ & $5^\circ$ \\
 		First-layer height $\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
-		Inflation layers & $8$ & $12$ & $16$ \\
-		Growth rate & $1.12$ & $1.10$ & $1.08$ \\
-		Inflation thickness [m] & $1.85 \times 10^{-2}$ & $3.19 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
-		Nodes & $6{,}941$ & $13{,}490$ & $25{,}414$ \\
-		Elements & $10{,}985$ & $21{,}036$ & $39{,}561$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $1.1608 \times 10^{4}$ & $1.1749 \times 10^{4}$ & $1.1831 \times 10^{4}$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $1.21\%$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.70\%$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $3.4552 \times 10^{4}$ & $3.4513 \times 10^{4}$ & $3.4299 \times 10^{4}$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium & -- & $0.11\%$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine & -- & -- & $0.62\%$ \\
+		Inflation layers & $6$ & $12$ & $16$ \\
+		Growth rate & $1.15$ & $1.10$ & $1.08$ \\
+		Inflation thickness [m] & $1.31 \times 10^{-2}$ & $3.19 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
+		Nodes & $3{,}300$ & $13{,}490$ & $25{,}414$ \\
+		Elements & $5{,}074$ & $21{,}036$ & $39{,}561$ \\
+		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $1.1426 \times 10^{4}$ & $1.1749 \times 10^{4}$ & $1.1831 \times 10^{4}$ \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $2.83$ & -- \\
+		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.70$ \\
+		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $3.4547 \times 10^{4}$ & $3.4513 \times 10^{4}$ & $3.4299 \times 10^{4}$ \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $0.10$ & -- \\
+		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.62$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabularx}

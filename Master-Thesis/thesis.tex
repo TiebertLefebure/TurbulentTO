@@ -114,7 +114,7 @@ As modern electronic and automotive systems grow increasingly compact and powerf
 
 This thesis develops and implements a density-based topology optimization framework for turbulent internal flows as a baseline for future heat-transfer applications. The computational methodology is built upon the open-source FEniCS platform and utilizes the fictitious domain method with Brinkman momentum penalization to conceptualize solid boundaries within a continuous fluid mesh. To capture the complex physics of high-Reynolds flows, the framework integrates the one-equation Spalart-Allmaras (SA) turbulence model. The optimization process is driven by a frozen-turbulence continuous adjoint, meaning that the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
 
-The assessment strategy is deliberately separated into methodology and results. First, the predictive scope of the SA model for curvature-dominated internal flows is established. The FEniCS-SA implementation is then verified against Ansys Fluent on turbulent channel and U-bend benchmarks. Finally, the pipe-bend and U-bend topology optimization benchmarks from Bayat et al. are evaluated, with the pipe-bend derivative checked through a Dilgen-style finite-difference sensitivity verification before the optimized geometries are exported to Ansys Fluent for sharp-geometry validation with SA and SST $k$-$\omega$ turbulence models. Laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
+The assessment strategy is deliberately separated into methodology and results. First, the predictive scope of the SA model for curvature-dominated internal flows is established. The FEniCS-SA implementation is then verified against Ansys Fluent on turbulent channel and U-bend benchmarks. Finally, the pipe-bend and U-bend topology optimization benchmarks from Bayat et al. are evaluated, with the pipe-bend derivative checked through a Dilgen-style finite-difference sensitivity verification before the optimized geometries are exported to Ansys Fluent for sharp-geometry validation with SA and SST $k-\omega$ turbulence models. Laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
 
 The resulting thesis is therefore intentionally conservative in its claims. Its central question is not merely whether turbulent topologies look different from laminar ones, but whether SA-driven topology optimization produces low-loss designs whose predicted performance remains credible under independent CFD re-analysis. This establishes a more defensible and transparent baseline for future three-dimensional and conjugate heat-transfer extensions.
 
@@ -151,7 +151,7 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		RANS & Reynolds-Averaged Navier-Stokes \\
 		SA  & Spalart-Allmaras \\
 		SIMP & Solid Isotropic Material with Penalization \\
-		SST & Shear Stress Transport \\
+		SST $k-\omega$ & Shear Stress Transport $k-\omega$ model \\
 			TO  & Topology Optimization \\
 		UFL & Unified Form Language \\
 	\end{tabularx}

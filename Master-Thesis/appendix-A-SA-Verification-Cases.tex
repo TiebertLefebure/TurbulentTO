@@ -103,9 +103,9 @@ To guarantee that the numerical results were independent of the spatial discreti
 		Growth ratio & $1.45$ & $1.35$ & $1.25$ \\
 		Vertices & $473$ & $1{,}092$ & $2{,}829$ \\
 		Triangular elements & $840$ & $2{,}040$ & $5{,}440$ \\
-		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $16.953$ & $18.500$ & $18.479$ \\
-		Relative difference $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $8.362$ & -- \\
-		Relative difference $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & $0.114$ \\
+		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $16.923$ & $18.489$ & $18.472$ \\
+		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $8.47$ & -- \\
+		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & $0.09$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -138,11 +138,11 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 		Wall-normal bias type & Two-sided & Two-sided & Two-sided \\
 		Bias factor & $47$ & $28$ & $19$ \\
 		Approx. first-layer height $\Delta y_1$ [m] & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ \\
-		Nodes & $10{,}500$ & $26{,}448$ & -- \\
-		Elements & $10{,}296$ & $26{,}123$ & -- \\
-		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $18.120$ & \textit{TBD} & \textit{TBD} \\
-		Relative difference $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & \textit{TBD} & -- \\
-		Relative difference $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
+		Nodes & $10{,}500$ & $26{,}448$ & $49{,}551$ \\
+		Elements & $10{,}296$ & $26{,}123$ & $49{,}104$ \\
+		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $18.120$ & $17.267$ & \textit{TBD} \\
+		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $4.94$ & -- \\
+		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -265,8 +265,8 @@ where $|\Gamma|=\int_{\Gamma}1\,\mathrm{d}\Gamma$ is the FEniCS boundary measure
 			Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
 			Triangular elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
 			Static pressure drop $\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-			Relative difference $\Delta p$, Coarse--Medium [\%] & -- & \textit{TBD} & -- \\
-			Relative difference $\Delta p$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
+			Relative change $\Delta p$, Coarse--Medium [\%] & -- & \textit{TBD} & -- \\
+			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
 			\hline
 		\end{tabular}
 	\end{table}
@@ -304,8 +304,8 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 			Nodes & $47{,}707$ & $106{,}460$ & $223{,}089$ \\
 			Elements & $46{,}640$ & $104{,}763$ & $220{,}457$ \\
 			Static pressure drop $\Delta p$ [Pa] & $813.350$ & $803.326$ & $797.972$ \\
-			Relative difference $\Delta p$, Coarse--Medium [\%] & -- & $1.248$ & -- \\
-			Relative difference $\Delta p$, Medium--FIne [\%] & -- & -- & $0.671$ \\
+			Relative change $\Delta p$, Coarse--Medium [\%] & -- & $1.25$ & -- \\
+			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & $0.67$ \\
 			\hline
 		\end{tabular}
 	\end{table}

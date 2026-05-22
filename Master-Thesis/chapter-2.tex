@@ -158,20 +158,20 @@ The study focused on two distinct, fully three-dimensional (3D) internal flow ge
 To ensure a standardized and rigorously tested numerical baseline, the computational meshes, fluid properties, and boundary conditions for these simulations were adopted directly from the official Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}.
 Specifically, the $90^\circ$ bend corresponds to verification case VMFL030, while the 3D U-bend corresponds to case VMFL048.
 These cases evaluate industrial flow regimes ($Re_D > 40,000$) to ensure the turbulence model is rigorously verified against dominant inertial physics before being implemented into the custom FEniCS solver.
-To evaluate the accuracy of the one-equation model, the results were compared directly against the $k-\omega$ SST model, an industry standard for accurately predicting adverse pressure gradients and flow separation.
+To evaluate the accuracy of the one-equation model, the results were compared directly against the SST $k-\omega$ model, an industry standard for accurately predicting adverse pressure gradients and flow separation.
 
 \subsection{Mild Curvature: The U-Bend Case}
 The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$.
 Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$.
 Consistent with the findings of Apalowo for moderate bends, the SA model performed well under these conditions.
-As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model accurately replicate the bulk flow distribution of the $k-\omega$ SST model. The velocity profiles in the lower panel are extracted along the pipe-radius line visible on the contour plots above, thereby linking the one-dimensional profile comparison directly to the displayed exit-plane flow field. Furthermore, the quantitative velocity profiles agree well with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
+As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model accurately replicate the bulk flow distribution of the SST $k-\omega$ model. The velocity profiles in the lower panel are extracted along the pipe-radius line visible on the contour plots above, thereby linking the one-dimensional profile comparison directly to the displayed exit-plane flow field. Furthermore, the quantitative velocity profiles agree well with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
 
 \begin{figure}[htpb]
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Vel-Magn-Contour-Exit-SST}
-		\caption{$k-\omega$ SST Contour}
+		\caption{SST $k-\omega$ Contour}
 		\label{fig:ubend_komega}
 	\end{subfigure}
 	\hfill
@@ -190,7 +190,7 @@ As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity co
 		\caption{Velocity Profiles}
 		\label{fig:ch2_ubend_profiles}
 	\end{subfigure}
-	\caption{Flow predictions for a $180^\circ$ U-bend ($R_c \approx 4.46D$, $Re_D \approx 44,700$, $De \approx 15,000$). The SA model accurately matches the higher-fidelity $k-\omega$ SST contours and directly aligns with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.}
+	\caption{Flow predictions for a $180^\circ$ U-bend ($R_c \approx 4.46D$, $Re_D \approx 44,700$, $De \approx 15,000$). The SA model accurately matches the higher-fidelity SST $k-\omega$ contours and directly aligns with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.}
 	\label{fig:ansys_ubend_comparison}
 \end{figure}
 
@@ -199,14 +199,14 @@ The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by a
 Despite operating at a very similar bulk Reynolds number of $Re_D \approx 43,000$ compared to the U-bend, this significantly tighter bend radius pushed the Dean number up to $De \approx 18,000$.
 Because the bulk flow speed and Reynolds number remain effectively constant between these two benchmark cases, this comparison successfully isolates the geometric effect of streamline curvature.
 
-As shown in Figure~\ref{fig:ansys_90bend_comparison}, examining the quantitative velocity profile at the bend exit ($\theta = 90^\circ$) clearly demonstrates the breakdown of the SA model. In this case, the profile extraction spans the entire pipe diameter at the bend exit; because the line coincides with the full displayed diameter, it is not as visually distinguishable in the contour panels as the radius marker used in the U-bend case. Driven primarily by the tighter bend radius and amplified anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall ($y/D = 0$) when compared against both the $k-\omega$ SST prediction and the experimental data from Enayet et al. \cite{Enayet1982}. This failure is also visually apparent when comparing the side-by-side velocity contours.
+As shown in Figure~\ref{fig:ansys_90bend_comparison}, examining the quantitative velocity profile at the bend exit ($\theta = 90^\circ$) clearly demonstrates the breakdown of the SA model. In this case, the profile extraction spans the entire pipe diameter at the bend exit; because the line coincides with the full displayed diameter, it is not as visually distinguishable in the contour panels as the radius marker used in the U-bend case. Driven primarily by the tighter bend radius and amplified anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall ($y/D = 0$) when compared against both the SST $k-\omega$ prediction and the experimental data from Enayet et al. \cite{Enayet1982}. This failure is also visually apparent when comparing the side-by-side velocity contours.
 
 \begin{figure}[htpb]
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Vel-Magn-Cont-75-degrees-SST}
-		\caption{$k-\omega$ SST Contour}
+		\caption{SST $k-\omega$ Contour}
 		\label{fig:90bend_komega}
 	\end{subfigure}
 	\hfill
@@ -225,7 +225,7 @@ As shown in Figure~\ref{fig:ansys_90bend_comparison}, examining the quantitative
 		\caption{Velocity Profiles}
 		\label{fig:90bend_profiles}
 	\end{subfigure}
-	\caption{Flow predictions at the $90^\circ$ pipe bend exit ($R_c = 2.8D$, $Re_D \approx 43,000$, $De \approx 18,000$). The SA model over-smooths the velocity gradients near the inner wall, deviating significantly from both the $k-\omega$ SST model and the experimental data from Enayet et al. \cite{Enayet1982}.}
+	\caption{Flow predictions at the $90^\circ$ pipe bend exit ($R_c = 2.8D$, $Re_D \approx 43,000$, $De \approx 18,000$). The SA model over-smooths the velocity gradients near the inner wall, deviating significantly from both the SST $k-\omega$ model and the experimental data from Enayet et al. \cite{Enayet1982}.}
 	\label{fig:ansys_90bend_comparison}
 \end{figure}
 

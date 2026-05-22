@@ -93,6 +93,8 @@ def run_steady_sa_ipcs_picard(
     normalize_pressure_mean=False,
     ds=None,
     pressure_drop_metric=None,
+    picard_diagnostics=None,
+    picard_convergence=None,
     is_root=True,
 ):
     """Run steady RANS-SA using an outer Picard loop and inner pseudo-time IPCS solves."""
@@ -149,6 +151,15 @@ def run_steady_sa_ipcs_picard(
         simulation_prm.get("STEADY_SA_SWEEPS", 1),
     )))
     nu_tilde_floor = simulation_prm.get("SA_NU_TILDE_FLOOR", None)
+    picard_checkpoint_every = int(simulation_prm.get("PICARD_CHECKPOINT_EVERY", 0))
+    checkpoint_require_flow_convergence = bool(simulation_prm.get(
+        "PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE",
+        True,
+    ))
+    checkpoint_h5_dir = simulation_prm.get(
+        "PICARD_CHECKPOINT_H5_DIRECTORY",
+        simulation_prm.get("RESTART_H5_DIRECTORY", saving_directory.get("H5_FILES")),
+    )
 
     tolerance_global = float(simulation_prm.get("COUPLED_PICARD_TOLERANCE", simulation_prm.get("TOLERANCE", 1.0e-6)))
     tolerance_u = float(simulation_prm.get(
@@ -303,6 +314,52 @@ def run_steady_sa_ipcs_picard(
         pressure_drop_unit,
     ) = build_pressure_drop_evaluator()
 
+    diagnostic_specs = []
+    for diagnostic in picard_diagnostics or []:
+        key = diagnostic.get("key")
+        evaluator = diagnostic.get("evaluator")
+        if key in (None, "") or evaluator is None:
+            raise ValueError("Picard diagnostics require 'key' and 'evaluator'.")
+        diagnostic_specs.append({
+            "key": key,
+            "label": diagnostic.get("label", key),
+            "unit": diagnostic.get("unit", ""),
+            "format": diagnostic.get("format", "{:.6e}"),
+            "evaluator": evaluator,
+        })
+
+    convergence_prm = picard_convergence or {}
+    convergence_type = convergence_prm.get("type", "field_norm")
+    if convergence_type not in ("field_norm", "diagnostic_window_relative_change"):
+        raise ValueError(
+            "Unknown Picard convergence type '{}'. Use 'field_norm' or "
+            "'diagnostic_window_relative_change'.".format(convergence_type)
+        )
+    convergence_diagnostic_key = convergence_prm.get("diagnostic_key")
+    convergence_window = int(convergence_prm.get("window", 0))
+    convergence_relative_tolerance = float(convergence_prm.get("relative_tolerance", 0.0))
+    convergence_value_floor = float(convergence_prm.get("value_floor", 1.0e-30))
+    convergence_require_flow = bool(convergence_prm.get("require_flow_convergence", True))
+    convergence_require_pressure = bool(convergence_prm.get("require_pressure_tolerance", True))
+    convergence_require_nu_tilde = bool(convergence_prm.get("require_nu_tilde_tolerance", True))
+    convergence_require_velocity = bool(convergence_prm.get(
+        "require_velocity_tolerance",
+        convergence_type == "field_norm",
+    ))
+    if convergence_type == "diagnostic_window_relative_change":
+        diagnostic_keys = [diagnostic["key"] for diagnostic in diagnostic_specs]
+        if convergence_diagnostic_key not in diagnostic_keys:
+            raise ValueError(
+                "Diagnostic-window Picard convergence needs diagnostic_key to match "
+                "one of {}.".format(diagnostic_keys)
+            )
+        if convergence_window <= 0:
+            raise ValueError("Diagnostic-window Picard convergence requires window > 0.")
+        if convergence_relative_tolerance <= 0.0:
+            raise ValueError(
+                "Diagnostic-window Picard convergence requires relative_tolerance > 0."
+            )
+
     def maybe_restart_from_saved_state():
         if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
             return False
@@ -360,9 +417,40 @@ def run_steady_sa_ipcs_picard(
 
     maybe_restart_from_saved_state()
 
+    def save_h5_checkpoint_field(field, path):
+        temporary_path = "{}.tmp".format(path)
+        save_h5_file(field, temporary_path)
+        MPI4PY.COMM_WORLD.Barrier()
+        if MPI4PY.COMM_WORLD.Get_rank() == 0:
+            os.replace(temporary_path, path)
+        MPI4PY.COMM_WORLD.Barrier()
+
+    def save_picard_checkpoint():
+        if picard_checkpoint_every <= 0:
+            return False
+        if checkpoint_h5_dir in (None, ""):
+            return False
+
+        checkpoint_fields = {
+            "u": u0,
+            "p": p0,
+            "nu_tilde": turbulence_model.nu_tilde0,
+        }
+        for key, field in checkpoint_fields.items():
+            save_h5_checkpoint_field(field, os.path.join(checkpoint_h5_dir, key + ".h5"))
+        return True
+
     residual_keys = ["u", "p", "nu_tilde", "flow_u", "flow_p"]
     if pressure_drop_evaluator is not None:
         residual_keys.append("pressure_drop")
+    for diagnostic in diagnostic_specs:
+        if diagnostic["key"] in residual_keys:
+            raise ValueError(
+                "Picard diagnostic key '{}' conflicts with an existing residual key.".format(
+                    diagnostic["key"]
+                )
+            )
+        residual_keys.append(diagnostic["key"])
     residuals = {key: [] for key in residual_keys}
     start_time = time.time()
 
@@ -377,6 +465,26 @@ def run_steady_sa_ipcs_picard(
         if abs(float(domain_area)) > 1.0e-30:
             p_average = assemble(p1 * dx) / domain_area
             p1.vector()[:] -= p_average
+
+    pressure_null_space = None
+
+    def apply_pressure_nullspace(A, b):
+        # Body-force periodic-channel solves have no pressure Dirichlet BC.
+        # Attach the constant-pressure nullspace and orthogonalize the RHS so
+        # the linear pressure-correction solve has an explicit gauge treatment.
+        if len(bcp) > 0:
+            return
+
+        nonlocal pressure_null_space
+        if pressure_null_space is None:
+            null_vector = Vector(p1.vector())
+            pressure_space.dofmap().set(null_vector, 1.0)
+            null_vector.apply("insert")
+            null_vector *= 1.0 / null_vector.norm("l2")
+            pressure_null_space = VectorSpaceBasis([null_vector])
+
+        as_backend_type(A).set_nullspace(pressure_null_space)
+        pressure_null_space.orthogonalize(b)
 
     def solve_flow_to_steady(label, max_iters=None, verbose=False):
         # Inner loop: keep SA viscosity fixed and advance the flow equations
@@ -398,6 +506,7 @@ def run_steady_sa_ipcs_picard(
             b_2 = assemble(l_2)
             for bc in bcp:
                 bc.apply(A_2, b_2)
+            apply_pressure_nullspace(A_2, b_2)
             solve_linear_system(A_2, p1.vector(), b_2, pressure_solver, pressure_preconditioner)
             normalize_pressure()
 
@@ -440,9 +549,17 @@ def run_steady_sa_ipcs_picard(
         return float(du_rel), float(dp_rel), converged
 
     root_print("Steady RANS-SA solve: pseudo-time IPCS flow + steady SA Picard coupling", is_root=is_root)
-    root_print("  SA equation: steady Galerkin, no SA SUPG term", is_root=is_root)
     if pressure_drop_description is not None:
         root_print("  Pressure-drop metric: {}.".format(pressure_drop_description), is_root=is_root)
+    if convergence_type == "diagnostic_window_relative_change":
+        root_print(
+            "  Picard convergence metric: relative change in {} over {} Picard iterations <= {:.3e}.".format(
+                convergence_diagnostic_key,
+                convergence_window,
+                convergence_relative_tolerance,
+            ),
+            is_root=is_root,
+        )
 
     # Outer Picard loop: alternate between a flow solve at fixed nu_t and an
     # SA transport solve at fixed velocity until all coupled fields stop moving.
@@ -454,7 +571,7 @@ def run_steady_sa_ipcs_picard(
 
         if log_flow_iterations:
             terminal_print("  [Picard {}] flow solve".format(picard_iter), is_root=is_root)
-        flow_du, flow_dp, _flow_converged = solve_flow_to_steady(
+        flow_du, flow_dp, flow_converged = solve_flow_to_steady(
             "Picard {}".format(picard_iter),
             verbose=log_flow_iterations,
         )
@@ -485,6 +602,37 @@ def run_steady_sa_ipcs_picard(
         if pressure_drop_evaluator is not None:
             pressure_drop = pressure_drop_evaluator(p0)
             residuals["pressure_drop"].append(float(pressure_drop))
+        diagnostic_values = []
+        if diagnostic_specs:
+            diagnostic_state = {
+                "picard_iter": picard_iter,
+                "u": u0,
+                "p": p0,
+                "nu_tilde": turbulence_model.nu_tilde0,
+                "turbulence_model": turbulence_model,
+            }
+            for diagnostic in diagnostic_specs:
+                diagnostic_value = float(diagnostic["evaluator"](diagnostic_state))
+                residuals[diagnostic["key"]].append(diagnostic_value)
+                diagnostic_values.append((diagnostic, diagnostic_value))
+
+        diagnostic_window_relative_change = None
+        if convergence_type == "diagnostic_window_relative_change":
+            convergence_history = residuals[convergence_diagnostic_key]
+            if len(convergence_history) > convergence_window:
+                current_value = convergence_history[-1]
+                previous_value = convergence_history[-1 - convergence_window]
+                diagnostic_window_relative_change = (
+                    abs(current_value - previous_value)
+                    / max(abs(current_value), convergence_value_floor)
+                )
+        checkpoint_saved = False
+        checkpoint_skipped = False
+        if picard_checkpoint_every > 0 and picard_iter % picard_checkpoint_every == 0:
+            if flow_converged or not checkpoint_require_flow_convergence:
+                checkpoint_saved = save_picard_checkpoint()
+            else:
+                checkpoint_skipped = True
 
         if is_root:
             picard_message = (
@@ -506,13 +654,52 @@ def run_steady_sa_ipcs_picard(
                     pressure_drop,
                     pressure_drop_unit,
                 )
+            for diagnostic, diagnostic_value in diagnostic_values:
+                picard_message += "; {}={}".format(
+                    diagnostic["label"],
+                    diagnostic["format"].format(diagnostic_value),
+                )
+                if diagnostic["unit"]:
+                    picard_message += " {}".format(diagnostic["unit"])
+            if convergence_type == "diagnostic_window_relative_change":
+                if diagnostic_window_relative_change is None:
+                    picard_message += "; {}_rel{}=pending".format(
+                        convergence_diagnostic_key,
+                        convergence_window,
+                    )
+                else:
+                    picard_message += "; {}_rel{}={:.3e}".format(
+                        convergence_diagnostic_key,
+                        convergence_window,
+                        diagnostic_window_relative_change,
+                    )
+            if not flow_converged:
+                picard_message += "; flow solve did not meet tolerances before SA update"
+            if checkpoint_saved:
+                picard_message += "; checkpoint saved"
+            if checkpoint_skipped:
+                picard_message += "; checkpoint not saved because flow solve did not meet tolerances"
             print(picard_message)
 
-        if (
-            picard_errors[0] <= tolerance_u
-            and picard_errors[1] <= tolerance_p
-            and picard_errors[2] <= tolerance_nu_tilde
-        ):
+        picard_converged = False
+        if convergence_type == "field_norm":
+            picard_converged = (
+                flow_converged
+                and picard_errors[0] <= tolerance_u
+                and picard_errors[1] <= tolerance_p
+                and picard_errors[2] <= tolerance_nu_tilde
+            )
+        elif convergence_type == "diagnostic_window_relative_change":
+            picard_converged = (
+                diagnostic_window_relative_change is not None
+                and diagnostic_window_relative_change <= convergence_relative_tolerance
+                and (flow_converged or not convergence_require_flow)
+                and (picard_errors[0] <= tolerance_u or not convergence_require_velocity)
+                and (picard_errors[1] <= tolerance_p or not convergence_require_pressure)
+                and (picard_errors[2] <= tolerance_nu_tilde or not convergence_require_nu_tilde)
+            )
+
+        if picard_converged:
             converged = True
             convergence_message = (
                 "Steady RANS-SA Picard solve converged in {} iterations ({:.2f}s); "
@@ -528,6 +715,19 @@ def run_steady_sa_ipcs_picard(
                     pressure_drop_label,
                     pressure_drop,
                     pressure_drop_unit,
+                )
+            for diagnostic, diagnostic_value in diagnostic_values:
+                convergence_message += "; {}={}".format(
+                    diagnostic["label"],
+                    diagnostic["format"].format(diagnostic_value),
+                )
+                if diagnostic["unit"]:
+                    convergence_message += " {}".format(diagnostic["unit"])
+            if diagnostic_window_relative_change is not None:
+                convergence_message += "; {}_rel{}={:.3e}".format(
+                    convergence_diagnostic_key,
+                    convergence_window,
+                    diagnostic_window_relative_change,
                 )
             convergence_message += "."
             root_print(
@@ -578,7 +778,7 @@ def run_steady_sa_ipcs_picard(
     if post_processing.get("SAVE", False):
         for key, field in solutions.items():
             save_pvd_file(field, saving_directory["PVD_FILES"] + key + ".pvd")
-            save_h5_file(field, saving_directory["H5_FILES"] + key + ".h5")
+            save_h5_checkpoint_field(field, saving_directory["H5_FILES"] + key + ".h5")
 
         for key, values in residuals.items():
             save_list(values, saving_directory["RESIDUALS"] + key + ".txt")
