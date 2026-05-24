@@ -110,13 +110,13 @@ Finally, I want to thank my family and friends for their unwavering encouragemen
 
 \begin{abstract}
 
-As modern electronic and automotive systems grow increasingly compact and powerful, efficient thermal management has emerged as a fundamental engineering challenge. While topology optimization has proven to be a highly effective computational design tool for the fluid manifolds that drive these cooling systems, traditional methodologies rely heavily on laminar flow approximations. These laminar assumptions severely limit industrial applicability, as they fail to capture the separation, curvature effects, and turbulence-model dependence inherent to high-speed internal flows.
+As modern electronic and automotive systems grow increasingly compact and powerful, efficient thermal management increasingly depends on low-loss internal-flow manifolds operating beyond the laminar regime. This thesis develops a density-based topology optimization framework for turbulent internal flows in FEniCS, using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence weak-form adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
 
-This thesis develops and implements a density-based topology optimization framework for turbulent internal flows as a baseline for future heat-transfer applications. The computational methodology is built upon the open-source FEniCS platform and utilizes the fictitious domain method with Brinkman momentum penalization to conceptualize solid boundaries within a continuous fluid mesh. To capture the complex physics of high-Reynolds flows, the framework integrates the one-equation Spalart-Allmaras (SA) turbulence model. The optimization process is driven by a frozen-turbulence continuous adjoint, meaning that the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
+The work first establishes the modeling scope of SA for curved internal flows and then verifies the custom FEniCS-SA implementation against Ansys Fluent on a periodic turbulent channel and a curved U-bend. These verification cases show that the implemented wall-distance, SA transport, and segregated flow-coupling strategy reproduce the relevant Ansys-SA behavior sufficiently for the topology optimization studies, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
 
-The assessment strategy is deliberately separated into methodology and results. First, the predictive scope of the SA model for curvature-dominated internal flows is established. The FEniCS-SA implementation is then verified against Ansys Fluent on turbulent channel and U-bend benchmarks. Finally, the pipe-bend and U-bend topology optimization benchmarks from Bayat et al. are evaluated, with the pipe-bend derivative checked through a Dilgen-style finite-difference sensitivity verification before the optimized geometries are exported to Ansys Fluent for sharp-geometry validation with SA and SST $k-\omega$ turbulence models. Laminar-versus-turbulent design comparison is retained as supporting context rather than treated as CFD validation in itself.
+The topology optimization framework is evaluated on pipe-bend and U-bend benchmarks from Bayat et al. and a turbulent diffuser benchmark from Yoon. For the pipe bend, the implemented frozen sensitivity agrees with central finite differences to a maximum coordinate relative discrepancy of $1.47\times10^{-4}$, and the directional Taylor check shows approximately second-order remainder convergence. The extracted pipe-bend geometry is then validated in Ansys Fluent with both SA and SST $k-\omega$ closures: switching from Ansys-SA to SST $k-\omega$ increases the validated pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$, indicating moderate turbulence-model sensitivity rather than collapse of the optimized design. Under identical SST $k-\omega$ operating conditions, the turbulent pipe-bend design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference.
 
-The resulting thesis is therefore intentionally conservative in its claims. Its central question is not merely whether turbulent topologies look different from laminar ones, but whether SA-driven topology optimization produces low-loss designs whose predicted performance remains credible under independent CFD re-analysis. This establishes a more defensible and transparent baseline for future three-dimensional and conjugate heat-transfer extensions.
+The thesis therefore concludes that a frozen-SA topology optimization framework can produce credible low-loss turbulent internal-flow designs when its modeling assumptions are stated explicitly and the final geometries are independently re-analyzed. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction. These limitations define the most important next steps: three-dimensional extension, conjugate heat-transfer coupling, and adjoint hierarchies that reintroduce selected turbulence sensitivities.
 
 \end{abstract}
 
@@ -134,26 +134,38 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 \section*{Abbreviations}
 \begin{flushleft}
 	\renewcommand{\arraystretch}{1.1}
-	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
+	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
+		AMG & Algebraic Multigrid \\
+		BiCGSTAB & Bi-Conjugate Gradient Stabilized method \\
 		CAD & Computer-Aided Design \\
 		CEV & Constant Eddy Viscosity \\
 		CFD & Computational Fluid Dynamics \\
 		CG1 & Continuous Galerkin (Linear Basis Functions) \\
+		CG2 & Continuous Galerkin (Quadratic Basis Functions) \\
 		CHT & Conjugate Heat Transfer \\
 		DG0 & Discontinuous Galerkin (Piecewise Constant Elements) \\
 		DNS & Direct Numerical Simulation \\
+		DOF & Degree of Freedom \\
 		FEM & Finite Element Method \\
+		FD & Finite Difference \\
 		FVM & Finite Volume Method \\
+		GMRES & Generalized Minimal Residual method \\
 		IPCS & Incremental Pressure Correction Scheme \\
+		ILU & Incomplete LU factorization \\
 		MMA & Method of Moving Asymptotes \\
+		MUMPS & Multifrontal Massively Parallel Sparse direct Solver \\
+		NS-SA & Navier-Stokes-Spalart-Allmaras coupling \\
 		PDE & Partial Differential Equation \\
 		RAMP & Rational Approximation of Material Properties \\
 		RANS & Reynolds-Averaged Navier-Stokes \\
 		SA  & Spalart-Allmaras \\
 		SIMP & Solid Isotropic Material with Penalization \\
+		SNES & Scalable Nonlinear Equations Solver \\
 		SST $k-\omega$ & Shear Stress Transport $k-\omega$ model \\
-			TO  & Topology Optimization \\
+		TO  & Topology Optimization \\
 		UFL & Unified Form Language \\
+		VMFL & Ansys Fluent verification benchmark case \\
+		XFEM & Extended Finite Element Method \\
 	\end{tabularx}
 \end{flushleft}
 
@@ -162,9 +174,10 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 \subsection*{Fluid Dynamics \& Turbulence}
 \begin{flushleft}
 	\renewcommand{\arraystretch}{1.1}
-	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
-		$d, y$ & Distance to the nearest wall / Hydraulic diameter [m] \\
+	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
+		$D, D_h$ & Pipe diameter and hydraulic diameter [m] \\
 		$De$ & Dean number [-] \\
+		$H, L$ & Channel height and characteristic length [m] \\
 		$k$ & Turbulent kinetic energy [m$^2$/s$^2$] \\
 		$p, \bar{p}, p'$ & Instantaneous, mean, and fluctuating static pressure [Pa] \\
 		$\Delta P$ & Macroscopic total pressure drop [Pa] \\
@@ -172,14 +185,25 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		$Re$ & Bulk Reynolds number [-] \\
 		$S, \tilde{S}$ & Scalar vorticity magnitude and modified SA vorticity magnitude [1/s] \\
 		$t$ & Time / Pseudo-time [s] \\
+		$\tau_w$ & Wall shear stress [Pa] \\
 		$\mathbf{u}, \bar{u}_i$ & Velocity vector / Mean velocity component [m/s] \\
 		$u'_i$ & Fluctuating velocity component [m/s] \\
+		$U_{\mathrm{ref}}, U_{\mathrm{bulk}}, U_{\max}$ & Reference, bulk, and maximum velocity [m/s] \\
+		$u^+$ & Non-dimensional mean velocity [-] \\
 		$u_\tau$ & Friction velocity [m/s] \\
+		$y, d_w$ & Distance to the nearest wall [m] \\
 		$y^+$ & Non-dimensional wall distance [-] \\
+		$C_f$ & Skin-friction coefficient [-] \\
+		$c_{b1}, c_{b2}, c_{v1}$ & Spalart-Allmaras production and viscosity-ratio constants [-] \\
+		$c_{w1}, c_{w2}, c_{w3}$ & Spalart-Allmaras wall-destruction constants [-] \\
+		$f_{v1}, f_{v2}, f_w$ & Spalart-Allmaras damping and wall-destruction functions [-] \\
+		$r_{\mathrm{SA}}, g_{\mathrm{SA}}$ & Spalart-Allmaras wall-destruction auxiliary variables [-] \\
+		$\delta_{ij}$ & Kronecker delta [-] \\
 		$\mu, \mu_t$ & Dynamic and turbulent eddy viscosity [Pa$\cdot$s] \\
 		$\nu, \nu_t$ & Kinematic and turbulent eddy kinematic viscosity [m$^2$/s] \\
 		$\tilde{\nu}$ & Spalart-Allmaras working variable [m$^2$/s] \\
 		$\rho$ & Fluid density [kg/m$^3$] \\
+		$\omega$ & Scalar vorticity in two-dimensional flow [1/s] \\
 		$\Omega_{ij}$ & Vorticity tensor [1/s] \\
 		$\kappa$ & von Kármán constant [-] \\
 	\end{tabularx}
@@ -188,11 +212,19 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 \subsection*{Numerical Implementation (FEniCS)}
 \begin{flushleft}
 	\renewcommand{\arraystretch}{1.1}
-	\begin{tabularx}{\textwidth}{@{}p{20mm}X@{}}
+	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
 		$G, G_0$ & Relaxed Eikonal field variable and boundary value [1/m] \\
 		$h, h_{avg}$ & Finite element cell diameter and average cell size [m] \\
+		$p_k$ & Kinematic pressure [m$^2$/s$^2$] \\
+		$s$ & Arclength coordinate along a profile line [m] \\
+		$e_i$ & Pointwise profile error or design-space basis vector, depending on context [-] \\
+		$E_\infty, E_{L_2}$ & Maximum and relative $L_2$ profile discrepancies [-] \\
+		$\Delta h$ & Finite-difference design perturbation [-] \\
+		$S_i^{\mathrm{FD}}, S_i^{\mathrm{fr}}$ & Finite-difference and frozen-adjoint sensitivity of sampled design variable $i$ \\
+		$\varepsilon_i^{\mathrm{fr}}$ & Relative frozen-adjoint sensitivity discrepancy [-] \\
 		$||\cdot||_{L_2}$ & $L_2$ (Euclidean) norm [-] \\
 		$\llbracket \cdot \rrbracket$ & Jump operator across an internal element facet [-] \\
+		$\Gamma_{\mathrm{in}}, \Gamma_{\mathrm{out}}, \Gamma_D$ & Inlet, outlet, and profile-extraction boundaries \\
 		$\mathbf{n}$ & Outward-pointing normal vector [-] \\
 		$v, \xi$ & Test functions for pressure and turbulence equations [-] \\
 		$\alpha_u, \alpha_{\tilde{\nu}}$ & Relaxation factors for velocity and turbulence [-] \\
@@ -214,15 +246,23 @@ The resulting thesis is therefore intentionally conservative in its claims. Its 
 		$\gamma, \gamma_{raw}$ & Continuous and raw design variable (1 for fluid, 0 for solid) [-] \\
 		$\tilde{\gamma}, \bar{\gamma}$ & Filtered and Heaviside-projected design variables [-] \\
 		$\eta$ & Heaviside projection threshold [-] \\
+		$\Pi_\beta$ & Heaviside projection operator [-] \\
+		$\mathcal{H}$ & Helmholtz filter operator [-] \\
+		$M$ & Active design mask [-] \\
 		$J$ & Generic objective function used in the optimization problem [problem dependent] \\
 		$J_D$ & Dissipation objective, evaluated from viscous dissipation [W, or W/m for two-dimensional unit-depth cases] \\
 		$J_p$ & Average inlet-pressure objective [Pa] \\
+		$\Phi_D$ & Sharp-geometry viscous dissipation metric [W, or W/m for two-dimensional unit-depth cases] \\
 		$q$ & RAMP penalization tuning parameter [-] \\
 		$r$ & Continuous Helmholtz filter radius [m] \\
-		$\mathbf{s}, \mathbf{s}^*$ & Monolithic forward state and continuous adjoint state vectors \\
+		$r_V^{(k)}$ & Volume residual at optimization iteration $k$ [-] \\
+		$v_f^{(k)}$ & Realized fluid volume fraction at optimization iteration $k$ [-] \\
+		$\mathbf{s}, \mathbf{s}^*$ & Monolithic forward state and frozen-flow adjoint state vectors \\
 		$V_f, V_{domain}$ & Physical fluid volume and total design domain volume [m$^3$] \\
+		$V_{\mathrm{mask}}$ & Volume-mask measure [m$^3$] \\
 		$V_{max}$ & Maximum allowable fluid volume fraction constraint [-] \\
 		$\Omega, \partial\Omega, \Gamma_{int}$ & Computational domain, domain boundary, and internal element facets \\
+		$\Omega_D, \Omega_V$ & Objective-integration and volume-integration regions \\
 	\end{tabularx}
 \end{flushleft}
 

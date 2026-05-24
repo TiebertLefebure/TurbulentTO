@@ -11,7 +11,7 @@ Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} 
 
 The chapter first verifies the implemented frozen sensitivity on the same pipe-bend configuration used for optimization with a Dilgen-style coordinate finite-difference check on selected design cells and a directional Taylor check. The optimized pipe-bend, U-bend, and diffuser layouts are then interpreted through their projected density fields, velocity fields, convergence histories, and independent sharp-geometry CFD validation. This ordering keeps the derivative evidence close to the optimization result that uses it, while leaving the standalone forward-flow verification in Chapter~\ref{ch:sa_verification}.
 
-Detailed pipe-bend geometry and FEniCS settings are listed in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and \ref{tab:app_B_alexandersen_pipebend_numerical} of Section~\ref{sec:app_B_config_alexandersen_pipebend}; the corresponding U-bend setup is listed in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and \ref{tab:app_B_alexandersen_ubend_numerical} of Section~\ref{sec:app_B_config_alexandersen_ubend}. The diffuser benchmark setup is listed in Tables~\ref{tab:app_B_yoon_diffuser_physical} and \ref{tab:app_B_yoon_diffuser_numerical} of Section~\ref{sec:app_B_config_yoon_diffuser}. The Ansys grid-independence studies for the extracted turbulent designs are reported in Tables~\ref{tab:app_B_alexandersen_pipebend_mesh}, \ref{tab:app_B_alexandersen_ubend_mesh}, and \ref{tab:app_B_yoon_diffuser_mesh}. The corresponding laminar-design grid studies are retained in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}, while the topology and SST $k-\omega$ metric comparisons are reported directly in the benchmark sections below.
+The benchmark sections below introduce the geometry, boundary conditions, objective, and validation metrics needed to read the results without consulting the appendices first. Appendix~\ref{app:B_validation_configurations} retains the full numerical settings and Ansys grid-independence studies for the extracted turbulent designs, while Appendix~\ref{app:C_laminar_turbulent_topology_comparison} retains the corresponding laminar-design validation details.
 
 \section{Benchmark Cases and Evaluation Metrics}
 \label{sec:ch6_strategy_metrics}
@@ -74,7 +74,7 @@ The local benchmark geometry used for the present implementation is shown in Fig
 
 \subsection{Sensitivity Verification}
 \label{subsec:alexandersen_pipebend_sensitivity}
-Before interpreting the optimized topology, the frozen adjoint is checked directly on the pipe-bend configuration. This is the relevant local test for the final thesis setup because it uses the same topology-dependent SA and wall-distance penalties, inlet-pressure objective, and frozen-turbulence adjoint used during the optimization. No full turbulence-adjoint or wall-distance-adjoint comparison is made; the purpose is to compare the derivative supplied to MMA with objective changes obtained by re-solving the perturbed velocity-pressure state.
+Before interpreting the optimized topology, the frozen adjoint is checked directly on the pipe-bend configuration. This is the relevant local test for the final thesis setup because it uses the same topology-dependent SA and wall-distance penalties, inlet-pressure objective, and frozen-turbulence adjoint used during the optimization. No full turbulence-adjoint or wall-distance-adjoint comparison is made; the purpose is to compare the derivative supplied to MMA with objective changes obtained by re-solving the perturbed velocity-pressure state. The check follows the common literature practice of combining coordinate finite differences on selected design variables with a directional Taylor test over multiple step sizes. It therefore verifies the implemented derivative of the objective actually used in the pipe-bend run, $J_p$. If a later pipe-bend or U-bend campaign switches from $J_p$ to the dissipation objective $J_D$, the same diagnostic should be repeated because the adjoint right-hand side and the direct objective derivative change.
 
 The check is performed at the initial pipe-bend design state, with base objective
 $J_0=1.8363$. In every perturbation, the SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ are held fixed. This matches the frozen-turbulence assumption used by the adjoint: the flow state is re-solved, but the turbulence and wall-distance updates are not differentiated.
@@ -328,24 +328,12 @@ Figure~\ref{fig:alexandersen_ubend_fenics_results} reports the final projected d
 
 For the matching $V_f=0.27$, $Re=5{,}000$ U-bend case, the conventional $k$-$\varepsilon$ result reported by Bayat et al.~\cite{Bayat2026} is $J_p=0.8327$. As for the pipe bend, this value provides a reference scale only; the comparison remains qualitative because the present solver uses a different turbulence model and near-wall treatment.
 
-The U-bend convergence histories are collected in Figure~\ref{fig:alexandersen_ubend_histories}; the two panels separate the inlet-pressure objective history in Figure~\ref{fig:alexandersen_ubend_objective_history} from the enforced volume-fraction history in Figure~\ref{fig:alexandersen_ubend_volume_history}.
+The U-bend convergence histories are collected in Figure~\ref{fig:alexandersen_ubend_histories}. As for the pipe bend, the final figure should combine the normalized inlet-pressure objective and the relative volume-fraction residual on shared iteration coordinates so that objective progress and constraint activity can be read together.
 
 \begin{figure}[!ht]
 	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective function vs. optimization iteration}
-		\caption{Objective function $J$ vs. MMA iteration.}
-		\label{fig:alexandersen_ubend_objective_history}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume fraction vs. MMA iteration.}
-		\label{fig:alexandersen_ubend_volume_history}
-	\end{subfigure}
-	\caption{Optimization convergence histories for the U-bend benchmark.}
+	\validationplaceholder{Combined convergence history: normalized $J_p/J_0$ and relative volume residual $r_V$ vs. MMA iteration}
+	\caption{Optimization convergence history for the U-bend benchmark. The final figure should use the same combined-objective and volume-residual format as Figure~\ref{fig:alexandersen_pipebend_histories}.}
 	\label{fig:alexandersen_ubend_histories}
 \end{figure}
 
@@ -475,24 +463,12 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 
 Yoon~\cite{Yoon2016} reports that the turbulent diffuser design develops enlarged inlet and outlet regions, while the laminar solution forms a more cone-shaped diffuser. The present FEniCS-SA result is interpreted against this qualitative behavior rather than against a direct numerical objective target, because the present implementation uses a wall-resolved frozen-SA solve, active-mask filtering, and Heaviside projection.
 
-The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuser_histories}; the two panels separate the dissipation objective history in Figure~\ref{fig:yoon_diffuser_objective_history} from the enforced volume-fraction history in Figure~\ref{fig:yoon_diffuser_volume_history}.
+The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuser_histories}. Because this benchmark minimizes $J_D$ rather than $J_p$, the final convergence plot should report the normalized dissipation objective and the relative volume-fraction residual on one combined figure.
 
 \begin{figure}[!ht]
 	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Objective function $J_D$ vs. optimization iteration}
-		\caption{Objective function $J_D$ vs. MMA iteration.}
-		\label{fig:yoon_diffuser_objective_history}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\validationplaceholder{Volume constraint vs. optimization iteration}
-		\caption{Volume fraction vs. MMA iteration.}
-		\label{fig:yoon_diffuser_volume_history}
-	\end{subfigure}
-	\caption{Optimization convergence histories for the diffuser benchmark.}
+	\validationplaceholder{Combined convergence history: normalized $J_D/J_0$ and relative volume residual $r_V$ vs. MMA iteration}
+	\caption{Optimization convergence history for the diffuser benchmark. The final figure should use a combined dissipation-objective and volume-residual plot.}
 	\label{fig:yoon_diffuser_histories}
 \end{figure}
 
@@ -583,6 +559,6 @@ Table~\ref{tab:yoon_diffuser_laminar_perf} compares the extracted laminar and tu
 
 \section{Conclusion}
 \label{sec:ch6_conclusion}
-This chapter centers the final thesis evidence on the pipe-bend and U-bend benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}. The sensitivity verification is performed on the same penalized wall-distance, topology-penalized SA, frozen-turbulence formulation used for the optimization; therefore, the coordinate finite-difference and Taylor checks directly test the derivative supplied to MMA. The pipe-bend and U-bend results test the same framework on two distinct curved-flow layouts, while the diffuser tests the dissipation objective $J_D$ under prescribed inlet and outlet velocity profiles.
+This chapter answers the third research question by evaluating whether the turbulent topology optimization framework produces designs that remain credible after independent CFD re-analysis. The sensitivity verification is performed on the same penalized wall-distance, topology-penalized SA, frozen-turbulence formulation used for the pipe-bend optimization; therefore, the coordinate finite-difference and Taylor checks directly test the derivative supplied to MMA for $J_p$. The pipe-bend result provides the strongest completed evidence: the frozen derivative agrees with finite differences to a maximum relative discrepancy of $1.47\times10^{-4}$ in the coordinate check, the Taylor remainder shows approximately second-order behavior, and the extracted design remains robust when re-solved in Ansys Fluent with both SA and SST $k-\omega$.
 
-The independent CFD validation using Ansys Fluent is therefore interpreted as a sharp-geometry check of the optimized designs, not merely as another internal FEniCS result. Testing the extracted topologies with both SA and SST $k-\omega$ quantifies how much of the optimized performance survives a change in turbulence closure. Together with the laminar comparisons, this chapter supports the thesis argument that high-Reynolds turbulence physics must be included directly in the optimization loop when designing viable internal-flow topologies.
+For the pipe bend, changing the Ansys closure from SA to SST $k-\omega$ increases the validated pressure drop by only about $4.5\%$ and the viscous dissipation by about $8.5\%$, indicating that the optimized geometry is not narrowly tuned to the SA model. Under identical SST $k-\omega$ operating conditions, the turbulent design also reduces the pressure drop and viscous dissipation relative to the laminar-optimized design, supporting the claim that high-Reynolds turbulence physics should be included directly in the design loop. The U-bend and diffuser sections extend the same evaluation structure to a stronger flow-reversal case and to a $J_D$-driven diffuser case; once their remaining placeholder metrics are replaced, they should be judged by the same standard: convergence of the optimization, sharp-geometry validation under at least one independent closure, and comparison with an equivalent laminar-optimized layout.

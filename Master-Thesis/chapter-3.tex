@@ -4,57 +4,59 @@
 \section{Introduction}
 With the theoretical foundation of the Spalart-Allmaras (SA) model established in Chapter~\ref{ch:turbulence_modeling}, this chapter details its numerical translation into a working FEniCS solver. The focus is methodological: the finite-element weak forms, Picard coupling strategy, pressure-correction flow solver, SA transport equation, and relaxed Eikonal wall-distance calculation are described before the solver is verified separately in Chapter~\ref{ch:sa_verification}.
 
-The numerical simulations and eventual topology optimization in this thesis are built upon FEniCS, an open-source computing platform for solving partial differential equations (PDEs). Unlike commercial computational fluid dynamics (CFD) software such as Ansys, which typically relies on the Finite Volume Method (FVM), FEniCS uses the Finite Element Method (FEM) and requires the user to explicitly define the mathematical formulation of the problem \cite{Logg2012}. 
+The numerical simulations and eventual topology optimization in this thesis are built upon FEniCS, an open-source computing platform for solving partial differential equations (PDEs). Unlike commercial computational fluid dynamics (CFD) software such as Ansys, which typically relies on the Finite Volume Method (FVM), FEniCS uses the Finite Element Method (FEM) and requires the user to explicitly define the mathematical formulation of the problem \cite{Logg2012}. FEniCS is useful in this thesis because the same weak-form language used to assemble the forward equations can also be used to assemble residual derivatives for the topology-optimization adjoint in Chapter~\ref{ch:topology_optimization_methodology}.
 
-To solve a PDE in FEniCS, the governing equations (the "strong form") must be mathematically transformed into a "weak formulation" (or variational form). FEniCS utilizes the Unified Form Language (UFL) to express these weak forms in Python code that closely mirrors the mathematical notation \cite{Langtangen2016}. This high-level mathematical scripting is particularly advantageous for topology optimization, as it allows for the automated derivation of the adjoint equations required for gradient-based optimization algorithms. 
+To solve a PDE in FEniCS, the governing equations (the ``strong form'') must be mathematically transformed into a weak formulation, or variational form. FEniCS utilizes the Unified Form Language (UFL) to express these weak forms in Python code that closely mirrors the mathematical notation \cite{Langtangen2016}. This high-level mathematical scripting is particularly advantageous for topology optimization, as it makes the connection between the implemented residuals and the sensitivity equations explicit.
 
-To ensure complete transparency and reproducibility, the entire custom codebase developed for this thesis is available in the public GitHub repository \texttt{TurbulentTO}. To maintain modularity, the repository is divided into two primary directories. The \texttt{TurbulenceModels} directory contains the standalone Spalart-Allmaras fluid dynamics engine and the verification benchmarks reported in Chapter~\ref{ch:sa_verification}. The \texttt{FluidTO} directory houses the optimization algorithms, penalty formulations, and objective functions detailed in Chapter~\ref{ch:topology_optimization_methodology}.
+To ensure complete transparency and reproducibility, the entire custom codebase developed for this thesis is available in the public GitHub repository \texttt{TurbulentTO}. To maintain modularity, the repository is divided into two primary directories. The \texttt{TurbulenceModels} directory contains the forward-flow Spalart-Allmaras solver and the verification benchmarks reported in Chapter~\ref{ch:sa_verification}. The \texttt{FluidTO} directory builds on this verified forward solver by adding the optimization algorithms, Brinkman and turbulence penalties, objective functions, and sensitivity calculations detailed in Chapter~\ref{ch:topology_optimization_methodology}.
 
 \subsection{Derivation of a Weak Formulation}
 Before diving into the complex turbulence equations, it is instructive to demonstrate how a continuous PDE is translated into a discrete FEniCS formulation. To illustrate this methodology, consider the Poisson equation for pressure, which is a fundamental component of incompressible fluid solvers. The strong form of the Poisson equation is given by:
 \begin{equation}
 	-\nabla^2 p = f \quad \text{in} \, \Omega
 \end{equation}
-where $p$ is the pressure field, $f$ is a source term (derived from the velocity divergence), and $\Omega$ is the computational domain. To obtain the weak form, the equation is multiplied by a sufficiently smooth test function $v$ and integrated over the entire domain $\Omega$, following standard Galerkin finite element procedures \cite{Logg2012, Langtangen2016}:
+where $p$ is the pressure field, $f$ is a source term derived from the velocity divergence, and $\Omega$ is the computational domain. To obtain the weak form, the equation is multiplied by a sufficiently smooth test function $v$ and integrated over the entire domain $\Omega$, following standard Galerkin finite element procedures \cite{Logg2012, Langtangen2016}:
 \begin{equation}
-	-\int_{\Omega} (\nabla^2 p) v \, dx = \int_{\Omega} f v \, dx
+	-\int_{\Omega} (\nabla^2 p) v \, dx = \int_{\Omega} f v \, dx .
 \end{equation}
-Applying integration by parts (Green's first identity) to the left-hand side yields:
+Applying integration by parts to the left-hand side yields:
 \begin{equation}
-	\int_{\Omega} \nabla p \cdot \nabla v \, dx - \int_{\partial \Omega} (\nabla p \cdot \mathbf{n}) v \, ds = \int_{\Omega} f v \, dx
+	\int_{\Omega} \nabla p \cdot \nabla v \, dx - \int_{\partial \Omega} (\nabla p \cdot \mathbf{n}) v \, ds = \int_{\Omega} f v \, dx ,
 \end{equation}
-where $\partial \Omega$ is the boundary of the domain and $\mathbf{n}$ is the outward-pointing normal vector. This integral formulation fundamentally lowers the continuity requirements of the solution, requiring only first-order derivatives to be square-integrable. Furthermore, Neumann boundary conditions (e.g., a prescribed pressure gradient at an outlet) can be naturally substituted directly into the boundary integral $\int_{\partial \Omega} (\nabla p \cdot \mathbf{n}) v \, ds$. This variational approach forms the foundation of all fluid and turbulence equations implemented in this thesis.
+where $\partial \Omega$ is the boundary of the domain and $\mathbf{n}$ is the outward-pointing normal vector. This integral formulation lowers the continuity requirements of the solution, requiring only first-order derivatives to be square-integrable. Neumann boundary conditions can also be substituted directly into the boundary integral. This variational approach forms the foundation of all fluid and turbulence equations implemented in this thesis.
 
 \section{Numerical Solution Strategy for Fluid Dynamics}
-Solving the full Reynolds-Averaged Navier-Stokes (RANS) equations is numerically challenging due to the non-linear convective terms, the saddle-point nature of the coupled velocity-pressure system, and the intense cross-coupling with the turbulence model. To achieve a stable and efficient steady-state solution in FEniCS that seamlessly translates into the topology optimization framework, the governing equations are rigorously decoupled.
+Solving the full Reynolds-Averaged Navier-Stokes (RANS) equations is numerically challenging due to the non-linear convective terms, the saddle-point nature of the coupled velocity-pressure system, and the intense cross-coupling with the turbulence model. To achieve a stable and efficient steady-state solution in FEniCS, the verification solver in this chapter uses segregated Picard coupling between the velocity-pressure and SA fields.
 
 \subsection{Decoupling the Physics: The Picard Iteration Scheme}
-Because the momentum equation relies on the turbulent eddy viscosity ($\nu_t$), and the turbulence transport equation relies on the convective velocity ($\mathbf{u}$), solving the entire fluid-turbulence system simultaneously in a massive monolithic matrix frequently leads to ill-conditioning and solver divergence. 
+Because the momentum equation relies on the turbulent eddy viscosity ($\nu_t$), and the turbulence transport equation relies on the convective velocity ($\mathbf{u}$), solving the entire fluid-turbulence system simultaneously in a massive monolithic matrix frequently leads to ill-conditioning and solver divergence.
 
-To resolve this, the forward physics are decoupled using a \textbf{Picard iteration scheme} (successive substitution), a robust approach for segregated RANS solvers \cite{Ferziger2012, Versteeg2007}. During each Picard step, the flow solver advances using the eddy viscosity from the previous iteration. The newly updated velocity field is then passed to the Spalart-Allmaras solver to calculate a new eddy viscosity field. This alternating sequence forms the outer loop of the solver, iteratively updating the decoupled equations until the fully coupled physical system reaches a steady-state equilibrium.
+To resolve this, the forward physics are decoupled using a \textbf{Picard iteration scheme} (successive substitution), a robust approach for segregated RANS solvers \cite{Ferziger2012, Versteeg2007}. During each Picard step, the flow solver advances using the eddy viscosity from the previous iteration. The newly updated velocity field is then passed to the Spalart-Allmaras solver to calculate a new eddy viscosity field. This alternating sequence forms the outer loop of the solver, iteratively updating the decoupled equations until the coupled physical system reaches a steady-state equilibrium.
 
 \subsection{Incremental Pressure Correction Scheme (IPCS)}
-Within the Picard loop, the Navier-Stokes equations themselves must be solved. Rather than solving for velocity and pressure simultaneously, this implementation utilizes an Incremental Pressure Correction Scheme (IPCS). This algorithmic splitting is fundamentally based on the fractional-step projection methods originally pioneered by Chorin \cite{Chorin1968} and Temam \cite{Temam1969}. To nurse the non-linear convective momentum terms to a stable steady state, a pseudo-time stepping approach ($\Delta t$) is employed strictly for the flow variables. The IPCS algorithm splits the fluid equations into three sequential steps per pseudo-time step:
+Within the Picard loop, the Navier-Stokes equations themselves must be solved. Rather than solving for velocity and pressure simultaneously, the standalone verification solver utilizes an Incremental Pressure Correction Scheme (IPCS). This algorithmic splitting is based on the fractional-step projection methods originally pioneered by Chorin \cite{Chorin1968} and Temam \cite{Temam1969}. To drive the non-linear convective momentum terms toward a stable steady state, a pseudo-time stepping approach ($\Delta t$) is employed for the flow variables. The IPCS algorithm splits the fluid equations into three sequential steps per pseudo-time step:
 \begin{enumerate}
 	\item \textbf{Tentative velocity step:} The momentum equation is solved using the pressure field from the previous iteration ($p^n$) to compute an intermediate, non-divergence-free velocity field ($\mathbf{u}^*$). Because this is a RANS framework, the diffusion term utilizes the effective kinematic viscosity, $(\nu + \nu_t)$. Treating the convective term explicitly and the diffusive term implicitly, the semi-discrete equation is:
 	\begin{equation}
-		\frac{\mathbf{u}^* - \mathbf{u}^n}{\Delta t} + (\mathbf{u}^n \cdot \nabla) \mathbf{u}^* - \nabla \cdot \left( (\nu + \nu_t^n) \nabla \mathbf{u}^* \right) = -\nabla p^n
+		\frac{\mathbf{u}^* - \mathbf{u}^n}{\Delta t} + (\mathbf{u}^n \cdot \nabla) \mathbf{u}^* - \nabla \cdot \left( (\nu + \nu_t^n) \nabla \mathbf{u}^* \right) = -\nabla p^n .
 	\end{equation}
 	
-	\item \textbf{Pressure correction step:} A Poisson equation is solved to find the pressure variation that enforces the continuity constraint ($\nabla \cdot \mathbf{u}^{n+1} = 0$). The equation for the new pressure field ($p^{n+1}$) is derived as:
+	\item \textbf{Pressure correction step:} A Poisson equation is solved to find the pressure variation that enforces the continuity constraint ($\nabla \cdot \mathbf{u}^{n+1} = 0$):
 	\begin{equation}
-		\nabla^2 p^{n+1} = \nabla^2 p^n + \frac{1}{\Delta t} \nabla \cdot \mathbf{u}^*
+		\nabla^2 p^{n+1} = \nabla^2 p^n + \frac{1}{\Delta t} \nabla \cdot \mathbf{u}^* .
 	\end{equation}
 	
-	\item \textbf{Velocity update step:} The tentative velocity is strictly corrected using the gradient of the pressure difference to yield a mass-conserving velocity field ($\mathbf{u}^{n+1}$) for the current iteration:
+	\item \textbf{Velocity update step:} The tentative velocity is corrected using the gradient of the pressure difference to yield a mass-conserving velocity field:
 	\begin{equation}
-		\mathbf{u}^{n+1} = \mathbf{u}^* - \Delta t \nabla (p^{n+1} - p^n)
+		\mathbf{u}^{n+1} = \mathbf{u}^* - \Delta t \nabla (p^{n+1} - p^n) .
 	\end{equation}
 \end{enumerate}
-The simulation is deemed fully converged to a steady state when the $L_2$ norm of the residual difference between successive Picard iterations falls below a defined tolerance limit ($\epsilon_{tol}$) for both the fluid and turbulence fields.
+In the forward-flow verification scripts, pressure is treated as a kinematic pressure and the viscous operator uses the non-symmetric diffusion form $(\nu+\nu_t)\nabla\mathbf{u}$. This is the forward turbulent-flow solve that is verified in Chapter~\ref{ch:sa_verification} and then extended in Chapter~\ref{ch:topology_optimization_methodology}. The topology-optimization implementation retains the same SA transport model, wall-distance machinery, and segregated forward-flow update, while adding Brinkman resistance, topology-dependent turbulence penalties, and a final frozen-viscosity residual with dynamic viscosity and the symmetric strain tensor for adjoint sensitivity assembly.
+
+The simulation is deemed converged to a steady state when the $L_2$ norm of the residual difference between successive Picard iterations falls below a defined tolerance limit ($\epsilon_{tol}$) for both the fluid and turbulence fields.
 
 \section{Detailed Formulation of the Spalart-Allmaras Model}
-As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. Unlike the transient flow equations, the SA transport equation is solved in its purely steady-state form within the Picard loop. The steady transport equation for the continuous nonlinear working variable $\tilde{\nu}$ is given by:
+As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. Unlike the pseudo-transient flow equations, the SA transport equation is solved in its steady-state form within the Picard loop. The steady transport equation for the continuous nonlinear working variable $\tilde{\nu}$ is given by:
 \begin{equation}
 	\mathbf{u} \cdot \nabla \tilde{\nu} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{y} \right)^2 + \frac{1}{\sigma} \left[ \nabla \cdot \left( (\nu + \tilde{\nu}) \nabla \tilde{\nu} \right) + c_{b2} (\nabla \tilde{\nu})^2 \right]
 	\label{eq:sa_steady_transport}
@@ -66,9 +68,9 @@ The Spalart-Allmaras model relies on several interconnected closure functions to
 \begin{equation}
 	\tilde{S} = S + \frac{\tilde{\nu}}{\kappa^2 y^2} f_{v2}
 \end{equation}
-where $S = \sqrt{2 \Omega_{ij}\Omega_{ij}}$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Kármán constant, and $y$ is the distance to the nearest wall. The function $f_{v2}$ is a near-wall modifier:
+where $S = \sqrt{2 \Omega_{ij}\Omega_{ij}}$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Karman constant, and $y$ is the distance to the nearest wall. The function $f_{v2}$ is a near-wall modifier:
 \begin{equation}
-	f_{v2} = 1 - \frac{\chi}{1 + \chi f_{v1}} \quad \text{where} \quad \chi = \frac{\tilde{\nu}}{\nu} \quad \text{and} \quad f_{v1} = \frac{\chi^3}{\chi^3 + c_{v1}^3}
+	f_{v2} = 1 - \frac{\chi}{1 + \chi f_{v1}} \quad \text{where} \quad \chi = \frac{\tilde{\nu}}{\nu} \quad \text{and} \quad f_{v1} = \frac{\chi^3}{\chi^3 + c_{v1}^3}.
 \end{equation}
 
 Similarly, the wall destruction term is modulated by the non-dimensional function $f_w$, which accelerates the decay of turbulent viscosity inside the viscous sublayer:
@@ -77,52 +79,43 @@ Similarly, the wall destruction term is modulated by the non-dimensional functio
 \end{equation}
 where the intermediate variables $g$ and $r$ are evaluated as:
 \begin{equation}
-	g = r + c_{w2}(r^6 - r) \quad \text{and} \quad r = \min \left( \frac{\tilde{\nu}}{\tilde{S} \kappa^2 y^2}, 10 \right)
+	g = r + c_{w2}(r^6 - r) \quad \text{and} \quad r = \min \left( \frac{\tilde{\nu}}{\tilde{S} \kappa^2 y^2}, 10 \right).
 \end{equation}
-The upper bound of $10$ on $r$ ensures numerical stability during solver initialization when $\tilde{S}$ may momentarily approach zero. 
+The upper bound of $10$ on $r$ ensures numerical stability during solver initialization when $\tilde{S}$ may momentarily approach zero.
 
-It should be explicitly noted that the original formulation by Spalart and Allmaras \cite{Spalart1994} includes additional geometric trip functions ($f_{t1}$ and $f_{t2}$) designed to manually trigger the transition from laminar to turbulent flow at specific user-defined coordinates. However, following the topology optimization methodology established by Yoon \cite{Yoon2016}, these transition functions are deliberately omitted from this thesis. Because the topological boundaries are unknown *a priori* and evolve during optimization, tracking discrete trip points is mathematically unfeasible; therefore, the model assumes a fully turbulent flow regime.
+The original formulation by Spalart and Allmaras \cite{Spalart1994} includes additional geometric trip functions ($f_{t1}$ and $f_{t2}$) designed to manually trigger the transition from laminar to turbulent flow at specific user-defined coordinates. Following the topology optimization methodology established by Yoon \cite{Yoon2016}, these transition functions are omitted from this thesis. Because the topological boundaries are unknown a priori and evolve during optimization, tracking discrete trip points is mathematically infeasible; therefore, the model assumes a fully turbulent flow regime.
 
-To close the system, the standard empirical calibration constants formulated by Spalart and Allmaras are utilized throughout the FEniCS implementation \cite{NasaTurb}. Notably, the von Kármán constant is set to $0.41$ to perfectly align with the standard OpenFOAM and generalized industrial implementations[cite: 3]:
+To close the system, the standard empirical calibration constants formulated by Spalart and Allmaras are utilized throughout the FEniCS implementation \cite{NasaTurb}:
 \begin{align*}
 	c_{b1} &= 0.1355 & \sigma &= 2/3 & c_{b2} &= 0.622 \\
 	\kappa &= 0.41 & c_{w2} &= 0.3 & c_{w3} &= 2.0 \\
-	c_{v1} &= 7.1 & c_{w1} &= \frac{c_{b1}}{\kappa^2} + \frac{1 + c_{b2}}{\sigma}
+	c_{v1} &= 7.1 & c_{w1} &= \frac{c_{b1}}{\kappa^2} + \frac{1 + c_{b2}}{\sigma}.
 \end{align*}
 
 \subsection{Wall-Distance Calculation via the Relaxed Eikonal Equation}
-A major computational challenge in the SA model is the calculation of the wall distance $y$. In a standard static CFD simulation, $y$ is purely geometric and can be pre-computed. However, to ensure this verification solver translates seamlessly into the topology optimization code (where solid boundaries evolve continuously), the implementation abandons discrete geometric searches in favor of a PDE-based approach. 
+A major computational challenge in the SA model is the calculation of the wall distance $y$. In a standard static CFD simulation, $y$ is purely geometric and can be pre-computed. However, to ensure this verification solver translates into the topology optimization code, where solid boundaries evolve continuously, the implementation uses a PDE-based approach.
 
-The true geometric wall distance satisfies the standard Eikonal equation, $|\nabla y| = 1$. However, this formulation contains singularities at the medial axes of the domain. To guarantee continuous differentiability, a requirement for later adjoint derivations, a relaxed Eikonal equation proposed by Yoon \cite{Yoon2016} is solved:
+The true geometric wall distance satisfies the standard Eikonal equation, $|\nabla y| = 1$. However, this formulation contains singularities at the medial axes of the domain. To guarantee continuous differentiability, a relaxed reciprocal-distance equation proposed by Yoon \cite{Yoon2016} is solved:
 \begin{equation}
-	\nabla G \cdot \nabla G + \sigma_w G (\nabla \cdot \nabla G) = (1 + 2\sigma_w) G^4
+	\nabla G \cdot \nabla G + \sigma_w G (\nabla \cdot \nabla G) = (1 + 2\sigma_w) G^4 .
 \end{equation}
-Here, $G$ is an intermediate, non-dimensional field variable. The parameter $\sigma_w$ is a relaxation constant (typically set to $0.1$) that controls the smoothness of the field. The PDE is subjected to a Dirichlet boundary condition at the physical walls, $G = G_0$, where $G_0$ is an arbitrarily large constant (e.g., $G_0 = 20.0$). Once the field $G$ is solved over the domain, the physical wall distance $y$ is recovered algebraically at every node using the inverse relationship:
+Here, $G$ is an intermediate reciprocal-distance field variable. The parameter $\sigma_w$ is a relaxation constant, typically set to $0.1$, that controls the smoothness of the field. The PDE is subjected to a Dirichlet boundary condition at the physical walls, $G = G_0$, where $G_0$ is an arbitrarily large constant. Once $G$ is solved over the domain, the physical wall distance $y$ is recovered algebraically using the inverse relationship:
 \begin{equation}
-	y = \frac{1}{G} - \frac{1}{G_0}
+	y = \frac{1}{G} - \frac{1}{G_0}.
 \end{equation}
+The code applies small numerical floors and non-negativity safeguards during this recovery to prevent division-by-zero and roundoff artifacts, but the mathematical equation used in the thesis remains the Yoon formulation above.
 
-This system is implemented as a nonlinear weak residual for $G$. After multiplying by a scalar test function and integrating the $\sigma_w G \nabla^2 G$ term by parts, the residual contains only first derivatives of $G$. Listing~\ref{lst:eikonal_fenics} shows the weak-form structure used by the solver: the first two terms represent the relaxed Eikonal operator, the third term is the nonlinear source, and the Dirichlet condition fixes $G$ on physical walls before recovering $y$ algebraically.
-
-\begin{lstlisting}[caption={Pseudocode for the relaxed Eikonal wall-distance solve.}, label={lst:eikonal_fenics}]
-	# Unknown reciprocal wall-distance field G, test function z.
-	F_G = (
-	    (1.0 - sigma_w) * inner(grad(G), grad(G)) * z * dx
-	    - sigma_w * G * inner(grad(G), grad(z)) * dx
-	    - (1.0 + 2.0 * sigma_w) * G**4 * z * dx
-	)
-
-	wall_bc = DirichletBC(V_G, G0, physical_walls)
-	solve(F_G == 0, G, wall_bc, J=derivative(F_G, G))
-
-	G = enforce_lower_bound(G, G_min)
-	y = 1.0 / G - 1.0 / G0
-\end{lstlisting}
+This system is implemented as a nonlinear weak residual for $G$. After multiplying by a scalar test function and integrating the $\sigma_w G \nabla^2 G$ term by parts, the residual contains only first derivatives of $G$:
+\begin{equation}
+	(1-\sigma_w)\int_\Omega |\nabla G|^2 z\,dx
+	-\sigma_w\int_\Omega G\nabla G\cdot\nabla z\,dx
+	-(1+2\sigma_w)\int_\Omega G^4 z\,dx=0 .
+\end{equation}
 
 \section{Variational Formulation and FEniCS Implementation}
 The standard Galerkin weak formulation is constructed by multiplying the steady transport Equation~\ref{eq:sa_steady_transport} by a test function $\xi$ and applying integration by parts to the diffusive terms. Because the equation is highly non-linear, robust convergence is dependent on the stability of the external velocity field provided by the Picard outer loop.
 
-To manage this non-linearity, the equation is linearized within the Picard iteration scheme by freezing certain parameters using the most recent value of the working variable, $\tilde{\nu}^0$. Specifically, the turbulence production and cross-diffusion terms are treated as explicit sources evaluated using $\tilde{\nu}^0$. Conversely, the wall destruction term is linearized into an implicit reaction sink by scaling the continuous $\tilde{\nu}$ against the frozen variable, taking the form $c_{w1} f_w (\tilde{\nu}^0 / y^2) \tilde{\nu}$. 
+To manage this non-linearity, the equation is linearized within the Picard iteration scheme by freezing certain parameters using the most recent value of the working variable, $\tilde{\nu}^0$. Specifically, the turbulence production and cross-diffusion terms are treated as explicit sources evaluated using $\tilde{\nu}^0$. Conversely, the wall destruction term is linearized into an implicit reaction sink by scaling the continuous $\tilde{\nu}$ against the frozen variable, taking the form $c_{w1} f_w (\tilde{\nu}^0 / y^2) \tilde{\nu}$.
 
 The finite-element implementation mirrors the analytical weak form using the most recent convective velocity field passed from the flow solver. Listing~\ref{lst:sa_fenics} shows the residual assembled in each Picard step. The convection, implicit diffusion, and implicit destruction terms are placed on the left-hand side, while production and cross-diffusion are evaluated from the previous SA field and treated as explicit sources.
 
@@ -148,7 +141,30 @@ The finite-element implementation mirrors the analytical weak form using the mos
 	nu_t = eddy_viscosity_from(nu_tilde)
 \end{lstlisting}
 
-\section{Conclusion}
-This chapter has established the numerical formulation of the FEniCS-SA flow solver used throughout the remainder of the thesis. The key ingredients are the weak-form finite-element implementation, Picard decoupling of the velocity-pressure and turbulence fields, IPCS pseudo-time stepping for the incompressible flow solve, the steady SA transport equation, and the relaxed Eikonal wall-distance formulation.
+\section{Global Benchmark Solver Path}
+For the verification benchmarks in Chapter~\ref{ch:sa_verification}, the forward solver follows the global path summarized in Listing~\ref{lst:sa_benchmark_path}. This listing is more representative than a long implementation dump because it shows where the wall-distance update, IPCS flow solve, and SA transport solve enter the coupled algorithm.
 
-Separating these methods from their verification keeps the thesis logic clean: this chapter explains how the solver is constructed, Chapter~\ref{ch:topology_optimization_methodology} extends the same finite-element machinery to density-based topology optimization and adjoint sensitivities, and Chapter~\ref{ch:sa_verification} then verifies the standalone SA solver against Ansys Fluent benchmark cases before the topology optimization results are interpreted.
+\begin{lstlisting}[caption={Global solver path for the forward SA verification benchmarks.}, label={lst:sa_benchmark_path}]
+	initialize velocity, pressure, nu_tilde, and wall_distance
+	compute relaxed-Eikonal wall_distance on the fixed physical walls
+
+	while not converged:
+	    build eddy viscosity nu_t from the current nu_tilde
+
+	    for pseudo_time_step in flow_solve:
+	        solve IPCS tentative velocity step with fixed nu_t
+	        solve pressure-correction equation
+	        update divergence-free velocity field
+
+	    solve Picard-linearized steady SA transport equation
+	    under_relax velocity and nu_tilde
+	    apply turbulence-variable bounds and boundary values
+	    check flow and turbulence residuals
+
+	export velocity, pressure, nu_tilde, nu_t, and wall_distance
+\end{lstlisting}
+
+\section{Conclusion}
+This chapter has established the numerical formulation of the FEniCS-SA forward solver used for the verification benchmarks. The key ingredients are the weak-form finite-element implementation, Picard decoupling of the velocity-pressure and turbulence fields, IPCS pseudo-time stepping for the incompressible flow solve, the steady SA transport equation, and the relaxed Eikonal wall-distance formulation.
+
+Separating these methods from their verification keeps the thesis logic clean: this chapter explains how the forward SA solver is constructed, Chapter~\ref{ch:sa_verification} verifies its turbulent-flow behavior against Ansys Fluent benchmark cases, and Chapter~\ref{ch:topology_optimization_methodology} extends the verified forward solver to density-based topology optimization and frozen adjoint sensitivities.

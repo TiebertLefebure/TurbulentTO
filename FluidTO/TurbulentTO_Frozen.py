@@ -2818,6 +2818,20 @@ def ipcs_accept_best_score_for_label(solve_label, default_score):
     return float(default_score)
 
 
+def ipcs_tolerances_for_label(solve_label, default_rtol_u, default_rtol_p):
+    """Return role-specific IPCS steady-state tolerances when configured."""
+    label_text = "" if solve_label is None else str(solve_label).lower()
+    rtol_u = default_rtol_u
+    rtol_p = default_rtol_p
+    if "final" in label_text:
+        rtol_u = globals().get("FORWARD_IPCS_FINAL_VELOCITY_RTOL", rtol_u)
+        rtol_p = globals().get("FORWARD_IPCS_FINAL_PRESSURE_RTOL", rtol_p)
+    elif "picard" in label_text:
+        rtol_u = globals().get("FORWARD_IPCS_PICARD_VELOCITY_RTOL", rtol_u)
+        rtol_p = globals().get("FORWARD_IPCS_PICARD_PRESSURE_RTOL", rtol_p)
+    return float(rtol_u), float(rtol_p)
+
+
 def summarize_linear_solver_failure(exc):
     """Extract the useful PETSc/DOLFIN reason from a failed linear solve."""
     lines = [line.strip(" *") for line in str(exc).splitlines() if line.strip(" *")]
@@ -2837,6 +2851,7 @@ def solve_forward_ipcs(solve_label=None, allow_best_without_acceptance=False):
     max_it  = int(globals().get("FORWARD_IPCS_MAX_ITERS", 200))
     rtol_u  = float(globals().get("FORWARD_IPCS_VELOCITY_RTOL", 1.0e-3))
     rtol_p  = float(globals().get("FORWARD_IPCS_PRESSURE_RTOL", 2.0e-2))
+    rtol_u, rtol_p = ipcs_tolerances_for_label(solve_label, rtol_u, rtol_p)
     omega_u_base = float(globals().get("FORWARD_IPCS_VEL_RELAXATION", 0.5))
     omega_p_base = float(globals().get("FORWARD_IPCS_P_RELAXATION", 0.2))
     min_omega_u = float(globals().get("FORWARD_IPCS_MIN_U_RELAXATION", 0.05))

@@ -1,5 +1,10 @@
 \begin{thebibliography}{10}
 
+\bibitem{Aage2017}
+N.~Aage, E.~Andreassen, B.~S. Lazarov, and O.~Sigmund.
+\newblock Giga-voxel computational morphogenesis for structural design.
+\newblock {\em Nature}, 550(7674):84--86, 2017.
+
 \bibitem{Abuhatira2021}
 A.~A. Abuhatira, S.~M. Salim, and J.~B. Vorstius.
 \newblock Numerical simulation of turbulent pipe flow with 90-degree elbow
@@ -24,14 +29,6 @@ M.~S. Aln{\ae}s, J.~Blechta, J.~Hake, A.~Johansson, B.~Kehlet, A.~Logg,
   C.~Richardson, J.~Ring, M.~E. Rognes, and G.~N. Wells.
 \newblock The fenics project version 1.5.
 \newblock {\em Archive of Numerical Software}, 3(100), 2015.
-
-\bibitem{Alonso2021}
-D.~H. Alonso, L.~F. Garcia~Rodriguez, and E.~C.~N. Silva.
-\newblock Flexible framework for fluid topology optimization with openfoam and
-  finite element-based high-level discrete adjoint method
-  (fenics/dolfin-adjoint).
-\newblock {\em Structural and Multidisciplinary Optimization},
-  64(6):4409--4440, 2021.
 
 \bibitem{Altair}
 Altair Engineering, Inc.
@@ -82,10 +79,22 @@ T.~Borrvall and J.~Petersson.
 \newblock {\em International journal for numerical methods in fluids},
   41(1):77--107, 2003.
 
+\bibitem{Bourdin2001}
+B.~Bourdin.
+\newblock Filters in topology optimization.
+\newblock {\em International Journal for Numerical Methods in Engineering},
+  50(9):2143--2158, 2001.
+
 \bibitem{Chorin1968}
 A.~J. Chorin.
 \newblock Numerical solution of the navier-stokes equations.
 \newblock {\em Mathematics of computation}, 22(104):745--762, 1968.
+
+\bibitem{Dean1927}
+W.~R. Dean.
+\newblock Xvi. note on the motion of fluid in a curved pipe.
+\newblock {\em The London, Edinburgh, and Dublin Philosophical Magazine and
+  Journal of Science}, 4(20):208--223, 1927.
 
 \bibitem{Deng2013}
 Y.~Deng, Z.~Liu, and Y.~Wu.
@@ -174,11 +183,29 @@ A.~Logg, K.-A. Mardal, and G.~N. Wells.
   Element Method: The FEniCS Book}, volume~84.
 \newblock Springer Science \& Business Media, 2012.
 
+\bibitem{Margetis2024}
+A.-S. Margetis, E.~Papoutsis-Kiachagias, and K.~Giannakoglou.
+\newblock The continuous adjoint to the incompressible (d) des spalart-allmaras
+  turbulence models.
+\newblock {\em Computers \& Fluids}, 284:106439, 2024.
+
+\bibitem{Menter1994}
+F.~R. Menter.
+\newblock Two-equation eddy-viscosity turbulence models for engineering
+  applications.
+\newblock {\em AIAA Journal}, 32(8):1598--1605, 1994.
+
 \bibitem{Maute2023}
 L.~No\"{e}l and K.~Maute.
 \newblock Xfem level set-based topology optimization for turbulent conjugate
   heat transfer problems.
 \newblock {\em Structural and Multidisciplinary Optimization}, 66(1), 2023.
+
+\bibitem{Ooms2024}
+T.~Ooms, G.~Vantyghem, T.~Thienpont, R.~Van~Coile, and W.~De~Corte.
+\newblock Thermoelastic topology optimization of structural components at
+  elevated temperatures considering transient heat conduction.
+\newblock {\em Engineering with Computers}, 40(4):2183--2207, 2024.
 
 \bibitem{Othmer2014}
 C.~Othmer.
@@ -204,6 +231,18 @@ C.~L. Rumsey et~al.
   2023.
 \newblock Accessed: 2024-05-15.
 
+\bibitem{Rumsey2001}
+C.~L. Rumsey, T.~B. Gatski, W.~K. Anderson, and E.~J. Nielsen.
+\newblock Isolating curvature effects in computing wall-bounded turbulent
+  flows.
+\newblock {\em International Journal of Heat and Fluid Flow}, 22:573--582,
+  2001.
+
+\bibitem{Rumsey2000}
+C.~L. Rumsey, T.~B. Gatski, and J.~H. Morrison.
+\newblock Turbulence model predictions of strongly curved flow in a {U-Duct}.
+\newblock {\em AIAA Journal}, 38(8):1394--1402, 2000.
+
 \bibitem{Schramm2018}
 M.~Schramm, B.~Stoevesandt, and J.~Peinke.
 \newblock Optimization of airfoils using the adjoint approach and the influence
@@ -219,6 +258,11 @@ P.~Spalart and S.~Allmaras.
 P.~R. Spalart and S.~R. Allmaras.
 \newblock A one-equation turbulence model for aerodynamic flows.
 \newblock {\em La Recherche Aérospatiale}, 1:5--21, 1994.
+
+\bibitem{Spalding1961}
+D.~B. Spalding.
+\newblock A single formula for the law of the wall.
+\newblock {\em Journal of Applied Mechanics}, 28(3):455--458, 1961.
 
 \bibitem{Stolpe2001}
 M.~Stolpe and K.~Svanberg.
