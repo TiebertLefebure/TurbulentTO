@@ -65,6 +65,7 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 1e-6
 OBJECTIVE_STREAK_TO_STOP = 10
+RESUME_OPTIMIZATION = True
 
 # Same continuation schedule as the frozen config for consistency.
 Q_PENAL_SCHEDULE = [
@@ -100,9 +101,17 @@ ETA_I = 0.50
 OUTLET_BC_TYPE = "velocity"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
+
+# Result folder toggles. Keep the lightweight text files needed for
+# postprocessing, but skip heavy fields that are not needed for this resume.
+SAVE_RHO_FOLDER = False
+SAVE_RHO_PROJECTED_FOLDER = True
+SAVE_U_FOLDER = True
+SAVE_P_FOLDER = True
+SAVE_DESIGN_FOLDER = True
+SAVE_DF0DX_CENTERED_FOLDER = False
 SAVE_DF0DX_VECTOR = True
 LOG_DF0DX_STATS = True
-SAVE_DF0DX_CENTERED_FIELD = True
 RESULTS_ROOT_NAME = "Results_Laminar/Results_DiffuserYoon_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}

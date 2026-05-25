@@ -27,6 +27,15 @@ The most common approach to turbulence modeling in engineering is the Reynolds-A
 	u_i = \bar{u}_i + u'_i \quad \text{and} \quad p = \bar{p} + p' .
 \end{equation}
 
+Figure~\ref{fig:reynolds_decomposition} illustrates this separation for velocity and pressure signals measured at a fixed point in a turbulent flow. The instantaneous signal contains rapid turbulent fluctuations, while the dashed mean line represents the slowly varying quantity retained by the RANS equations. By construction, the mean of the fluctuating component is zero, but products of fluctuations, such as $\overline{u'_i u'_j}$, remain non-zero and generate the Reynolds-stress terms.
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=0.95\textwidth]{Reynolds-decomposition}
+	\caption{Reynolds decomposition of velocity and pressure signals into mean and fluctuating components. Adapted from the Fluid Mechanics on the Web Chapter 6 material based on White's viscous-flow treatment \cite{OnlineFlowCalculatorWhiteCh6}.}
+	\label{fig:reynolds_decomposition}
+\end{figure}
+
 Substituting these decomposed variables into the standard Navier-Stokes equations and taking the time average yields the RANS momentum equations:
 \begin{equation}
 	\rho \left( \frac{\partial \bar{u}_i}{\partial t} + \bar{u}_j \frac{\partial \bar{u}_i}{\partial x_j} \right) = -\frac{\partial \bar{p}}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial \bar{u}_i}{\partial x_j} - \rho \overline{u'_i u'_j} \right) .
@@ -50,6 +59,15 @@ Before selecting a specific turbulence equation to calculate $\mu_t$, the physic
 	y^+ = \frac{y u_\tau}{\nu}, \quad u^+ = \frac{\bar{u}}{u_\tau}
 \end{equation}
 where $y$ is the distance from the wall, $\nu$ is the kinematic viscosity, and $u_\tau = \sqrt{\tau_w/\rho}$ is the friction velocity derived from the wall shear stress ($\tau_w$) \cite{Pope2000}.
+
+Figure~\ref{fig:near_wall_treatment} shows the usual wall-unit subdivision used when discussing RANS wall treatment. The viscous sublayer lies closest to the wall and is controlled mainly by molecular viscosity. The buffer layer is a transition region where molecular and turbulent shear are both important. Farther from the wall, the logarithmic layer follows the classical law-of-the-wall behavior, while the outer wake region becomes increasingly sensitive to pressure-gradient and outer-flow effects \cite{AltairNearWall2024}.
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=0.82\textwidth]{Near-wall-treatment}
+	\caption{Near-wall turbulent boundary-layer regions in wall units. Adapted from Altair's AcuSolve near-wall modeling documentation \cite{AltairNearWall2024}.}
+	\label{fig:near_wall_treatment}
+\end{figure}
 
 \begin{enumerate}
 	\item \textbf{The viscous sublayer ($y^+ < 5$):} Immediately adjacent to the wall, turbulent fluctuations are damped by kinematic constraints. Viscous shear dominates, and the velocity profile is approximately linear ($u^+ = y^+$).

@@ -7,8 +7,9 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 # Configuration: Yoon 2016 Double Pipe - Turbulent Frozen (SA, Re = 3,000)
 #
 # This follows Yoon's Fig. 7/Fig. 10 two-inlet/two-outlet pipe setup:
-# parabolic velocity at both inlet ports, p = 0 at both outlet ports,
-# and nu_tilde = 50 at both inlet and outlet ports.
+# parabolic velocity at the left-top and right-bottom inlet ports, p = 0
+# at the right-top and left-bottom outlet ports, and nu_tilde = 50 at all
+# open ports.
 # ===================================================================
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,24 +56,37 @@ BOTTOM_OUTLET_Y_MAX = BOTTOM_OUTLET_Y_MIN + H3
 TOP_OUTLET_Y_MIN = 3.0
 TOP_OUTLET_Y_MAX = TOP_OUTLET_Y_MIN + H3
 
+LEFT_TOP_SEGMENT = (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX)
+LEFT_BOTTOM_SEGMENT = (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX)
+RIGHT_TOP_SEGMENT = (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX)
+RIGHT_BOTTOM_SEGMENT = (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX)
+
 INLET_SEGMENTS = [
-    (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX),
-    (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX),
+    LEFT_TOP_SEGMENT,
+    RIGHT_BOTTOM_SEGMENT,
 ]
 OUTLET_SEGMENTS = [
-    (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX),
-    (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX),
+    RIGHT_TOP_SEGMENT,
+    LEFT_BOTTOM_SEGMENT,
+]
+LEFT_PORT_SEGMENTS = [
+    LEFT_TOP_SEGMENT,
+    LEFT_BOTTOM_SEGMENT,
+]
+RIGHT_PORT_SEGMENTS = [
+    RIGHT_TOP_SEGMENT,
+    RIGHT_BOTTOM_SEGMENT,
 ]
 TOL = DOLFIN_EPS
 
 # Flow and Brinkman parameters from Yoon Fig. 7/Fig. 10.
 RHO_FLUID_VALUE = 1.0
 MU_FLUID_VALUE = 1.0
-U_MAX_INLETS = [3000.0, 3000.0]
+U_MAX_INLETS = [3000.0, -3000.0]
 ALPHA_FLUID = 0.0
 ALPHA_SOLID = 1.0e5
 
-# Re = rho * U_MAX * h / mu = 3,000 for the 1 m high ports.
+# Re = rho * |U_MAX| * h / mu = 3,000 for the 1 m high ports.
 REYNOLDS_NUMBER = 3000.0
 
 # Yoon Fig. 10 imposes nu_tilde = 50 at both input and output ports.
@@ -215,11 +229,33 @@ FORWARD_IPCS_PICARD_ACCEPT_BEST_SCORE = 10.0
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
+PRESSURE_OUTLET_COMPONENT_BCS = [
+    {"marker": "outlet", "component": 1, "value": 0.0},
+]
 ENABLE_PRESSURE_PIN = False
 
 RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeYoon_Re3000_NuTilde50_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
+
+INLET_PORTS = [
+    {"marker": MARK["inlet"][0], "x": DOMAIN_X_MIN, "segment": LEFT_TOP_SEGMENT, "u_max": U_MAX_INLETS[0]},
+    {"marker": MARK["inlet"][1], "x": DOMAIN_X_MAX, "segment": RIGHT_BOTTOM_SEGMENT, "u_max": U_MAX_INLETS[1]},
+]
+OUTLET_PORTS = [
+    {"marker": MARK["outlet"][0], "x": DOMAIN_X_MAX, "segment": RIGHT_TOP_SEGMENT},
+    {"marker": MARK["outlet"][1], "x": DOMAIN_X_MIN, "segment": LEFT_BOTTOM_SEGMENT},
+]
+DESIGN_PRESSURE_DROP_PLANES = {
+    "inlet": [
+        {"axis": 0, "location": DESIGN_X_MIN, "range": LEFT_TOP_SEGMENT},
+        {"axis": 0, "location": DESIGN_X_MAX, "range": RIGHT_BOTTOM_SEGMENT},
+    ],
+    "outlet": [
+        {"axis": 0, "location": DESIGN_X_MAX, "range": RIGHT_TOP_SEGMENT},
+        {"axis": 0, "location": DESIGN_X_MIN, "range": LEFT_BOTTOM_SEGMENT},
+    ],
+}
 
 
 def between(value, limits, eps=DOLFIN_EPS):
@@ -250,8 +286,8 @@ class WallsBoundary(SubDomain):
         y_min,
         y_max,
         tol,
-        inlet_segments,
-        outlet_segments,
+        left_port_segments,
+        right_port_segments,
     ):
         super().__init__()
         self._design_x_min = design_x_min
@@ -261,29 +297,29 @@ class WallsBoundary(SubDomain):
         self._y_min = y_min
         self._y_max = y_max
         self._tol = tol
-        self._inlet_segments = inlet_segments
-        self._outlet_segments = outlet_segments
+        self._left_port_segments = left_port_segments
+        self._right_port_segments = right_port_segments
 
     def _inside_any_segment(self, y_value, segments):
         return any(between(y_value, segment, self._tol) for segment in segments)
 
     def inside(self, x, on_boundary):
         left_step_wall = near(x[0], self._design_x_min, self._tol) and not self._inside_any_segment(
-            x[1], self._inlet_segments
+            x[1], self._left_port_segments
         )
         right_step_wall = near(x[0], self._design_x_max, self._tol) and not self._inside_any_segment(
-            x[1], self._outlet_segments
+            x[1], self._right_port_segments
         )
         top_wall = near(x[1], self._y_max, self._tol)
         bottom_wall = near(x[1], self._y_min, self._tol)
         inlet_strip_caps = any(
             (near(x[1], y_edge, self._tol) and between(x[0], (self._domain_x_min, self._design_x_min), self._tol))
-            for segment in self._inlet_segments
+            for segment in self._left_port_segments
             for y_edge in segment
         )
         outlet_strip_caps = any(
             (near(x[1], y_edge, self._tol) and between(x[0], (self._design_x_max, self._domain_x_max), self._tol))
-            for segment in self._outlet_segments
+            for segment in self._right_port_segments
             for y_edge in segment
         )
         return on_boundary and (
@@ -302,13 +338,15 @@ def mark_boundaries(mesh):
 
     WallsBoundary(
         DESIGN_X_MIN, DESIGN_X_MAX, DOMAIN_X_MIN, DOMAIN_X_MAX, DOMAIN_Y_MIN, DOMAIN_Y_MAX,
-        TOL, INLET_SEGMENTS, OUTLET_SEGMENTS,
+        TOL, LEFT_PORT_SEGMENTS, RIGHT_PORT_SEGMENTS,
     ).mark(boundaries, MARK["walls"])
 
-    for marker, segment in zip(MARK["inlet"], INLET_SEGMENTS):
-        VerticalPortBoundary(DOMAIN_X_MIN, TOL, segment[0], segment[1]).mark(boundaries, marker)
-    for marker, segment in zip(MARK["outlet"], OUTLET_SEGMENTS):
-        VerticalPortBoundary(DOMAIN_X_MAX, TOL, segment[0], segment[1]).mark(boundaries, marker)
+    for port in INLET_PORTS:
+        segment = port["segment"]
+        VerticalPortBoundary(port["x"], TOL, segment[0], segment[1]).mark(boundaries, port["marker"])
+    for port in OUTLET_PORTS:
+        segment = port["segment"]
+        VerticalPortBoundary(port["x"], TOL, segment[0], segment[1]).mark(boundaries, port["marker"])
     return boundaries
 
 
@@ -326,7 +364,7 @@ def _parabolic_x_profile(y_min, y_max, u_max):
 
 def build_velocity_profile_sets():
     inlet_profiles = [
-        _parabolic_x_profile(segment[0], segment[1], u_max)
-        for segment, u_max in zip(INLET_SEGMENTS, U_MAX_INLETS)
+        _parabolic_x_profile(port["segment"][0], port["segment"][1], port["u_max"])
+        for port in INLET_PORTS
     ]
     return inlet_profiles, []

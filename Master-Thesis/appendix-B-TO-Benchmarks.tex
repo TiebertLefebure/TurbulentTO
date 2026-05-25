@@ -15,30 +15,36 @@ For each extracted turbulent topology optimization design, the Ansys validation 
 
 All Fluent mesh-independence runs in this appendix use the same convergence and acceptance criteria. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation for both SA and SST $k-\omega$. The reported refinement differences are computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{coarse}}|/|\phi_{\mathrm{coarse}}|$ and $|\phi_{\mathrm{fine}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{medium}}|$ for each validation metric.
 
-\section{Shared Pipe-Bend and U-Bend Topology Optimization Conventions}
-\label{sec:app_B_alexandersen_shared_conventions}
-The pipe-bend and U-bend benchmarks use the same turbulence-topology coupling conventions. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The design density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}.
+\section{Shared Turbulence-Topology Coupling Conventions}
+\label{sec:app_B_shared_coupling_conventions}
+All three turbulent topology optimization benchmarks use the same basic coupling idea between the density field, the SA working variable, and the reciprocal wall-distance equation. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The wall-density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}. The same frozen-turbulence adjoint convention is also used: the forward loop updates $\tilde{\nu}$, $\nu_t$, and $G$, while the derivative freezes $\tilde{\nu}$ and $G$ during gradient assembly.
+
+The pipe-bend and U-bend benchmarks then share a Bayat-style pressure-loss setup, while the diffuser follows the Yoon dissipation benchmark. The common mechanisms and the benchmark-specific parameter values are summarized in Table~\ref{tab:app_B_shared_coupling_conventions}.
 
 The pipe-bend finite-difference sensitivity verification in Chapter~\ref{ch:benchmark_results} is not assigned a separate configuration table. It uses the same geometry, physical parameters, wall-distance convention, penalty settings, objective, filter, and solver setup as the pipe-bend topology optimization run. The only additional settings are the finite-difference sampling parameters listed in Table~\ref{tab:app_B_alexandersen_pipebend_numerical}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Shared wall-distance and SA topology-penalty conventions for the pipe-bend and U-bend benchmarks.}
-	\label{tab:app_B_alexandersen_shared_conventions}
+	\caption{Shared turbulence-topology coupling conventions and benchmark-specific parameter values.}
+	\label{tab:app_B_shared_coupling_conventions}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
+	\begin{tabularx}{\textwidth}{l X X}
 		\hline
-		\textbf{Parameter} & \textbf{Setting} \\
+		\textbf{Parameter} & \textbf{Pipe bend and U-bend} & \textbf{Diffuser} \\
 		\hline
-		SA wall-distance mode & \texttt{reciprocal\_penalized} \\
-		SA wall-density source & \texttt{design} \\
-		Solid threshold for wall source & $\bar{\gamma}=0.50$ \\
-		SA working-variable penalty & Power-law solid indicator with amplitude $10^3$ and exponent $n=4$ \\
-		Wall-distance penalty & Power-law solid indicator with amplitude $10^3$ and exponent $n=4$ \\
-		Wall-distance recovery & Reciprocal recovery from the relaxed Eikonal variable $G$ \\
-		SA inlet turbulence estimate & $I=7.5\%$, $\ell/H=0.05$, eddy-viscosity ratio capped at $50$ \\
-		Optimization objective & Average inlet pressure with fixed outlet pressure $p=0$ \\
+		SA wall-distance mode & \texttt{reciprocal\_penalized} & \texttt{reciprocal\_penalized} \\
+		SA wall-density source & \texttt{design} & \texttt{design} \\
+		SA penalty interpolation & Power-law solid indicator & Power-law solid indicator \\
+		Wall-distance penalty interpolation & Power-law solid indicator & Power-law solid indicator \\
+		Wall-distance recovery & Reciprocal recovery from the relaxed Eikonal variable $G$ & Reciprocal recovery from the relaxed Eikonal variable $G$ \\
+		Adjoint treatment & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly \\
+		Solid threshold for wall source & $\bar{\gamma}=0.50$ & No separate threshold parameter in the diffuser configuration \\
+		SA working-variable penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
+		Wall-distance penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
+		Wall-distance parameters & $\sigma_w=0.01$, $G_0=20$ & $\sigma_w=0.1$, $G_0=20$ \\
+		SA inlet treatment & Turbulence-intensity estimate: $I=7.5\%$, $\ell/H=0.05$, eddy-viscosity ratio capped at $50$ & Prescribed $\tilde{\nu}=1$ at inlet and outlet \\
+		Optimization objective & Average inlet pressure with fixed outlet pressure $p=0$ & Dissipation objective $J_D$ with prescribed inlet and outlet velocity profiles \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -72,7 +78,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 		Volume fraction & $V_f=0.25$ \\
 		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ with $H_{\mathrm{in}}=0.2L$ \\
 		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
-		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_alexandersen_shared_conventions} \\
+		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
 		Outlet condition & Pressure outlet $p=0$ on the lower outlet, with the normal/tangential component constraint used by the FEniCS configuration \\
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls; topology-created solids enter through the design-density penalties \\
 		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
@@ -181,7 +187,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 		Volume fraction & $V_f=0.27$ \\
 		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ with $H_{\mathrm{port}}=0.2L$ \\
 		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
-		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_alexandersen_shared_conventions} \\
+		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
 		Outlet condition & Pressure outlet $p=0$ on the lower left port, with the component constraint used by the FEniCS configuration \\
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls and the fixed separator; topology-created solids enter through the design-density penalties \\
 		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
@@ -252,7 +258,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 \section{Diffuser Benchmark}
 \label{sec:app_B_config_yoon_diffuser}
 
-The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-bend and U-bend benchmarks, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$.
+The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-bend and U-bend benchmarks, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$. Its turbulence-density coupling still uses the shared \texttt{design}, \texttt{reciprocal\_penalized}, power-law, and frozen-adjoint conventions summarized in Table~\ref{tab:app_B_shared_coupling_conventions}.
 
 \begin{table}[htbp]
 	\centering

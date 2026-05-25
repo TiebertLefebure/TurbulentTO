@@ -36,6 +36,13 @@ Altair Engineering, Inc.
 \newblock Available online:
   \url{https://help.altair.com/hwcfdsolvers/acusolve}.
 
+\bibitem{AltairNearWall2024}
+Altair Engineering, Inc.
+\newblock {\em AcuSolve Training Manual: Near-Wall Modeling}, 2024.
+\newblock Available online:
+  \url{https://2024.help.altair.com/2024.1/hwcfdsolvers/acusolve/topics/acusolve/training_manual/near_wall_modeling_r.htm};
+  accessed 25 May 2026.
+
 \bibitem{AnsysVerification2024}
 ANSYS, Inc., Canonsburg, PA.
 \newblock {\em Ansys Fluid Dynamics Verification Manual, Release 2024 R1},
@@ -200,6 +207,13 @@ L.~No\"{e}l and K.~Maute.
 \newblock Xfem level set-based topology optimization for turbulent conjugate
   heat transfer problems.
 \newblock {\em Structural and Multidisciplinary Optimization}, 66(1), 2023.
+
+\bibitem{OnlineFlowCalculatorWhiteCh6}
+{Online Flow Calculator}.
+\newblock Fluid mechanics on the web: Chapter 6, viscous flow in ducts.
+\newblock \url{https://fluidmech.onlineflowcalculator.com/White/Chapter6/},
+  n.d.
+\newblock Accessed: 2026-05-25.
 
 \bibitem{Ooms2024}
 T.~Ooms, G.~Vantyghem, T.~Thienpont, R.~Van~Coile, and W.~De~Corte.

@@ -67,7 +67,7 @@ The local benchmark geometry used for the present implementation is shown in Fig
 
 \begin{figure}[!ht]
 	\centering
-	\includegraphics[width=0.75\textwidth]{Alexandersen-PipeBend-GeometryBCs}
+	\includegraphics[width=0.75\textwidth]{PipeBend-Geometry-BCs}
 	\caption{Geometry and boundary conditions for the pipe-bend benchmark from Bayat et al.~\cite{Bayat2026}. The present evaluation targets the $V_f=0.25$ case using the SA model.}
 	\label{fig:alexandersen_pipebend_setup}
 \end{figure}
@@ -166,18 +166,18 @@ Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected 
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Topology}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_pipebend_topology}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Velocity-FEniCS}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Velocity-FEniCS}
 		\caption{Velocity magnitude field $u$.}
 		\label{fig:alexandersen_pipebend_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$. Final objective function value $J_p= 0.2032$ Pa.}
+	\caption{FEniCS-SA optimization result for the pipe-bend benchmark at $V_f=0.25$. Final objective value $J_p= 0.2032$ Pa.}
 	\label{fig:alexandersen_pipebend_fenics_results}
 \end{figure}
 
@@ -192,7 +192,7 @@ With this sign convention, the dashed line at $r_V=0$ represents the active volu
 
 \begin{figure}[!ht]
 	\centering
-	\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Convergence-History}
+	\includegraphics[width=\textwidth]{PipeBend-Turbulent-Convergence-History}
 	\caption{Optimization convergence history for the pipe-bend benchmark. The blue curve shows the normalized pressure objective $J/J_0$, while the orange curve shows the relative volume-fraction residual $r_V$ from Eq.~\eqref{eq:alexandersen_pipebend_volume_residual}.}
 	\label{fig:alexandersen_pipebend_histories}
 \end{figure}
@@ -233,14 +233,14 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_topologies} compares the laminar a
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Laminar-Topology}
+		\includegraphics[width=\textwidth]{PipeBend-Laminar-Topology}
 		\caption{Projected density field $\bar{\gamma}$: laminar-optimized pipe-bend topology ($Re=1$).}
 		\label{fig:alexandersen_pipebend_laminar_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Topology}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized pipe-bend topology.}
 		\label{fig:alexandersen_pipebend_turbulent_topo}
 	\end{subfigure}
@@ -254,14 +254,14 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the cor
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Laminar-Velocity-Ansys}
+		\includegraphics[width=\textwidth]{PipeBend-Laminar-Velocity-Ansys}
 		\caption{Velocity magnitude field $u$: laminar-optimized design.}
 		\label{fig:alexandersen_pipebend_laminar_velocity_sst}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-PipeBend-Turbulent-Velocity-Ansys}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Velocity-Ansys}
 		\caption{Velocity magnitude field $u$: turbulent-optimized design.}
 		\label{fig:alexandersen_pipebend_turbulent_velocity_sst}
 	\end{subfigure}
@@ -298,7 +298,7 @@ Figure~\ref{fig:alexandersen_ubend_setup} shows the corresponding local geometry
 
 \begin{figure}[!ht]
 	\centering
-	\includegraphics[width=0.8\textwidth]{Alexandersen-UBend-GeometryBCs}
+	\includegraphics[width=0.8\textwidth]{UBend-TO-Geometry-BCs}
 	\caption{Geometry and boundary conditions for the U-bend benchmark from Bayat et al.~\cite{Bayat2026}.}
 	\label{fig:alexandersen_ubend_setup}
 \end{figure}
@@ -368,7 +368,7 @@ Figure~\ref{fig:alexandersen_ubend_laminar_topologies} compares the laminar and 
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-UBend-Laminar-Topology}
+		\includegraphics[width=\textwidth]{UBend-Laminar-Topology}
 		\caption{Projected density field $\bar{\gamma}$: laminar-optimized U-bend topology ($Re=1$).}
 		\label{fig:alexandersen_ubend_laminar_topo}
 	\end{subfigure}
@@ -389,7 +389,7 @@ Figure~\ref{fig:alexandersen_ubend_laminar_velocity_comparison} shows the SST $k
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Alexandersen-UBend-Laminar-Velocity-Ansys}
+		\includegraphics[width=\textwidth]{UBend-Laminar-Velocity-Ansys}
 		\caption{Velocity magnitude field $u$: laminar-optimized design.}
 		\label{fig:alexandersen_ubend_laminar_velocity_sst}
 	\end{subfigure}
@@ -457,7 +457,7 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 		\caption{Velocity magnitude field $u$.}
 		\label{fig:yoon_diffuser_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective function value $J_D=2.8264\times10^5~\mathrm{W/m}$.}
+	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective value $J_D=2.8264\times10^5~\mathrm{W/m}$.}
 	\label{fig:yoon_diffuser_fenics_results}
 \end{figure}
 
@@ -467,7 +467,7 @@ The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuse
 
 \begin{figure}[!ht]
 	\centering
-		\includegraphics[width=\textwidth]{Diffuser-Convergence-History}
+		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Convergence-History}
 	\caption{Optimization convergence history for the diffuser benchmark. The final figure should use a combined dissipation-objective and volume-residual plot.}
 	\label{fig:yoon_diffuser_histories}
 \end{figure}
@@ -503,15 +503,15 @@ Figure~\ref{fig:yoon_diffuser_laminar_topologies} compares the laminar and turbu
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
-		\caption{Projected density field $\bar{\gamma}$: laminar-optimized diffuser topology ($Re=1$).}
+		\includegraphics[width=\textwidth]{Diffuser-Laminar-Topology}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized design ($Re=1$). Final objective value $J_D= 1.1655\times10^7~\mathrm{W/m}$.}
 		\label{fig:yoon_diffuser_laminar_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Topology}
-		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized diffuser topology.}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized design ($Re=3{,}000$). Final objective value $J_D=2.8264\times10^5~\mathrm{W/m}$.}
 		\label{fig:yoon_diffuser_turbulent_topo}
 	\end{subfigure}
 	\caption{Laminar and turbulent topology comparison for the diffuser benchmark.}

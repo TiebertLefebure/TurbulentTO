@@ -20,6 +20,7 @@ from Utilities_SharedTO import (
     build_design_pressure_drop_markers,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
+    config_truthy,
     create_design_mesh_from_config,
     ensure_clean_dir,
     ensure_dir,
@@ -570,9 +571,29 @@ u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
 design_dir = os.path.join(results_root, "design")
 df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
-save_df0dx_vector = bool(globals().get("SAVE_DF0DX_VECTOR", False))
-log_df0dx_stats = bool(globals().get("LOG_DF0DX_STATS", save_df0dx_vector))
-save_df0dx_centered_field = bool(globals().get("SAVE_DF0DX_CENTERED_FIELD", log_df0dx_stats))
+
+
+def output_flag(name, default=True):
+    return config_truthy(globals().get(name, default))
+
+
+save_rho_field = output_flag("SAVE_RHO_FOLDER", globals().get("SAVE_RHO_FIELD", True))
+save_rho_projected_field = output_flag(
+    "SAVE_RHO_PROJECTED_FOLDER",
+    globals().get("SAVE_RHO_PROJECTED_FIELD", True),
+)
+save_velocity_field = output_flag("SAVE_U_FOLDER", globals().get("SAVE_VELOCITY_FIELD", True))
+save_pressure_field = output_flag("SAVE_P_FOLDER", globals().get("SAVE_PRESSURE_FIELD", True))
+save_design_text_files = output_flag(
+    "SAVE_DESIGN_FOLDER",
+    globals().get("SAVE_DESIGN_TEXT_FILES", True),
+)
+save_df0dx_vector = save_design_text_files and output_flag("SAVE_DF0DX_VECTOR", False)
+log_df0dx_stats = output_flag("LOG_DF0DX_STATS", save_df0dx_vector)
+save_df0dx_centered_field = output_flag(
+    "SAVE_DF0DX_CENTERED_FOLDER",
+    globals().get("SAVE_DF0DX_CENTERED_FIELD", log_df0dx_stats),
+)
 
 checkpoint_path = optimization_checkpoint_path(results_root)
 resume_requested = resume_optimization_requested(globals())
@@ -586,7 +607,17 @@ resume_vtk_iteration = (
 
 if resume_from_checkpoint:
     root_print("Resuming optimization from checkpoint {}".format(checkpoint_path))
-    output_dirs = [results_root, rho_dir, rho_p_dir, u_dir, p_dir, design_dir]
+    output_dirs = [results_root]
+    if save_rho_field:
+        output_dirs.append(rho_dir)
+    if save_rho_projected_field:
+        output_dirs.append(rho_p_dir)
+    if save_velocity_field:
+        output_dirs.append(u_dir)
+    if save_pressure_field:
+        output_dirs.append(p_dir)
+    if save_design_text_files:
+        output_dirs.append(design_dir)
     if save_df0dx_centered_field:
         output_dirs.append(df0dx_centered_dir)
     for output_dir in output_dirs:
@@ -599,25 +630,40 @@ else:
             )
         )
     ensure_clean_dir(results_root)
-    ensure_clean_dir(rho_dir)
-    ensure_clean_dir(rho_p_dir)
-    ensure_clean_dir(u_dir)
-    ensure_clean_dir(p_dir)
-    ensure_clean_dir(design_dir)
+    if save_rho_field:
+        ensure_clean_dir(rho_dir)
+    if save_rho_projected_field:
+        ensure_clean_dir(rho_p_dir)
+    if save_velocity_field:
+        ensure_clean_dir(u_dir)
+    if save_pressure_field:
+        ensure_clean_dir(p_dir)
+    if save_design_text_files:
+        ensure_clean_dir(design_dir)
     if save_df0dx_centered_field:
         ensure_clean_dir(df0dx_centered_dir)
 
-rho_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_dir, "plot_rho.pvd"), resume_vtk_iteration), COMM))
-rhop_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd"), resume_vtk_iteration), COMM))
-u_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(u_dir, "plot_u.pvd"), resume_vtk_iteration), COMM))
-p_out = File(reset_vtk_series(resume_vtk_series_path(os.path.join(p_dir, "plot_p.pvd"), resume_vtk_iteration), COMM))
-if save_df0dx_centered_field:
-    df0dx_centered_out = File(
+
+def make_vtk_writer(enabled, output_dir, filename):
+    if not enabled:
+        return None
+    return File(
         reset_vtk_series(
-            resume_vtk_series_path(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd"), resume_vtk_iteration),
+            resume_vtk_series_path(os.path.join(output_dir, filename), resume_vtk_iteration),
             COMM,
         )
     )
+
+
+rho_out = make_vtk_writer(save_rho_field, rho_dir, "plot_rho.pvd")
+rhop_out = make_vtk_writer(save_rho_projected_field, rho_p_dir, "plot_rho_projected.pvd")
+u_out = make_vtk_writer(save_velocity_field, u_dir, "plot_u.pvd")
+p_out = make_vtk_writer(save_pressure_field, p_dir, "plot_p.pvd")
+df0dx_centered_out = make_vtk_writer(
+    save_df0dx_centered_field,
+    df0dx_centered_dir,
+    "plot_df0dx_centered.pvd",
+)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
 df0dx_log_path = os.path.join(results_root, "Df0dxLog.txt")
@@ -878,9 +924,11 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # Filter current design
         rho_f = pde_filter_design_density(rho, rho_f)
-        rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-        rho_out << rho
-        rhop_out << rho_proj_plot
+        if rho_out is not None:
+            rho_out << rho
+        if rhop_out is not None:
+            rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
+            rhop_out << rho_proj_plot
 
         # Forward solve
         root_print("  [Forward solve]")
@@ -907,8 +955,10 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = False
         solver_adj.solve()
 
-        u_out << w_fwd.sub(0)
-        p_out << w_fwd.sub(1)
+        if u_out is not None:
+            u_out << w_fwd.sub(0)
+        if p_out is not None:
+            p_out << w_fwd.sub(1)
 
         f0val = assemble(ObjFunctional)
         if objective_scale_reference is None:
@@ -947,7 +997,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         # Objective gradient
         unfiltered_gradient.vector()[:] = assemble(ddx)[:]
         filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
-        np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
+        if save_design_text_files:
+            np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
 
         # Constraint and constraint gradient
         fval[0, 0] = assemble(vol_constraint) / volume

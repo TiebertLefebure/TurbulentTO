@@ -49,12 +49,21 @@ This raw variable is subjected to a spatial PDE filter \cite{Lazarov2011,Bourdin
 \begin{equation}
 	\bar{\gamma} = \gamma_{\mathrm{lower}} + (\gamma_{\mathrm{upper}} - \gamma_{\mathrm{lower}}) \Pi_\beta(\tilde{\gamma})
 \end{equation}
-where $\Pi_\beta$ is the projection operator, and $\gamma_{\mathrm{lower}}$ and $\gamma_{\mathrm{upper}}$ define the absolute permissible bounds for each cell. This bounding guarantees that predefined features, such as non-design fluid inlet extensions ($\gamma_{\mathrm{lower}} = \gamma_{\mathrm{upper}} = 1$) or explicitly constrained structural walls ($\gamma_{\mathrm{lower}} = \gamma_{\mathrm{upper}} = 0$), remain fixed without interfering with the mathematical behavior of the active optimization space.
+where $\Pi_\beta$ is the projection operator, and $\gamma_{\mathrm{lower}}$ and $\gamma_{\mathrm{upper}}$ define the absolute permissible bounds for each cell. This bounding guarantees that predefined passive-fluid features, such as non-design inlet and outlet extensions ($\gamma_{\mathrm{lower}} = \gamma_{\mathrm{upper}} = 1$), remain fixed without interfering with the mathematical behavior of the active optimization space.
 
 \subsection{Design and Non-Design Domains}
-The computational mesh is partitioned into active design cells and passive non-design cells. The active design domain contains the cells whose raw densities are updated by MMA. Fluid non-design domains are fixed as permanent fluid, typically to preserve inlet and outlet extensions, buffer channels, or measurement regions. Solid non-design domains are fixed as permanent solid, typically to impose external walls, separator bars, or geometric features that must not be modified.
+The computational mesh is partitioned into active design cells and passive fluid non-design cells. The active design domain contains the cells whose raw densities are updated by MMA. Fluid non-design domains are fixed as permanent fluid, typically to preserve inlet and outlet extensions, buffer channels, or measurement regions.
 
-These passive cells still participate in the forward flow, turbulence, and wall-distance solves. They are excluded only from the optimization masks: the volume constraint is evaluated over the prescribed volume mask $\Omega_V$, and any domain-integrated post-processing metric is evaluated over its prescribed integration mask. Consequently, prescribed inlet/outlet buffers and mandatory solid walls do not count toward the optimized fluid fraction and do not directly bias reported domain-integrated metrics.
+These passive fluid cells still participate in the forward flow, turbulence, and wall-distance solves. They are excluded only from the optimization masks: the volume constraint is evaluated over the prescribed volume mask $\Omega_V$, and any domain-integrated post-processing metric is evaluated over its prescribed integration mask. Consequently, prescribed inlet/outlet buffers do not count toward the optimized fluid fraction and do not directly bias reported domain-integrated metrics.
+
+Figure~\ref{fig:filter_domain_schematic} illustrates the masking convention used by the active-domain filter. The Helmholtz filter is applied to the active design contribution and normalized by the filtered active mask, so fixed passive-fluid cells do not dilute nearby design densities. After projection, the passive-fluid bounds are restored before the physical flow equations are assembled. The same chain is traversed in reverse when objective and volume sensitivities are mapped back to the active raw density variables.
+
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=0.92\textwidth]{Filter-Domain-Schematic}
+	\caption{Schematic of active design cells, passive fluid cells, objective and volume masks, and the active-mask-normalized Helmholtz filtering chain. The filter concept follows the PDE-filter formulation of Lazarov and Sigmund and the regularization motivation of Bourdin \cite{Lazarov2011,Bourdin2001}.}
+	\label{fig:filter_domain_schematic}
+\end{figure}
 
 \section{Penalization of the Governing Equations}
 \label{sec:penalization_governing}
@@ -261,6 +270,15 @@ where $\eta \in [0, 1]$ is the projection threshold, and $\beta$ is a steepness 
 \section{Algorithmic Workflow and Solver Implementation}
 \label{sec:algorithmic_workflow}
 Executing the optimization requires a robust iterative algorithm. The solver combines density processing, wall-distance updates, Picard-decoupled SA turbulence updates, a final frozen-viscosity state solve, adjoint sensitivity assembly, transpose-filter mapping, volume-gradient assembly, and MMA updates.
+
+Figure~\ref{fig:turbulent_to_workflow} summarizes the full optimization workflow. The raw active density is first filtered, projected, and restored into the bounded physical density field used by the governing equations. The forward loop then updates the wall-distance, velocity-pressure, and SA turbulence fields until an accepted turbulent state is obtained. Only after this forward update is complete is the frozen-viscosity residual assembled for the final state and adjoint solve. The resulting objective and volume sensitivities are mapped back through the projection slope and transpose filter before MMA updates the active raw design variables.
+
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=\textwidth]{Turbulent-TO-Workflow}
+	\caption{Workflow of the density-based frozen-turbulence topology optimization algorithm. The forward turbulence fields are updated in the flow loop, while the adjoint differentiates only the final frozen-viscosity residual.}
+	\label{fig:turbulent_to_workflow}
+\end{figure}
 
 \subsection{SA Numerical Controls and Hybrid Forward Flow Recovery}
 During the optimization loop, the flow solver advances the momentum field using the eddy viscosity from the previous iteration, and the updated velocity is then passed back to the SA solver. During volatile intermediate design steps, the framework uses Stokes-Brinkman warm starts and convection continuation to reintroduce inertial physics gradually. If convergence stalls, the SNES-based final solve can step through recovery schedules with altered tolerances and line-search methods.

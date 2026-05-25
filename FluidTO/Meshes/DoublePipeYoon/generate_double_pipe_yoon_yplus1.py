@@ -7,10 +7,10 @@ import numpy as np
 
 
 WALL_TAG = 1
-INLET_TOP_TAG = 2
-INLET_BOTTOM_TAG = 3
-OUTLET_TOP_TAG = 4
-OUTLET_BOTTOM_TAG = 5
+INLET_LEFT_TOP_TAG = 2
+INLET_RIGHT_BOTTOM_TAG = 3
+OUTLET_RIGHT_TOP_TAG = 4
+OUTLET_LEFT_BOTTOM_TAG = 5
 DESIGN_TAG = 1
 
 L1 = 3.0
@@ -111,22 +111,21 @@ def in_segment(value: float, segment: tuple[float, float]) -> bool:
     return between(value, segment[0], segment[1])
 
 
-INLET_SEGMENTS = (
-    (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX),
-    (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX),
-)
-OUTLET_SEGMENTS = (
-    (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX),
-    (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX),
-)
+LEFT_TOP_SEGMENT = (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX)
+LEFT_BOTTOM_SEGMENT = (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX)
+RIGHT_TOP_SEGMENT = (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX)
+RIGHT_BOTTOM_SEGMENT = (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX)
+
+LEFT_PORT_SEGMENTS = (LEFT_TOP_SEGMENT, LEFT_BOTTOM_SEGMENT)
+RIGHT_PORT_SEGMENTS = (RIGHT_TOP_SEGMENT, RIGHT_BOTTOM_SEGMENT)
 
 
-def in_inlet_port(y: float) -> bool:
-    return any(in_segment(y, segment) for segment in INLET_SEGMENTS)
+def in_left_port(y: float) -> bool:
+    return any(in_segment(y, segment) for segment in LEFT_PORT_SEGMENTS)
 
 
-def in_outlet_port(y: float) -> bool:
-    return any(in_segment(y, segment) for segment in OUTLET_SEGMENTS)
+def in_right_port(y: float) -> bool:
+    return any(in_segment(y, segment) for segment in RIGHT_PORT_SEGMENTS)
 
 
 def in_design(x: float, y: float) -> bool:
@@ -134,11 +133,11 @@ def in_design(x: float, y: float) -> bool:
 
 
 def in_left_extension(x: float, y: float) -> bool:
-    return between(x, X_MIN, DESIGN_X_MIN) and in_inlet_port(y)
+    return between(x, X_MIN, DESIGN_X_MIN) and in_left_port(y)
 
 
 def in_right_extension(x: float, y: float) -> bool:
-    return between(x, DESIGN_X_MAX, X_MAX) and in_outlet_port(y)
+    return between(x, DESIGN_X_MAX, X_MAX) and in_right_port(y)
 
 
 def in_fluid_domain(x: float, y: float) -> bool:
@@ -149,15 +148,15 @@ def classify_boundary_edge(p0: np.ndarray, p1: np.ndarray) -> int:
     midpoint = 0.5 * (p0 + p1)
     x, y = midpoint[:2]
     if abs(x - X_MIN) <= 1.0e-10:
-        if in_segment(y, (TOP_INLET_Y_MIN, TOP_INLET_Y_MAX)):
-            return INLET_TOP_TAG
-        if in_segment(y, (BOTTOM_INLET_Y_MIN, BOTTOM_INLET_Y_MAX)):
-            return INLET_BOTTOM_TAG
+        if in_segment(y, LEFT_TOP_SEGMENT):
+            return INLET_LEFT_TOP_TAG
+        if in_segment(y, LEFT_BOTTOM_SEGMENT):
+            return OUTLET_LEFT_BOTTOM_TAG
     if abs(x - X_MAX) <= 1.0e-10:
-        if in_segment(y, (TOP_OUTLET_Y_MIN, TOP_OUTLET_Y_MAX)):
-            return OUTLET_TOP_TAG
-        if in_segment(y, (BOTTOM_OUTLET_Y_MIN, BOTTOM_OUTLET_Y_MAX)):
-            return OUTLET_BOTTOM_TAG
+        if in_segment(y, RIGHT_TOP_SEGMENT):
+            return OUTLET_RIGHT_TOP_TAG
+        if in_segment(y, RIGHT_BOTTOM_SEGMENT):
+            return INLET_RIGHT_BOTTOM_TAG
     return WALL_TAG
 
 
