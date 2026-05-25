@@ -33,6 +33,7 @@ build_density_bounds, build_volume_region, build_objective_region = build_cell_t
     design_tags=(DESIGN_DOMAIN_TAG,),
 )
 
+RESUME_OPTIMIZATION = True
 
 L = 1.0
 N = 180
@@ -62,13 +63,26 @@ VOL_FRAC = 0.30
 INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 OBJECTIVE_TYPE = "dissipation"
-OBJECTIVE_CONVERGENCE_TOL = 1e-7
+OBJECTIVE_CONVERGENCE_TOL = 1e-6
 OBJECTIVE_STREAK_TO_STOP = 10
 
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005, 0.003, 0.002]
-MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100, 100, 120, 150, 180, 120, 120]
+# Same continuation schedule as the frozen config for consistency.
+Q_PENAL_SCHEDULE = [
+    0.01, 0.02, 0.04, 0.08,
+    0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00,
+]
+BETA_PROJ_SCHEDULE = [
+    1.0, 2.0, 4.0, 8.0,
+    8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0,
+]
+MOVE_LIMIT_SCHEDULE = [
+    0.05, 0.04, 0.03, 0.02,
+    0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010,
+]
+MAX_INNER_ITERATIONS_SCHEDULE = [
+    50, 60, 80, 100,
+    200, 180, 220, 260, 260, 220, 260, 360,
+]
 
 SNES_LINEAR_SOLVER = "mumps"
 FILTER_BASE_LENGTH = H_MAX

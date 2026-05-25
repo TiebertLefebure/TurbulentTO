@@ -5,9 +5,14 @@ from dolfin import DOLFIN_EPS, Expression, MeshFunction, MPI, SubDomain, near
 from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_from_xdmf
 
 
-# ----------------------------------------------------------------
+# -------------------------------------------------------------------------
 # Configuration: Yoon 2016 Double Pipe - Laminar reference (Re = 1)
-# ----------------------------------------------------------------
+#
+# Uses the same geometry and parabolic inlet-profile shape as the turbulent
+# Yoon double-pipe case. The laminar reference uses a normalized inlet
+# magnitude and viscosity so rho * U_max * H2 / mu = 1 without inflating the
+# dimensional residuals and objective.
+# -------------------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -66,35 +71,47 @@ REYNOLDS_NUMBER = 1.0
 RHO_FLUID_VALUE = 1.0
 U_MAX_INLETS = [1.0, 1.0]
 MU_FLUID_VALUE = U_MAX_INLETS[0] * H2 * RHO_FLUID_VALUE / REYNOLDS_NUMBER
+ALPHA_FLUID = 0.0
+ALPHA_SOLID = 1.0e5
 
-# Re = U_MAX_INLET * H2 * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
+# Re = rho * U_MAX_INLET * H2 / mu = 1 for both 1 m high inlet ports.
 
 VOL_FRAC = 0.40
 INITIAL_DENSITY_VALUE = VOL_FRAC
-MAX_INNER_ITERATIONS = 100
+INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 OBJECTIVE_TYPE = "dissipation"
-OBJECTIVE_CONVERGENCE_TOL = 5e-5
-OBJECTIVE_STREAK_TO_STOP = 5
+OBJECTIVE_CONVERGENCE_TOL = 1e-7
+OBJECTIVE_STREAK_TO_STOP = 10
 
-Q_PENAL_SCHEDULE = [0.005, 0.01, 0.02, 0.03, 0.05, 0.10, 0.20, 0.35, 0.50]
-MOVE_LIMIT_SCHEDULE = [0.05, 0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005]
-BETA_PROJ_SCHEDULE = [0.3, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0]
+MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02, 0.015, 0.01, 0.0075, 0.005, 0.003, 0.002]
+MAX_INNER_ITERATIONS_SCHEDULE = [50, 60, 80, 100, 100, 120, 150, 180, 120, 120]
 
 SNES_LINEAR_SOLVER = "mumps"
 FILTER_BASE_LENGTH = H_MAX
-FILTER_RADIUS_IN_CELLS = 3.0
+FILTER_RADIUS_IN_CELLS = 4.0
+FILTER_DENOMINATOR_FLOOR = 1.0e-12
+QUADRATURE_DEGREE = 6
 FORWARD_SNES_RTOL = 1.0e-6
-FORWARD_SNES_ATOL = 1.0e-9
+FORWARD_SNES_ATOL = 1.0e-8
+FORWARD_SNES_MAX_ITERS = 220
 ADJOINT_SNES_RTOL = 1.0e-6
 ADJOINT_SNES_ATOL = 1.0e-9
-SNES_MAX_ITERS = 220
+SNES_MAX_ITERS = 200
 
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 
 OUTLET_BC_TYPE = "pressure"
 OUTLET_PRESSURE_VALUE = 0.0
+PRESSURE_OUTLET_COMPONENT_BCS = [
+    {"marker": "outlet", "component": 1, "value": 0.0},
+]
 ENABLE_PRESSURE_PIN = False
+SAVE_DF0DX_VECTOR = True
+LOG_DF0DX_STATS = True
+SAVE_DF0DX_CENTERED_FIELD = True
 RESULTS_ROOT_NAME = "Results_Laminar/Results_DoublePipeYoon_LaminarTO"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}

@@ -97,32 +97,26 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 PICARD_CHECKPOINT_EVERY = 1
 PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE = False
 
-# Inner pseudo-time flow solve used inside each outer Picard step.
-# The medium wall-resolved mesh can falsely look over-diffusive at the bend-exit
-# probe if the IPCS pressure solve is allowed to stop at O(1e-3) relative change.
-# Keep a larger cap here: if the inner flow solve exits early, the outer Picard
-# loop can fall into an odd/even pressure-velocity catch-up cycle.
+# [Picard] IPCS flow solve parameters
 FLOW_IPCS_TIME_STEP = 2.5e-5
-FLOW_IPCS_MAX_STEPS = 3000
-# The final cleanup flow solve runs once, after SA Picard convergence, so keep a
-# larger cap there to avoid shortening the saved final state as much as the
-# repeated Picard updates.
-FLOW_IPCS_FINAL_MAX_STEPS = 6000
-FLOW_IPCS_VELOCITY_TOLERANCE = 5.0e-5
+FLOW_IPCS_MAX_STEPS = 1200
+FLOW_IPCS_VELOCITY_TOLERANCE = 1.25e-4
 FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-4
 FLOW_IPCS_VELOCITY_RELAXATION = 0.2
-# Incremental IPCS uses p0 in the tentative velocity, pressure increment, and
-# velocity correction steps. Keep pressure undamped first; lower this if the
-# pseudo-time pressure update still oscillates.
 FLOW_IPCS_PRESSURE_RELAXATION = 0.5
+
+# [Final flow] IPCS flow solve parameters
+FLOW_IPCS_FINAL_MAX_STEPS = 3000
+
 FLOW_IPCS_LOG_EVERY = 10
 # Verbose IPCS diagnostics print to the terminal only; SimulationLog.txt stays compact.
 FLOW_IPCS_VERBOSE = True
 FLOW_IPCS_NORMALIZE_PRESSURE_MEAN = False
 
 # Fallback solver used by any IPCS block without an explicit block-specific setting.
-FLOW_IPCS_LINEAR_SOLVER = "gmres" # Default for solving 3 IPCS blocks
-FLOW_IPCS_LINEAR_PRECONDITIONER = "hypre_amg" # Default for solving 3 IPCS blocks
+FLOW_IPCS_LINEAR_SOLVER = "gmres" # General default for solving 3 IPCS blocks
+FLOW_IPCS_LINEAR_PRECONDITIONER = "hypre_amg" # General default for solving 3 IPCS blocks
+
 FLOW_IPCS_VELOCITY_LINEAR_SOLVER = "gmres"
 FLOW_IPCS_VELOCITY_LINEAR_PRECONDITIONER = "ilu"
 FLOW_IPCS_PRESSURE_LINEAR_SOLVER = "gmres"
@@ -136,7 +130,6 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 # the solver resumes from the previously saved HDF5 state instead of starting cold.
 # Set RESTART_FROM_SAVED_STATE = False for a clean run from the initial condition.
 
-PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE = False
 RESTART_FROM_SAVED_STATE = True 
 RESTART_REQUIRE_FILES = True
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)

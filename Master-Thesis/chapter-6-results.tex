@@ -433,7 +433,7 @@ Figure~\ref{fig:yoon_diffuser_setup} shows the corresponding local geometry and 
 
 \begin{figure}[!ht]
 	\centering
-	\includegraphics[width=0.8\textwidth]{Yoon-Diffuser-GeometryBCs}
+	\includegraphics[width=0.8\textwidth]{Diffuser-Geometry-BCs}
 	\caption{Geometry and boundary conditions for the diffuser benchmark from Yoon~\cite{Yoon2016}.}
 	\label{fig:yoon_diffuser_setup}
 \end{figure}
@@ -446,18 +446,18 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:yoon_diffuser_topology}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Velocity-FEniCS}
 		\caption{Velocity magnitude field $u$.}
 		\label{fig:yoon_diffuser_velocity}
 	\end{subfigure}
-	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective function value $J_D=6.2274\times10^5~\mathrm{W/m}$.}
+	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective function value $J_D=2.8264\times10^5~\mathrm{W/m}$.}
 	\label{fig:yoon_diffuser_fenics_results}
 \end{figure}
 
@@ -467,7 +467,7 @@ The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuse
 
 \begin{figure}[!ht]
 	\centering
-	\validationplaceholder{Combined convergence history: normalized $J_D/J_0$ and relative volume residual $r_V$ vs. MMA iteration}
+		\includegraphics[width=\textwidth]{Diffuser-Convergence-History}
 	\caption{Optimization convergence history for the diffuser benchmark. The final figure should use a combined dissipation-objective and volume-residual plot.}
 	\label{fig:yoon_diffuser_histories}
 \end{figure}
@@ -486,7 +486,7 @@ The extracted diffuser topology is validated with the same sharp-geometry workfl
 		\hline
 		\textbf{Solver} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Comment} \\
 		\hline
-		FEniCS diffuse design & SA & $TBD$ & $TBD$ & Diffuse diagnostic; $J_D= TBD~\mathrm{W/m}$ \\
+		FEniCS diffuse design & SA & $2.7553\times10^5 $ & $2.6666\times10^5$ & Diffuse diagnostic; $J_D=2.8264\times10^5~\mathrm{W/m}$ \\
 		Ansys sharp geometry & SA & [TBD] & [TBD] & Cross-code comparison \\
 		Ansys sharp geometry & SST $k-\omega$ & [TBD] & [TBD] & Turbulence-model sensitivity \\
 		\hline
@@ -503,14 +503,14 @@ Figure~\ref{fig:yoon_diffuser_laminar_topologies} compares the laminar and turbu
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Yoon-Diffuser-Laminar-Topology}
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{Projected density field $\bar{\gamma}$: laminar-optimized diffuser topology ($Re=1$).}
 		\label{fig:yoon_diffuser_laminar_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Topology}
 		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized diffuser topology.}
 		\label{fig:yoon_diffuser_turbulent_topo}
 	\end{subfigure}
@@ -524,7 +524,7 @@ Figure~\ref{fig:yoon_diffuser_laminar_velocity_comparison} shows the correspondi
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Yoon-Diffuser-Laminar-Velocity-Ansys}
+		\includegraphics[width=\textwidth]{example-image}
 		\caption{Velocity magnitude field $u$: laminar-optimized design.}
 		\label{fig:yoon_diffuser_laminar_velocity_sst}
 	\end{subfigure}
@@ -551,7 +551,7 @@ Table~\ref{tab:yoon_diffuser_laminar_perf} compares the extracted laminar and tu
 		\hline
 		\textbf{Design origin} & \textbf{Model} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p$ [Pa]} & \textbf{Relative performance} \\
 		\hline
-		Laminar TO, $Re=1$ & SST $k-\omega$ & $1.1831 \times 10^{4}$ & $3.4299 \times 10^{4}$ & Baseline \\
+		Laminar TO, $Re=1$ & SST $k-\omega$ & $[TBD]$ & $[TBD]$ & Baseline \\
 		Turbulent TO, SA & SST $k-\omega$ & [TBD] & [TBD] & [TBD]\% vs. laminar \\
 		\hline
 	\end{tabularx}

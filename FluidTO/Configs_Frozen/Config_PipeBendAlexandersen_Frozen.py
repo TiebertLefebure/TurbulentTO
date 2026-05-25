@@ -29,6 +29,7 @@ mesh_files = {
 DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
+RESUME_OPTIMIZATION = True
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
@@ -69,7 +70,7 @@ ALPHA_FLUID = 0.0
 ALPHA_SOLID = 1.0e5
 
 # ==============================================================================================
-# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5000
+# Reynolds number: Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
 # ==============================================================================================
 
 # SA inlet data are modelling choices for this solver, not values from Alexandersen's k-epsilon paper.
@@ -95,13 +96,7 @@ SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
 SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
-SA_SUPG_STABILIZATION = False
-SA_SUPG_TAU_SCALE = 1.0
-SA_PSEUDO_TIME_STABILIZATION = False
-SA_PSEUDO_DT = 1.0e-4
-SA_PSEUDO_TIME_STEPS = 3
-
-SAVE_SA_CLIPPING_DIAGNOSTICS = True
+SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
 # The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
@@ -129,8 +124,8 @@ SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 # MMA Objective and Continuation Parameters
 VOL_FRAC = 0.25
 OBJECTIVE_TYPE = "average_inlet_pressure"
-OBJECTIVE_CONVERGENCE_TOL = 1.0e-5
-OBJECTIVE_STREAK_TO_STOP = 5
+OBJECTIVE_CONVERGENCE_TOL = 1.0e-6
+OBJECTIVE_STREAK_TO_STOP = 10
 INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
@@ -149,7 +144,7 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 # projection and Brinkman penalization become stiff.
 Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
 BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
-MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.012, 0.008, 0.005, 0.003]
+MOVE_LIMIT_SCHEDULE = [0.02, 0.015, 0.010, 0.006, 0.004, 0.003, 0.002]
 MAX_INNER_ITERATIONS_SCHEDULE = [80, 100, 140, 200, 200, 240, 260]
 
 MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
@@ -201,8 +196,11 @@ FORWARD_SNES_ATOL = 1.0e-8
 FORWARD_SNES_MAX_ITERS = 220
 
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
-FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
-FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 16
+#FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
+#FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 16
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.005
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 40
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
