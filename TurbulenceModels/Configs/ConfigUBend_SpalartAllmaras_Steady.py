@@ -30,6 +30,10 @@ BOUNDARY_MARKERS = {
     "WALLS": [4],
 }
 
+
+RESTART_FROM_SAVED_STATE = True
+
+
 # Physical parameters.
 PIPE_RADIUS = 0.014 # [m]
 HYDRAULIC_DIAMETER = 2.0 * PIPE_RADIUS # [m]
@@ -131,7 +135,6 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 # Restart controls. With RESTART_REQUIRE_FILES=False, the first run in a new
 # result directory starts from the initial condition; later runs resume once
 # checkpoint HDF5 files exist.
-RESTART_FROM_SAVED_STATE = True
 RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 
