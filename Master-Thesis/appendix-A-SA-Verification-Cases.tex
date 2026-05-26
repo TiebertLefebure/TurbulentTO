@@ -7,6 +7,8 @@
 
 To ensure complete scientific reproducibility and to prevent the disruption of the narrative flow in Chapter~\ref{ch:fenics_implementation}, all comprehensive configuration matrices and spatial grid independence studies for the fluid benchmarks are documented in this appendix.
 
+Unless stated otherwise, all grid-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
+
 \section{Verification Benchmark 1: Channel Flow}
 \label{sec:app_A_channel}
 
@@ -104,7 +106,7 @@ To guarantee that the numerical results were independent of the spatial discreti
 		Vertices & $473$ & $1{,}092$ & $2{,}829$ \\
 		Triangular elements & $840$ & $2{,}040$ & $5{,}440$ \\
 		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $16.923$ & $18.489$ & $18.472$ \\
-		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $8.47$ & -- \\
+		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $9.25$ & -- \\
 		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & $0.09$ \\
 		\hline
 	\end{tabularx}
@@ -141,7 +143,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 		Nodes & $10{,}500$ & $26{,}448$ & $49{,}551$ \\
 		Elements & $10{,}296$ & $26{,}123$ & $49{,}104$ \\
 		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $18.120$ & $17.267$ & \textit{TBD} \\
-		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $4.94$ & -- \\
+		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $4.71$ & -- \\
 		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
 		\hline
 	\end{tabularx}
@@ -280,7 +282,7 @@ Convergence was visually verified by extracting the velocity profiles directly a
 	\label{fig:app_A_ubend_mesh_independence}
 \end{figure}
 
-Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were verified to be spatially converged. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is therefore selected as the commercial verification baseline, ensuring that the reference data is independent of grid resolution.
+Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were checked for spatial convergence. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is retained as the commercial verification baseline, while the deliberately coarser \texttt{Coarse\_Ansys} level is selected to bracket the mesh-convergence trend.
 
 \begin{table}[htbp]
 	\centering
@@ -294,18 +296,18 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 			\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
 			\hline
 			Mesh method & Quad-dominant & Quad-dominant & Quad-dominant \\
-			Face element size [m] & $2.00 \times 10^{-3}$ & $1.25 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
-			Curvature angle & $12^\circ$ & $8^\circ$ & $5^\circ$ \\
+			Face element size [m] & $4.00 \times 10^{-3}$ & $2.00 \times 10^{-3}$ & $1.25 \times 10^{-3}$ \\
+			Curvature angle & $22^\circ$ & $12^\circ$ & $8^\circ$ \\
 			Inflation option & First layer & First layer & First layer \\
 			First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
-			Inflation layers & $16$ & $22$ & $28$ \\
-			Growth rate & $1.22$ & $1.16$ & $1.12$ \\
-			Inflation thickness [m] & $1.59 \times 10^{-3}$ & $2.17 \times 10^{-3}$ & $2.29 \times 10^{-3}$ \\
-			Nodes & $47{,}707$ & $106{,}460$ & $223{,}089$ \\
-			Elements & $46{,}640$ & $104{,}763$ & $220{,}457$ \\
-			Static pressure drop $\Delta p$ [Pa] & $813.350$ & $803.326$ & $797.972$ \\
-			Relative change $\Delta p$, Coarse--Medium [\%] & -- & $1.25$ & -- \\
-			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & $0.67$ \\
+			Inflation layers & $10$ & $16$ & $22$ \\
+			Growth rate & $1.35$ & $1.22$ & $1.16$ \\
+			Inflation thickness [m] & $6.55 \times 10^{-4}$ & $1.59 \times 10^{-3}$ & $2.17 \times 10^{-3}$ \\
+			Nodes & $14{,}525$ & $47{,}707$ & $106{,}460$ \\
+			Elements & $13{,}984$ & $46{,}640$ & $104{,}763$ \\
+			Static pressure drop $\Delta p$ [Pa] & $814.109$ & $796.804$ & $792.995$ \\
+			Relative change $\Delta p$, Coarse--Medium [\%] & -- & $2.13$ & -- \\
+			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & $0.48$ \\
 			\hline
 		\end{tabular}
 	\end{table}

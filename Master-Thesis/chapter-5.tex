@@ -7,6 +7,8 @@ Chapter~\ref{ch:fenics_implementation} introduced the numerical implementation o
 
 This chapter keeps the essential benchmark definitions in the main text: geometry type, boundary conditions, Reynolds number, wall resolution, and the comparison metrics used to judge agreement. The appendices retain the exhaustive mesh hierarchies, solver tolerances, and full configuration tables. This separation keeps the verification argument readable while still making the numerical setup reproducible. The purpose is to verify the forward-flow solver developed in Chapter~\ref{ch:fenics_implementation}, because this is the turbulent-flow core on which the topology optimization framework is built. Chapter~\ref{ch:topology_optimization_methodology} later adds Brinkman penalization, topology-dependent SA and wall-distance penalties, and a frozen-adjoint sensitivity residual, but those additions build on the same SA transport equation, wall-distance computation, and segregated flow-coupling strategy verified here.
 
+All mesh-independence relative differences referenced from Appendix~\ref{app:A_baseline_configurations} follow the appendix convention: coarse--medium differences are normalized by the coarse value, while medium--fine differences are normalized by the fine value.
+
 \section{Channel Verification Benchmark}
 \label{sec:sa_channel_verification}
 To verify the fundamental correctness of the custom fluid and turbulence solvers, the code was first tested on a standard 2D turbulent channel flow. To cleanly isolate and verify turbulence production, wall damping, and Picard coupling without the artifacts of a developing boundary layer, this benchmark was formulated as a pressure-driven periodic channel rather than a conventional inlet-outlet duct.
@@ -186,7 +188,7 @@ and
 	{\int_{\Gamma_D} |\mathbf{u}_{\mathrm{Ansys}}|^2\,\mathrm{d}s}
 	\right)^{1/2}\times 100\%,
 \end{equation}
-where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers. Since the FEniCS formulation solves for kinematic pressure, its pressure drop is converted to physical static pressure using $\rho=997$ kg/m$^3$ before comparison; equivalently, the fine Ansys pressure drop of $797.972$ Pa corresponds to $\Delta p/\rho = 0.8004$ m$^2$/s$^2$.
+where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers. Since the FEniCS formulation solves for kinematic pressure, its pressure drop is converted to physical static pressure using $\rho=997$ kg/m$^3$ before comparison; equivalently, the fine Ansys pressure drop of $792.995$ Pa corresponds to $\Delta p/\rho = 0.7954$ m$^2$/s$^2$.
 
 \begin{table}[!ht]
 	\centering
@@ -198,7 +200,7 @@ where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ 
 		\hline
 		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Rel. diff.} \\
 		\hline
-		Pressure drop ($\Delta p$) [Pa] & $797.972$ & $[TBD]$ & $TBD\%$ \\
+		Pressure drop ($\Delta p$) [Pa] & $792.995$ & $[TBD]$ & $TBD\%$ \\
 		Max pointwise velocity discrepancy ($E_\infty$) & -- & -- & [TBD]\% \\
 		Relative $L_2$ velocity discrepancy ($E_{L_2}$) & -- & -- & [TBD]\% \\
 		\hline

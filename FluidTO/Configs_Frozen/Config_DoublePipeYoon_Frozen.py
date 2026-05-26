@@ -33,6 +33,8 @@ build_density_bounds, build_volume_region, build_objective_region = build_cell_t
     design_tags=(DESIGN_DOMAIN_TAG,),
 )
 
+RESUME_OPTIMIZATION = False
+
 
 # Geometry from Yoon Fig. 7.
 L1 = 3.0
@@ -80,23 +82,31 @@ RIGHT_PORT_SEGMENTS = [
 TOL = DOLFIN_EPS
 
 # Flow and Brinkman parameters from Yoon Fig. 7/Fig. 10.
-RHO_FLUID_VALUE = 1.0
+# Use the diffuser-style dimensional scaling to keep Re = 3000 without the
+# numerically harsh U_max = 3000 inlet magnitude.
+RHO_FLUID_VALUE = 1000.0
 MU_FLUID_VALUE = 1.0
-U_MAX_INLETS = [3000.0, -3000.0]
+U_MAX_INLETS = [3.0, -3.0]
 ALPHA_FLUID = 0.0
 ALPHA_SOLID = 1.0e5
 
 # Re = rho * |U_MAX| * h / mu = 3,000 for the 1 m high ports.
 REYNOLDS_NUMBER = 3000.0
 
-# Yoon Fig. 10 imposes nu_tilde = 50 at both input and output ports.
-SA_NU_TILDE_INLETS = [50.0, 50.0]
-SA_NU_TILDE_OUTLETS = [50.0, 50.0]
-SA_NU_TILDE_INITIAL = 50.0
+# Yoon Fig. 10 imposes nu_tilde = 50 with rho = 1, mu = 1. After scaling
+# rho by 1000, scale nu_tilde by the same factor as nu_lam = mu / rho so
+# the inlet nu_tilde / nu_lam ratio is preserved.
+SA_NU_TILDE_INLETS = [0.05, 0.05]
+SA_NU_TILDE_OUTLETS = [0.05, 0.05]
+SA_NU_TILDE_INITIAL = 0.05
 SA_SMOOTH_ABS_EPS = 1.0e-12
 SA_INIT_WALL_DIST_SCALE = 0.05 * H1
 SA_NU_TILDE_FLOOR = 1.0e-12
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e6
+SA_NU_TILDE_PENALTY_ALPHA = 1.0e5
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [
+    1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5,
+    1.0e5, 1.0e5, 1.0e5, 1.0e5, 1.0e5, 1.0e5,
+]
 SA_NU_TILDE_PENALTY_N = 3.0
 SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 
@@ -107,7 +117,11 @@ SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_DENSITY_SOURCE = "design"
 SA_WALL_SIGMA = 0.1
 SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e6
+SA_WALL_PENALTY_ALPHA = 1.0e5
+SA_WALL_PENALTY_ALPHA_SCHEDULE = [
+    1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5,
+    1.0e5, 1.0e5, 1.0e5, 1.0e5, 1.0e5, 1.0e5,
+]
 SA_WALL_PENALTY_N = 3.0
 SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
@@ -234,7 +248,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ]
 ENABLE_PRESSURE_PIN = False
 
-RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeYoon_Re3000_NuTilde50_Frozen"
+RESULTS_ROOT_NAME = "Results_Frozen/Results_DoublePipeYoon_Re3000_Rho1000_U3_NuTilde0p05_Frozen"
 
 MARK = {"generic": 0, "walls": 1, "inlet": (2, 3), "outlet": (4, 5)}
 

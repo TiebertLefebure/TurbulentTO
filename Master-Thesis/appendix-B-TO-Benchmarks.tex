@@ -13,7 +13,7 @@ The FEniCS meshes used during topology optimization are treated as fixed optimiz
 
 For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. Both SA and SST $k-\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
 
-All Fluent mesh-independence runs in this appendix use the same convergence and acceptance criteria. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation for both SA and SST $k-\omega$. The reported refinement differences are computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{coarse}}|/|\phi_{\mathrm{coarse}}|$ and $|\phi_{\mathrm{fine}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{medium}}|$ for each validation metric.
+All Fluent mesh-independence runs in this appendix use the same convergence and acceptance criteria. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation for both SA and SST $k-\omega$. The reported refinement differences are computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|$ and $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|$ for each validation metric.
 
 \section{Shared Turbulence-Topology Coupling Conventions}
 \label{sec:app_B_shared_coupling_conventions}
@@ -347,8 +347,8 @@ The extracted turbulent diffuser geometry is meshed with the same wall-resolved 
 		Inflation layers & $10$ & $14$ & $18$ \\
 		Growth rate & $1.11$ & $1.09$ & $1.07$ \\
 		Inflation thickness [m] & $2.51 \times 10^{-2}$ & $3.90 \times 10^{-2}$ & $5.10 \times 10^{-2}$ \\
-		Nodes & $8{,}206$ & [TBD] & [TBD] \\
-		Elements & $12{,}453$ & [TBD] & [TBD] \\
+		Nodes & $8{,}104$ & [TBD] & [TBD] \\
+		Elements & $12{,}330$ & [TBD] & [TBD] \\
 		Viscous dissipation $\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		Relative change $\Phi_D^{\mathrm{SA}}$, Coarse--Medium [\%] & -- & [TBD] & -- \\
 		Relative change $\Phi_D^{\mathrm{SA}}$, Medium--Fine [\%] & -- & -- & [TBD] \\
