@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -97,6 +97,7 @@ COUPLED_PICARD_SA_RELAXATION = 0.01
 SA_NU_TILDE_FLOOR = 1.0e-12
 PICARD_CHECKPOINT_EVERY = 1
 PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE = False
+PICARD_CHECKPOINT_SAVE_PVD = True
 
 # [Picard] IPCS flow solve parameters
 FLOW_IPCS_TIME_STEP = 2.5e-5
@@ -127,12 +128,11 @@ FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER = "ilu"
 SA_TRANSPORT_LINEAR_SOLVER = "default"
 SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 
-# Restart controls. Keep this enabled for the current medium-mesh recovery run so
-# the solver resumes from the previously saved HDF5 state instead of starting cold.
-# Set RESTART_FROM_SAVED_STATE = False for a clean run from the initial condition.
-
-RESTART_FROM_SAVED_STATE = True 
-RESTART_REQUIRE_FILES = True
+# Restart controls. With RESTART_REQUIRE_FILES=False, the first run in a new
+# result directory starts from the initial condition; later runs resume once
+# checkpoint HDF5 files exist.
+RESTART_FROM_SAVED_STATE = True
+RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 
 # G-equation wall-distance parameters.
@@ -191,6 +191,7 @@ steady_sa_solver_parameters = {
     "SA_NU_TILDE_FLOOR": SA_NU_TILDE_FLOOR,
     "PICARD_CHECKPOINT_EVERY": PICARD_CHECKPOINT_EVERY,
     "PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE": PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE,
+    "PICARD_CHECKPOINT_SAVE_PVD": PICARD_CHECKPOINT_SAVE_PVD,
     "FLOW_IPCS_TIME_STEP": FLOW_IPCS_TIME_STEP,
     "FLOW_IPCS_MAX_STEPS": FLOW_IPCS_MAX_STEPS,
     "FLOW_IPCS_FINAL_MAX_STEPS": FLOW_IPCS_FINAL_MAX_STEPS,

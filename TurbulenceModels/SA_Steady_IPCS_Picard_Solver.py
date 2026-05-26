@@ -160,6 +160,11 @@ def run_steady_sa_ipcs_picard(
         "PICARD_CHECKPOINT_H5_DIRECTORY",
         simulation_prm.get("RESTART_H5_DIRECTORY", saving_directory.get("H5_FILES")),
     )
+    checkpoint_save_pvd = bool(simulation_prm.get("PICARD_CHECKPOINT_SAVE_PVD", False))
+    checkpoint_pvd_dir = simulation_prm.get(
+        "PICARD_CHECKPOINT_PVD_DIRECTORY",
+        saving_directory.get("PVD_FILES"),
+    )
 
     tolerance_global = float(simulation_prm.get("COUPLED_PICARD_TOLERANCE", simulation_prm.get("TOLERANCE", 1.0e-6)))
     tolerance_u = float(simulation_prm.get(
@@ -438,6 +443,8 @@ def run_steady_sa_ipcs_picard(
         }
         for key, field in checkpoint_fields.items():
             save_h5_checkpoint_field(field, os.path.join(checkpoint_h5_dir, key + ".h5"))
+            if checkpoint_save_pvd and checkpoint_pvd_dir not in (None, ""):
+                save_pvd_file(field, os.path.join(checkpoint_pvd_dir, key + ".pvd"))
         return True
 
     residual_keys = ["u", "p", "nu_tilde", "flow_u", "flow_p"]

@@ -454,7 +454,7 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Velocity-FEniCS}
-		\caption{Velocity magnitude field $u$.}
+		\caption{Velocity magnitude and vector field.}
 		\label{fig:yoon_diffuser_velocity}
 	\end{subfigure}
 	\caption{FEniCS-SA optimization result for the diffuser benchmark at $V_f=0.30$. Final objective value $J_D=2.8264\times10^5~\mathrm{W/m}$.}
@@ -463,12 +463,12 @@ Figure~\ref{fig:yoon_diffuser_fenics_results} reports the final projected densit
 
 Yoon~\cite{Yoon2016} reports that the turbulent diffuser design develops enlarged inlet and outlet regions, while the laminar solution forms a more cone-shaped diffuser. The present FEniCS-SA result is interpreted against this qualitative behavior rather than against a direct numerical objective target, because the present implementation uses a wall-resolved frozen-SA solve, active-mask filtering, and Heaviside projection.
 
-The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuser_histories}. Because this benchmark minimizes $J_D$ rather than $J_p$, the final convergence plot should report the normalized dissipation objective and the relative volume-fraction residual on one combined figure.
+The diffuser convergence histories are collected in Figure~\ref{fig:yoon_diffuser_histories}. Because this benchmark minimizes $J_D$ rather than $J_p$, the convergence plot reports the normalized dissipation objective and the relative volume-fraction residual on one combined figure.
 
 \begin{figure}[!ht]
 	\centering
 		\includegraphics[width=\textwidth]{Diffuser-Turbulent-Convergence-History}
-	\caption{Optimization convergence history for the diffuser benchmark. The final figure should use a combined dissipation-objective and volume-residual plot.}
+	\caption{Optimization convergence history for the turbulent diffuser benchmark. The blue curve shows the normalized dissipation objective $J_D/J_{D,0}$, while the orange curve shows the relative volume-fraction residual.}
 	\label{fig:yoon_diffuser_histories}
 \end{figure}
 
@@ -497,7 +497,7 @@ The extracted diffuser topology is validated with the same sharp-geometry workfl
 \label{subsec:yoon_diffuser_laminar}
 The laminar reference uses the same diffuser mesh, inlet and outlet profile shapes, objective type, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent layouts are then evaluated under the same target turbulent operating conditions. This comparison is expected to show whether the laminar cone-like diffuser remains competitive once turbulent eddy viscosity and the outlet contraction are considered.
 
-Figure~\ref{fig:yoon_diffuser_laminar_topologies} compares the laminar and turbulent optimized diffuser topologies. The expected distinction follows Yoon~\cite{Yoon2016}: the laminar design tends toward a cone-like diffuser, while the turbulent design should allocate additional fluid area near the inlet and outlet where eddy-viscosity effects increase the local loss. The laminar-design mesh-independence study supporting the SST $k-\omega$ result is reported in Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} of Appendix~\ref{app:C_laminar_turbulent_topology_comparison}.
+Figure~\ref{fig:yoon_diffuser_laminar_topologies} compares the laminar and turbulent optimized diffuser topologies. The expected distinction follows Yoon~\cite{Yoon2016}: the laminar design tends toward a cone-like diffuser, while the turbulent design should allocate additional fluid area near the inlet and outlet where eddy-viscosity effects increase the local loss. The laminar FEniCS configuration and optimization diagnostics are reported in Appendix~\ref{app:C_laminar_turbulent_topology_comparison}, and the laminar-design mesh-independence study supporting the SST $k-\omega$ result is reported in Table~\ref{tab:app_C_yoon_diffuser_lam_mesh}.
 
 \begin{figure}[!ht]
 	\centering

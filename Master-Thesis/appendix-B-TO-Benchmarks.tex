@@ -310,10 +310,10 @@ For the body-fitted Fluent evaluations, the parabolic inlet and outlet velocity 
 		Objective & $J_D$ & Dissipation objective over the design domain \\
 		Initial design density & $\gamma_0$ & $V_f=0.30$, matched to the filtered volume \\
 		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^9$ \\
-		RAMP continuation & $q$ & $[0.01,\ 0.02,\ 0.04,\ 0.08]$ \\
-		Projection continuation & $\beta$ & $[1,\ 2,\ 4,\ 8]$ with threshold $\eta=0.50$ \\
-		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $[50,\ 60,\ 80,\ 100]$ MMA iterations; stop if objective change is below $10^{-5}$ for five iterations \\
+		RAMP continuation & $q$ & 12-stage schedule: 0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00 \\
+		Projection continuation & $\beta$ & 12-stage schedule: 1, 2, 4, 8, 8, 12, 16, 32, 64, 96, 128, 128, with threshold $\eta=0.50$ \\
+		MMA move limits & -- & 12-stage schedule: 0.05, 0.04, 0.03, 0.02, 0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010 \\
+		Maximum optimization iterations & -- & 12-stage schedule: 50, 60, 80, 100, 200, 180, 220, 260, 260, 220, 260, 360 MMA iterations; stop if objective change is below $10^{-6}$ for ten iterations \\
 		Filter radius & $r_f$ & $4h_{\max}=2.22\times10^{-2}L$ \\
 		SA working-variable penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
 		Wall-distance penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\

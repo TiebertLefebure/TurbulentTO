@@ -1,13 +1,13 @@
 \chapter{Laminar-Design Mesh Independence for Benchmark Topologies}
 \label{app:C_laminar_turbulent_topology_comparison}
 
-This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST $k-\omega$ metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result.
+This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST $k-\omega$ metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result. For the completed laminar diffuser baseline, this appendix also records the FEniCS configuration and optimization diagnostics used to generate the reference design.
 
 \section{Methodology and Evaluation Pipeline}
 \label{sec:app_C_lam_vs_turb_methodology}
 Each benchmark is solved twice. The laminar reference design is optimized at $Re=1$, where the optimizer primarily responds to creeping-flow viscous losses. The turbulent design is optimized at the target high-Reynolds operating condition using the SA topology optimization framework described in Chapter~\ref{ch:topology_optimization_methodology}. Apart from replacing the SA turbulent state equations by the laminar flow formulation and setting $Re=1$, the laminar topology-optimization runs use the same benchmark-specific FEniCS setup as the turbulent runs: identical mesh, design-domain restrictions, non-design regions, volume constraint, prescribed inlet and outlet treatment, objective type, Brinkman penalty limits, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations. Thus, the pipe-bend and U-bend comparisons retain the inlet-pressure objective $J_p$, while the diffuser comparison retains the dissipation objective $J_D$ from Yoon~\cite{Yoon2016}. This keeps the laminar-vs-turbulent comparison focused on the flow-physics model rather than on optimization or boundary-condition choices.
 
-Because these FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables in this appendix. The additional tables reported here are therefore limited to the Ansys mesh-independence studies for the extracted laminar geometries.
+Because most FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables for every case. The completed laminar diffuser run is listed explicitly in Section~\ref{sec:app_C_yoon_diffuser}, because its $Re=1$ viscosity, laminar state solve, and saved diagnostic fields are important for reproducing the reference design.
 
 After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST $k-\omega$, the laminar-design comparison uses the higher-fidelity SST $k-\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
 
@@ -107,6 +107,50 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 
 The diffuser benchmark tests whether the turbulent optimizer remains advantageous when the design must diffuse a full-height inflow into a center-third outflow while minimizing the dissipation objective $J_D$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.30$, $Re=3{,}000$ design from Yoon~\cite{Yoon2016}.
 The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:yoon_diffuser_laminar}.
+
+\subsection{Laminar FEniCS Configuration Differences}
+\label{subsec:app_C_yoon_diffuser_lam_config}
+The laminar diffuser reference is a completed FEniCS topology-optimization run from \texttt{Config\_DiffuserYoon\_Laminar.py}. It reuses the turbulent diffuser setup in Tables~\ref{tab:app_B_yoon_diffuser_physical} and~\ref{tab:app_B_yoon_diffuser_numerical} wherever not stated otherwise: the square $L=1~\mathrm{m}$ domain, full-height inlet, center-third outlet, parabolic velocity profiles, $V_f=0.30$ volume constraint, dissipation objective $J_D$, Brinkman limits, mesh, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations are unchanged. Table~\ref{tab:app_C_yoon_diffuser_lam_differences} therefore lists only the laminar-specific differences.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Laminar-specific differences from the turbulent diffuser FEniCS setup in Appendix~\ref{app:B_validation_configurations}.}
+	\label{tab:app_C_yoon_diffuser_lam_differences}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Parameter} & \textbf{Laminar setting} \\
+		\hline
+		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, SA wall-distance equation, and frozen-turbulence coupling are omitted \\
+		Reynolds number & $Re=1$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ instead of the turbulent $Re=3{,}000$ setup \\
+		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$ and $\mu=3000~\mathrm{Pa\,s}$, with the same $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$ and $U_{\max,\mathrm{out}}=9~\mathrm{m/s}$ as the turbulent case \\
+		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-9}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $200$ \\
+		Saved diagnostic fields & Projected density, velocity, pressure, design field, and objective-gradient vector saved under the laminar diffuser results directory \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Laminar FEniCS Optimization Diagnostics}
+\label{subsec:app_C_yoon_diffuser_lam_diagnostics}
+Figure~\ref{fig:app_C_yoon_diffuser_lam_convergence} records the completed laminar diffuser optimization history. The normalized objective drops rapidly during the early continuation stages and then remains nearly flat, while the volume-fraction residual stays close to the active constraint. This figure is kept in the appendix because it documents the baseline optimization run rather than the turbulent performance comparison itself.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{Diffuser-Laminar-Convergence-History}
+	\caption{FEniCS convergence history for the laminar diffuser topology-optimization run. The blue curve is the normalized dissipation objective $J_D/J_{D,0}$, and the orange curve is the relative volume-fraction residual.}
+	\label{fig:app_C_yoon_diffuser_lam_convergence}
+\end{figure}
+
+Figure~\ref{fig:app_C_yoon_diffuser_lam_fenics_velocity} shows the final FEniCS velocity field for the laminar baseline. This is a diagnostic of the diffuse laminar optimization state, not the body-fitted turbulent SST $k-\omega$ validation used for the final laminar-versus-turbulent comparison in Chapter~\ref{ch:benchmark_results}.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.86\textwidth]{Diffuser-Laminar-Velocity-FEniCS}
+	\caption{Velocity magnitude and vector field from the final FEniCS laminar diffuser optimization state.}
+	\label{fig:app_C_yoon_diffuser_lam_fenics_velocity}
+\end{figure}
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_yoon_diffuser_lam_mesh}
