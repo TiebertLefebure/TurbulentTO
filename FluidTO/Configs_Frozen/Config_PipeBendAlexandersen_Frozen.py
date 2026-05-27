@@ -123,7 +123,7 @@ SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 # ================================================================== #
 # MMA Objective and Continuation Parameters
 VOL_FRAC = 0.25
-OBJECTIVE_TYPE = "average_inlet_pressure"
+OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-6
 OBJECTIVE_STREAK_TO_STOP = 10
 INITIAL_DENSITY_VALUE = VOL_FRAC
@@ -301,7 +301,13 @@ LOG_DILGEN_FIG8_COLUMNS = False
 SAVE_DF0DX_VECTOR = True
 SAVE_IPCS_RESIDUAL_PLOTS = False
 SAVE_IPCS_RESIDUAL_SVGS = False
-RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendAlexandersen_Frozen"
+RESULTS_ROOT_BASE_NAME = "Results_Frozen/Results_PipeBendAlexandersen_Frozen"
+if OBJECTIVE_TYPE == "dissipation":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_JD"
+elif OBJECTIVE_TYPE == "average_inlet_pressure":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_Jp"
+else:
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

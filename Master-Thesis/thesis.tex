@@ -1,6 +1,6 @@
 \documentclass[master=ewtk,masteroption=,openany]{kulemt}
 \setup{
-  title={Topology Optimization of Heat Transfer Applications Operating in the Turbulent Regime},
+  title={Topology Optimization of Flow Configurations Operating in the Turbulent Regime},
   author={Tiebert Lefebure},
   promotor={Prof. Niels Horsten\and Prof. Maarten Blommaert},
   assessor={Prof. Elke Deckers\and Olivier Renders},
@@ -110,7 +110,7 @@ Finally, I want to thank my family and friends for their unwavering encouragemen
 
 \begin{abstract}
 
-As modern electronic and automotive systems grow increasingly compact and powerful, efficient thermal management increasingly depends on low-loss internal-flow manifolds operating beyond the laminar regime. This thesis develops a density-based topology optimization framework for turbulent internal flows in FEniCS, using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence weak-form adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
+As modern electronic, automotive, and energy systems grow increasingly compact and power-dense, their thermal performance increasingly depends on low-loss internal-flow paths that can distribute coolant without excessive pumping power. This thesis focuses on the flow-only part of that broader thermal-management problem. It develops a density-based topology optimization framework for turbulent internal-flow configurations in FEniCS, using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence weak-form adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
 
 The work first establishes the modeling scope of SA for curved internal flows and then verifies the custom FEniCS-SA implementation against Ansys Fluent on a periodic turbulent channel and a curved U-bend. These verification cases show that the implemented wall-distance, SA transport, and segregated flow-coupling strategy reproduce the relevant Ansys-SA behavior sufficiently for the topology optimization studies, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
 
@@ -273,9 +273,9 @@ The thesis therefore concludes that a frozen-SA topology optimization framework 
 \include{chapter-1-introduction}
 \include{chapter-2}
 \include{chapter-3}
+\include{chapter-5}
 \include{chapter-4}
 % ... and so on until
-\include{chapter-5}
 \include{chapter-6-results}
 \include{chapter-7-conclusion}
 

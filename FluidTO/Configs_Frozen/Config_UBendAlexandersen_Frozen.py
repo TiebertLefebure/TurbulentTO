@@ -131,7 +131,7 @@ SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 # =================================================
 
 VOL_FRAC = 0.27
-OBJECTIVE_TYPE = "average_inlet_pressure"
+OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-6
 OBJECTIVE_STREAK_TO_STOP = 10
 INITIAL_DENSITY_VALUE = VOL_FRAC
@@ -276,7 +276,13 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 
 ENABLE_PRESSURE_PIN = False
 
-RESULTS_ROOT_NAME = "Results_Frozen/Results_UBendAlexandersen_Frozen"
+RESULTS_ROOT_BASE_NAME = "Results_Frozen/Results_UBendAlexandersen_Frozen"
+if OBJECTIVE_TYPE == "dissipation":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_JD"
+elif OBJECTIVE_TYPE == "average_inlet_pressure":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_Jp"
+else:
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

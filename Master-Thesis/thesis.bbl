@@ -166,12 +166,6 @@ L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
 \newblock {\em International Journal of Heat and Mass Transfer}, 163:120543,
   2020.
 
-\bibitem{Kobayashi2021}
-H.~Kobayashi, K.~Yaji, S.~Yamasaki, and K.~Fujita.
-\newblock Topology design of two-fluid heat exchange.
-\newblock {\em Structural and Multidisciplinary Optimization}, 63:821--834,
-  2021.
-
 \bibitem{Langtangen2016}
 H.~P. Langtangen and A.~Logg.
 \newblock {\em Solving PDEs in Python: The FEniCS Tutorial I}.
@@ -241,9 +235,9 @@ S.~B. Pope.
 \bibitem{NasaTurb}
 C.~L. Rumsey et~al.
 \newblock Turbulence modeling resource.
-\newblock NASA Langley Research Center, \url{https://turbmodels.larc.nasa.gov},
-  2023.
-\newblock Accessed: 2024-05-15.
+\newblock NASA Langley Research Center,
+  \url{https://tmbwg.github.io/turbmodels/}, 2026.
+\newblock Accessed: 2026-05-26.
 
 \bibitem{Rumsey2001}
 C.~L. Rumsey, T.~B. Gatski, W.~K. Anderson, and E.~J. Nielsen.

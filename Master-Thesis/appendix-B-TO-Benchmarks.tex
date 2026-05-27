@@ -123,40 +123,43 @@ The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patc
 
 \begin{table}[htbp]
 	\centering
-	\scriptsize
+	\footnotesize
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent pipe-bend benchmark geometry.}
 	\label{tab:app_B_alexandersen_pipebend_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{4pt}
-	\begin{tabular}{@{}lccc@{}}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & Triangles & Triangles & Triangles \\
-		Bulk face element size [m] & $1.10 \times 10^{-2}$ & $5.00 \times 10^{-3}$ & $3.25 \times 10^{-3}$ \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & Tri. & Tri. & Tri. \\
+		$h_{\mathrm{bulk}}$ [m] & $1.10 \times 10^{-2}$ & $5.00 \times 10^{-3}$ & $3.25 \times 10^{-3}$ \\
 		Curvature angle & $15^\circ$ & $7^\circ$ & $4.5^\circ$ \\
-		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
-		First-layer height $\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
+		Near-wall & WR infl. & WR infl. & WR infl. \\
+		$\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
 		Inflation layers & $8$ & $14$ & $18$ \\
 		Growth rate & $1.15$ & $1.10$ & $1.08$ \\
-		Inflation thickness [m] & $8.24 \times 10^{-3}$ & $1.68 \times 10^{-2}$ & $2.25 \times 10^{-2}$ \\
+		$t_{\mathrm{infl}}$ [m] & $8.24 \times 10^{-3}$ & $1.68 \times 10^{-2}$ & $2.25 \times 10^{-2}$ \\
 		Nodes & $5{,}147$ & $21{,}343$ & $44{,}042$ \\
 		Elements & $7{,}551$ & $32{,}780$ & $68{,}743$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SA}}$ [W/m] & $0.0143$ & $0.0151$ & $0.0153$ \\
-		Relative change $\Phi_D^{\mathrm{SA}}$, Coarse--Medium [\%] & -- & $5.38$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SA}}$, Medium--Fine [\%] & -- & -- & $1.32$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.0150$ & $0.0164$ & $0.0166$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $9.04$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $1.22$ \\
-		Static pressure drop $\Delta p^{\mathrm{SA}}$ [Pa] & $0.1423$ & $0.1449$ & $0.1457$ \\
-		Relative change $\Delta p^{\mathrm{SA}}$, Coarse--Medium [\%] & -- & $1.84$ & -- \\
-		Relative change $\Delta p^{\mathrm{SA}}$, Medium--Fine [\%] & -- & -- & $0.55$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $0.1481$ & $0.1516$ & $0.1522$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $2.36$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.40$ \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & $0.0143$ & $0.0151$ & $0.0153$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $5.38$ & $1.32$ \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.0150$ & $0.0164$ & $0.0166$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $9.04$ & $1.22$ \\
+		$\Delta p^{\mathrm{SA}}$ [Pa] & $0.1423$ & $0.1449$ & $0.1457$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $1.84$ & $0.55$ \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & $0.1481$ & $0.1516$ & $0.1522$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $2.36$ & $0.40$ \\
 		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
-	\end{tabular}
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier
@@ -231,26 +234,37 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent U-bend benchmark geometry.}
 	\label{tab:app_B_alexandersen_ubend_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
 		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Bulk mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall treatment & [TBD] & [TBD] & [TBD] \\
-		First-layer height $\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & [TBD] & [TBD] & [TBD] \\
+		Near-wall & [TBD] & [TBD] & [TBD] \\
+		$\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
 		Inflation layers & [TBD] & [TBD] & [TBD] \\
 		Growth rate & [TBD] & [TBD] & [TBD] \\
 		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SA & [TBD] & [TBD] & [TBD] \\
-		Maximum $y^+$, SST $k-\omega$ & [TBD] & [TBD] & [TBD] \\
+		$y^+_{\max}$, SA & [TBD] & [TBD] & [TBD] \\
+		$y^+_{\max}$, SST & [TBD] & [TBD] & [TBD] \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
 		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
 		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change, Medium--Fine [\%] & \multicolumn{3}{c}{[TBD]} \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
 		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
 		\hline
-	\end{tabularx}
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier
@@ -330,40 +344,43 @@ The extracted turbulent diffuser geometry is meshed with the same wall-resolved 
 
 \begin{table}[htbp]
 	\centering
-	\scriptsize
+	\footnotesize
 	\caption{Ansys Fluent mesh-independence table for the extracted turbulent diffuser benchmark geometry.}
 	\label{tab:app_B_yoon_diffuser_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{4pt}
-	\begin{tabularx}{\textwidth}{X c c c}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & Triangles & Triangles & Triangles \\
-		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
-		Bulk face element size [m] & $7.50 \times 10^{-3}$ & $5.00 \times 10^{-3}$ & $3.50 \times 10^{-3}$ \\
-		Curvature angle & $9^\circ$ & $6^\circ$ & $4^\circ$ \\
-		First-layer height $\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
-		Inflation layers & $10$ & $14$ & $18$ \\
-		Growth rate & $1.11$ & $1.09$ & $1.07$ \\
-		Inflation thickness [m] & $2.51 \times 10^{-2}$ & $3.90 \times 10^{-2}$ & $5.10 \times 10^{-2}$ \\
-		Nodes & $8{,}104$ & [TBD] & [TBD] \\
-		Elements & $12{,}330$ & [TBD] & [TBD] \\
-		Viscous dissipation $\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		Relative change $\Phi_D^{\mathrm{SA}}$, Coarse--Medium [\%] & -- & [TBD] & -- \\
-		Relative change $\Phi_D^{\mathrm{SA}}$, Medium--Fine [\%] & -- & -- & [TBD] \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & [TBD] & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & [TBD] \\
-		Static pressure drop $\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change $\Delta p^{\mathrm{SA}}$, Coarse--Medium [\%] & -- & [TBD] & -- \\
-		Relative change $\Delta p^{\mathrm{SA}}$, Medium--Fine [\%] & -- & -- & [TBD] \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & [TBD] & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & [TBD] \\
-		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys, pending metric confirmation} \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & Tri. & Tri. & Tri. \\
+		Near-wall & WR infl. & WR infl. & WR ST infl. \\
+		$h_{\mathrm{bulk}}$ [m] & $7.50 \times 10^{-3}$ & $5.00 \times 10^{-3}$ & $4.00 \times 10^{-3}$ \\
+		Curvature angle & $9^\circ$ & $6^\circ$ & $5^\circ$ \\
+		$\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
+		Inflation layers & $10$ & $14$ & $16$ \\
+		Growth rate & $1.11$ & $1.09$ & $1.08$ \\
+		$t_{\mathrm{infl}}$ [m] & $2.51 \times 10^{-2}$ & $3.90 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
+		Nodes & $8{,}104$ & $16{,}166$ & $21{,}238$ \\
+		Elements & $12{,}330$ & $24{,}570$ & $40{,}268$ \\
 		\hline
-	\end{tabularx}
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & $1.2921\times10^{5}$ & $1.2966\times10^{5}$ & $1.2995\times10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $0.35$ & $0.22$ \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & $1.5296\times10^{4}$ & $1.5570\times10^{4}$ & $1.5725\times10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $1.79$ & $0.99$ \\
+		$\Delta p^{\mathrm{SA}}$ [Pa] & $1.2460\times10^{5}$ & $1.2449\times10^{5}$ & $1.2422\times10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $0.09$ & $0.22$ \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & $4.2412\times10^{4}$ & $4.2034\times10^{4}$ & $4.1833\times10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $0.89$ & $0.48$ \\
+		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
+		\hline
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} WR = wall-resolved; ST = smooth-transition; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier

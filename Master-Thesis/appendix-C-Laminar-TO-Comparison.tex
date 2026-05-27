@@ -1,15 +1,15 @@
-\chapter{Laminar-Design Mesh Independence for Benchmark Topologies}
+\chapter{Laminar-Design Diagnostics and Mesh Independence for Benchmark Topologies}
 \label{app:C_laminar_turbulent_topology_comparison}
 
-This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST $k-\omega$ metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result. For the completed laminar diffuser baseline, this appendix also records the FEniCS configuration and optimization diagnostics used to generate the reference design.
+This appendix supports the laminar-design comparisons in Chapter~\ref{ch:benchmark_results}. It defines the common evaluation pipeline and reports the Ansys mesh-independence studies for the extracted laminar geometries. The topology figures and final laminar-versus-turbulent SST $k-\omega$ metric tables are placed in the corresponding Chapter~\ref{ch:benchmark_results} benchmark sections so that the main comparison can be read together with each optimization result. This appendix also records the FEniCS convergence histories and configuration differences needed to reproduce the laminar $Re=1$ reference designs.
 
 Unless stated otherwise, all mesh-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
 
 \section{Methodology and Evaluation Pipeline}
 \label{sec:app_C_lam_vs_turb_methodology}
-Each benchmark is solved twice. The laminar reference design is optimized at $Re=1$, where the optimizer primarily responds to creeping-flow viscous losses. The turbulent design is optimized at the target high-Reynolds operating condition using the SA topology optimization framework described in Chapter~\ref{ch:topology_optimization_methodology}. Apart from replacing the SA turbulent state equations by the laminar flow formulation and setting $Re=1$, the laminar topology-optimization runs use the same benchmark-specific FEniCS setup as the turbulent runs: identical mesh, design-domain restrictions, non-design regions, volume constraint, prescribed inlet and outlet treatment, objective type, Brinkman penalty limits, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations. Thus, the pipe-bend and U-bend comparisons retain the inlet-pressure objective $J_p$, while the diffuser comparison retains the dissipation objective $J_D$ from Yoon~\cite{Yoon2016}. This keeps the laminar-vs-turbulent comparison focused on the flow-physics model rather than on optimization or boundary-condition choices.
+Each benchmark is solved twice. The laminar reference design is optimized at $Re=1$, where the optimizer primarily responds to creeping-flow viscous losses. The turbulent design is optimized at the target high-Reynolds operating condition using the SA topology optimization framework described in Chapter~\ref{ch:topology_optimization_methodology}. Apart from replacing the SA turbulent state equations by the laminar flow formulation and setting $Re=1$, the laminar topology-optimization runs retain the benchmark geometry, FEniCS mesh, design-domain restrictions, non-design regions, volume constraint, prescribed inlet and outlet treatment, objective type, Brinkman penalty limits, filter radius, and projection threshold from the corresponding turbulent runs. Thus, the pipe-bend and U-bend comparisons retain the inlet-pressure objective $J_p$, while the diffuser comparison retains the dissipation objective $J_D$ from Yoon~\cite{Yoon2016}. The laminar-specific viscosity, solver, and optimizer-control differences are listed in the benchmark subsections below.
 
-Because most FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated as separate configuration tables for every case. The completed laminar diffuser run is listed explicitly in Section~\ref{sec:app_C_yoon_diffuser}, because its $Re=1$ viscosity, laminar state solve, and saved diagnostic fields are important for reproducing the reference design.
+Because most FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated in full. Instead, each benchmark lists only the laminar-specific differences from the corresponding turbulent setup.
 
 After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST $k-\omega$, the laminar-design comparison uses the higher-fidelity SST $k-\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
 
@@ -23,39 +23,81 @@ For fairness, the extracted laminar geometries receive their own Ansys mesh-inde
 The pipe bend tests whether a topology optimized under turbulent conditions produces a more separation-aware $90^\circ$ turning path than a laminar topology optimized at $Re=1$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.25$ design.
 The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:alexandersen_pipebend_laminar}.
 
+\subsection{Laminar FEniCS Configuration Differences}
+\label{subsec:app_C_alexandersen_pipebend_lam_config}
+The laminar pipe-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_PipeBendAlexandersen\_Laminar.py}. It reuses the turbulent pipe-bend setup in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and~\ref{tab:app_B_alexandersen_pipebend_numerical} wherever not stated otherwise: the geometry, wall-resolved mesh, non-design inlet and outlet ducts, uniform inlet velocity, pressure-outlet treatment, $V_f=0.25$ volume constraint, average inlet-pressure objective $J_p$, Brinkman limits, filter radius, and projection threshold are unchanged. Table~\ref{tab:app_C_alexandersen_pipebend_lam_differences} lists the laminar-specific differences.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Laminar-specific differences from the turbulent pipe-bend FEniCS setup in Appendix~\ref{app:B_validation_configurations}.}
+	\label{tab:app_C_alexandersen_pipebend_lam_differences}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Parameter} & \textbf{Laminar setting} \\
+		\hline
+		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
+		Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
+		Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{in}}=0.2L$ as the turbulent case \\
+		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-8}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $220$ \\
+		Continuation and optimizer controls & The $q$ and $\beta$ schedules match the turbulent run, but the laminar run uses move limits $\{0.04,0.03,0.02,0.012,0.008,0.005,0.003\}$ and inner-iteration budgets $\{80,100,140,200,200,240,260\}$ \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Laminar FEniCS Optimization Diagnostics}
+\label{subsec:app_C_alexandersen_pipebend_lam_diagnostics}
+Figure~\ref{fig:app_C_alexandersen_pipebend_lam_convergence} records the completed laminar pipe-bend optimization history. The normalized inlet-pressure objective drops rapidly in the first continuation stage and then remains nearly flat, while the volume-fraction residual repeatedly returns to the active constraint after continuation updates.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{PipeBend-Laminar-Convergence-History}
+	\caption{FEniCS convergence history for the laminar pipe-bend topology-optimization run. The blue curve is the normalized inlet-pressure objective $J_p/J_{p,0}$, the orange curve is the relative volume-fraction residual, and the dashed black line marks the active volume constraint.}
+	\label{fig:app_C_alexandersen_pipebend_lam_convergence}
+\end{figure}
+
+\FloatBarrier
+
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_pipebend_lam_mesh}
 Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar pipe-bend design. This table is separate from the turbulent-design mesh study in Table~\ref{tab:app_B_alexandersen_pipebend_mesh} of Section~\ref{sec:app_B_config_alexandersen_pipebend} because the laminar and turbulent topologies generally produce different wall shapes and near-wall mesh requirements.
 
 \begin{table}[htbp]
 	\centering
-	\scriptsize
+	\footnotesize
 	\caption{Ansys mesh-independence table for the extracted laminar pipe-bend design.}
 	\label{tab:app_C_alexandersen_pipebend_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{4pt}
-	\begin{tabular}{@{}lccc@{}}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & Triangles & Triangles & Triangles \\
-		Bulk face element size [m] & $4.50 \times 10^{-3}$ & $2.60 \times 10^{-3}$ & $2.00 \times 10^{-3}$ \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & Tri. & Tri. & Tri. \\
+		$h_{\mathrm{bulk}}$ [m] & $4.50 \times 10^{-3}$ & $2.60 \times 10^{-3}$ & $2.00 \times 10^{-3}$ \\
 		Curvature angle & $8^\circ$ & $4^\circ$ & $3^\circ$ \\
-		First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ \\
+		$\Delta y_1$ [m] & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ & $1.20 \times 10^{-3}$ \\
 		Inflation layers & $12$ & $15$ & $16$ \\
 		Growth rate & $1.06$ & $1.045$ & $1.04$ \\
-		Inflation thickness [m] & $2.02 \times 10^{-2}$ & $2.49 \times 10^{-2}$ & $2.62 \times 10^{-2}$ \\
+		$t_{\mathrm{infl}}$ [m] & $2.02 \times 10^{-2}$ & $2.49 \times 10^{-2}$ & $2.62 \times 10^{-2}$ \\
 		Nodes & $22{,}494$ & $56{,}468$ & $89{,}804$ \\
 		Elements & $35{,}948$ & $93{,}828$ & $153{,}163$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.0293$ & $0.0310$ & $0.0313$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $5.82$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.95$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $0.5229$ & $0.5420$ & $0.5444$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $3.65$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.45$ \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.0293$ & $0.0310$ & $0.0313$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $5.82$ & $0.95$ \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & $0.5229$ & $0.5420$ & $0.5444$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $3.65$ & $0.45$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
-	\end{tabular}
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier
@@ -66,6 +108,43 @@ Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-inde
 The U-bend tests whether the turbulent optimizer remains advantageous when the flow must complete a $180^\circ$ return path around a fixed separator. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.27$ design.
 The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:alexandersen_ubend_laminar}.
 
+\subsection{Laminar FEniCS Configuration Differences}
+\label{subsec:app_C_alexandersen_ubend_lam_config}
+The laminar U-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_UBendAlexandersen\_Laminar.py}. It reuses the turbulent U-bend setup in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and~\ref{tab:app_B_alexandersen_ubend_numerical} wherever not stated otherwise: the geometry, fixed separator, wall-resolved mesh, non-design ports, uniform inlet velocity, pressure-outlet treatment, $V_f=0.27$ volume constraint, average inlet-pressure objective $J_p$, Brinkman limits, filter radius, and projection threshold are unchanged. Table~\ref{tab:app_C_alexandersen_ubend_lam_differences} lists the laminar-specific differences.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Laminar-specific differences from the turbulent U-bend FEniCS setup in Appendix~\ref{app:B_validation_configurations}.}
+	\label{tab:app_C_alexandersen_ubend_lam_differences}
+	\renewcommand{\arraystretch}{1.2}
+	\begin{tabularx}{\textwidth}{l X}
+		\hline
+		\textbf{Parameter} & \textbf{Laminar setting} \\
+		\hline
+		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
+		Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
+		Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{port}}=0.2L$ as the turbulent case \\
+		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-8}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $260$ \\
+		Continuation and optimizer controls & The $q$ and $\beta$ schedules match the turbulent run, but the laminar run uses move limits $\{0.02,0.015,0.010,0.006,0.004,0.003,0.002\}$ and inner-iteration budgets $\{80,100,140,200,200,240,260\}$ \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Laminar FEniCS Optimization Diagnostics}
+\label{subsec:app_C_alexandersen_ubend_lam_diagnostics}
+Figure~\ref{fig:app_C_alexandersen_ubend_lam_convergence} records the completed laminar U-bend optimization history. As in the pipe-bend case, the objective reduction occurs mainly at the start of the run, after which the optimizer preserves a nearly active volume constraint while only small continuation-related corrections remain.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{UBend-Laminar-Convergence-History}
+	\caption{FEniCS convergence history for the laminar U-bend topology-optimization run. The blue curve is the normalized inlet-pressure objective $J_p/J_{p,0}$, the orange curve is the relative volume-fraction residual, and the dashed black line marks the active volume constraint.}
+	\label{fig:app_C_alexandersen_ubend_lam_convergence}
+\end{figure}
+
+\FloatBarrier
+
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_alexandersen_ubend_lam_mesh}
 Table~\ref{tab:app_C_alexandersen_ubend_lam_mesh} reports the Ansys mesh-independence study for the extracted laminar U-bend design. The turbulent U-bend mesh study is reported separately in Table~\ref{tab:app_B_alexandersen_ubend_mesh} of Section~\ref{sec:app_B_config_alexandersen_ubend}.
@@ -73,33 +152,38 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 
 \begin{table}[htbp]
 	\centering
-	\scriptsize
+	\footnotesize
 	\caption{Ansys mesh-independence table for the extracted laminar U-bend design.}
 	\label{tab:app_C_alexandersen_ubend_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{4pt}
-	\begin{tabular}{@{}lccc@{}}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & Triangles & Triangles & Triangles \\
-		Bulk face element size [m] & $6.00 \times 10^{-3}$ & $4.00 \times 10^{-3}$ & $2.75 \times 10^{-3}$ \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & Tri. & Tri. & Tri. \\
+		$h_{\mathrm{bulk}}$ [m] & $6.00 \times 10^{-3}$ & $4.00 \times 10^{-3}$ & $2.75 \times 10^{-3}$ \\
 		Curvature angle & $8^\circ$ & $6^\circ$ & $4^\circ$ \\
-		First-layer height $\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
+		$\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
 		Inflation layers & $12$ & $16$ & $20$ \\
 		Growth rate & $1.10$ & $1.08$ & $1.06$ \\
-		Inflation thickness [m] & $1.28 \times 10^{-2}$ & $1.82 \times 10^{-2}$ & $2.21 \times 10^{-2}$ \\
+		$t_{\mathrm{infl}}$ [m] & $1.28 \times 10^{-2}$ & $1.82 \times 10^{-2}$ & $2.21 \times 10^{-2}$ \\
 		Nodes & $16{,}106$ & $32{,}580$ & $62{,}622$ \\
 		Elements & $24{,}460$ & $50{,}067$ & $98{,}084$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $0.101$ & $0.105$ & $0.107$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $3.96$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $1.90$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $1.125$ & $1.141$ & $1.150$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $1.42$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.79$ \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.101$ & $0.105$ & $0.107$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $3.96$ & $1.90$ \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & $1.125$ & $1.141$ & $1.150$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $1.42$ & $0.79$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
-	\end{tabular}
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier
@@ -129,7 +213,6 @@ The laminar diffuser reference is a completed FEniCS topology-optimization run f
 		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$ and $\mu=3000~\mathrm{Pa\,s}$, with the same $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$ and $U_{\max,\mathrm{out}}=9~\mathrm{m/s}$ as the turbulent case \\
 		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
 		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-9}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $200$ \\
-		Saved diagnostic fields & Projected density, velocity, pressure, design field, and objective-gradient vector saved under the laminar diffuser results directory \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -141,18 +224,11 @@ Figure~\ref{fig:app_C_yoon_diffuser_lam_convergence} records the completed lamin
 \begin{figure}[htbp]
 	\centering
 	\includegraphics[width=\textwidth]{Diffuser-Laminar-Convergence-History}
-	\caption{FEniCS convergence history for the laminar diffuser topology-optimization run. The blue curve is the normalized dissipation objective $J_D/J_{D,0}$, and the orange curve is the relative volume-fraction residual.}
+	\caption{FEniCS convergence history for the laminar diffuser topology-optimization run. The blue curve is the normalized dissipation objective $J_D/J_{D,0}$, the orange curve is the relative volume-fraction residual, and the dashed black line marks the active volume constraint.}
 	\label{fig:app_C_yoon_diffuser_lam_convergence}
 \end{figure}
 
-Figure~\ref{fig:app_C_yoon_diffuser_lam_fenics_velocity} shows the final FEniCS velocity field for the laminar baseline. This is a diagnostic of the diffuse laminar optimization state, not the body-fitted turbulent SST $k-\omega$ validation used for the final laminar-versus-turbulent comparison in Chapter~\ref{ch:benchmark_results}.
-
-\begin{figure}[htbp]
-	\centering
-	\includegraphics[width=0.86\textwidth]{Diffuser-Laminar-Velocity-FEniCS}
-	\caption{Velocity magnitude and vector field from the final FEniCS laminar diffuser optimization state.}
-	\label{fig:app_C_yoon_diffuser_lam_fenics_velocity}
-\end{figure}
+\FloatBarrier
 
 \subsection{Laminar-Design Mesh Independence}
 \label{subsec:app_C_yoon_diffuser_lam_mesh}
@@ -164,29 +240,39 @@ Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence
 	\caption{Ansys mesh-independence table for the extracted laminar diffuser design.}
 	\label{tab:app_C_yoon_diffuser_lam_mesh}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & Triangles & Triangles & Triangles \\
-		Near-wall treatment & Wall-resolved inflation & Wall-resolved inflation & Wall-resolved inflation \\
-		Bulk face element size [m] & $1.20 \times 10^{-2}$ & $5.50 \times 10^{-3}$ & $3.75 \times 10^{-3}$ \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & Tri. & Tri. & Tri. \\
+		Near-wall & WR infl. & WR infl. & WR infl. \\
+		$h_{\mathrm{bulk}}$ [m] & $1.20 \times 10^{-2}$ & $5.50 \times 10^{-3}$ & $3.75 \times 10^{-3}$ \\
 		Curvature angle & $15^\circ$ & $7^\circ$ & $5^\circ$ \\
-		First-layer height $\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
+		$\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
 		Inflation layers & $6$ & $12$ & $16$ \\
 		Growth rate & $1.15$ & $1.10$ & $1.08$ \\
-		Inflation thickness [m] & $1.31 \times 10^{-2}$ & $3.19 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
-		Nodes & $3{,}300$ & $13{,}490$ & $25{,}414$ \\
-		Elements & $5{,}074$ & $21{,}036$ & $39{,}561$ \\
-		Viscous dissipation $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$ [W/m] & $1.1426 \times 10^{4}$ & $1.1749 \times 10^{4}$ & $1.1831 \times 10^{4}$ \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $2.83$ & -- \\
-		Relative change $\Phi_D^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.70$ \\
-		Static pressure drop $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$ [Pa] & $3.4547 \times 10^{4}$ & $3.4513 \times 10^{4}$ & $3.4299 \times 10^{4}$ \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Coarse--Medium [\%] & -- & $0.10$ & -- \\
-		Relative change $\Delta p^{\mathrm{SST}\ k\text{-}\omega}$, Medium--Fine [\%] & -- & -- & $0.62$ \\
+		$t_{\mathrm{infl}}$ [m] & $1.31 \times 10^{-2}$ & $3.19 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
+		Nodes & $3{,}317$ & $13{,}444$ & $25{,}485$ \\
+		Elements & $5{,}085$ & $20{,}888$ & $39{,}582$ \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & $1.2643 \times 10^{4}$ & $1.2983 \times 10^{4}$ & $1.3077 \times 10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $2.69$ & $0.72$ \\
+		$\Delta p^{\mathrm{SST}}$ [Pa] & $3.6628 \times 10^{4}$ & $3.6693 \times 10^{4}$ & $3.6464 \times 10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $0.18$ & $0.62$ \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & $1.4296 \times 10^{5}$ & $1.4315 \times 10^{5}$ & $1.4333 \times 10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $0.13$ & $0.13$ \\
+		$\Delta p^{\mathrm{SA}}$ [Pa] & $1.4191 \times 10^{5}$ & $1.4276 \times 10^{5}$ & $1.4200 \times 10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $0.60$ & $0.53$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
-	\end{tabularx}
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The SA rows are re-evaluations for turbulence-model sensitivity.
+	\end{minipage}
 \end{table}
 
 \FloatBarrier

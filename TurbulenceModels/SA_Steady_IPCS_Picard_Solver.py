@@ -318,6 +318,31 @@ def run_steady_sa_ipcs_picard(
         pressure_drop_description,
         pressure_drop_unit,
     ) = build_pressure_drop_evaluator()
+    pressure_drop_convergence_window = int(simulation_prm.get(
+        "PRESSURE_DROP_CONVERGENCE_WINDOW",
+        simulation_prm.get("COUPLED_PICARD_PRESSURE_DROP_CONVERGENCE_WINDOW", 0),
+    ))
+    pressure_drop_convergence_relative_tolerance = float(simulation_prm.get(
+        "PRESSURE_DROP_CONVERGENCE_RELATIVE_TOLERANCE",
+        simulation_prm.get("COUPLED_PICARD_PRESSURE_DROP_RELATIVE_TOLERANCE", 0.0),
+    ))
+    pressure_drop_convergence_value_floor = float(simulation_prm.get(
+        "PRESSURE_DROP_CONVERGENCE_VALUE_FLOOR",
+        simulation_prm.get("COUPLED_PICARD_PRESSURE_DROP_VALUE_FLOOR", 1.0e-30),
+    ))
+    pressure_drop_convergence_require_flow = bool(simulation_prm.get(
+        "PRESSURE_DROP_CONVERGENCE_REQUIRE_FLOW",
+        simulation_prm.get("COUPLED_PICARD_PRESSURE_DROP_REQUIRE_FLOW", True),
+    ))
+    if pressure_drop_convergence_window < 0:
+        raise ValueError("Pressure-drop convergence window must be >= 0.")
+    if pressure_drop_convergence_window > 0:
+        if pressure_drop_evaluator is None:
+            raise ValueError("Pressure-drop convergence requires a pressure_drop_metric.")
+        if pressure_drop_convergence_relative_tolerance <= 0.0:
+            raise ValueError("Pressure-drop convergence relative tolerance must be > 0.")
+        if pressure_drop_convergence_value_floor <= 0.0:
+            raise ValueError("Pressure-drop convergence value floor must be > 0.")
 
     diagnostic_specs = []
     for diagnostic in picard_diagnostics or []:
@@ -558,6 +583,15 @@ def run_steady_sa_ipcs_picard(
     root_print("Steady RANS-SA solve: pseudo-time IPCS flow + steady SA Picard coupling", is_root=is_root)
     if pressure_drop_description is not None:
         root_print("  Pressure-drop metric: {}.".format(pressure_drop_description), is_root=is_root)
+    if pressure_drop_convergence_window > 0:
+        root_print(
+            "  Pressure-drop convergence: relative change over {} Picard iterations <= {:.3e}{}.".format(
+                pressure_drop_convergence_window,
+                pressure_drop_convergence_relative_tolerance,
+                " with converged flow solves" if pressure_drop_convergence_require_flow else "",
+            ),
+            is_root=is_root,
+        )
     if convergence_type == "diagnostic_window_relative_change":
         root_print(
             "  Picard convergence metric: relative change in {} over {} Picard iterations <= {:.3e}.".format(
@@ -633,6 +667,16 @@ def run_steady_sa_ipcs_picard(
                     abs(current_value - previous_value)
                     / max(abs(current_value), convergence_value_floor)
                 )
+        pressure_drop_window_relative_change = None
+        if pressure_drop_convergence_window > 0:
+            pressure_drop_history = residuals["pressure_drop"]
+            if len(pressure_drop_history) > pressure_drop_convergence_window:
+                current_pressure_drop = pressure_drop_history[-1]
+                previous_pressure_drop = pressure_drop_history[-1 - pressure_drop_convergence_window]
+                pressure_drop_window_relative_change = (
+                    abs(current_pressure_drop - previous_pressure_drop)
+                    / max(abs(current_pressure_drop), pressure_drop_convergence_value_floor)
+                )
         checkpoint_saved = False
         checkpoint_skipped = False
         if picard_checkpoint_every > 0 and picard_iter % picard_checkpoint_every == 0:
@@ -680,6 +724,16 @@ def run_steady_sa_ipcs_picard(
                         convergence_window,
                         diagnostic_window_relative_change,
                     )
+            if pressure_drop_convergence_window > 0:
+                if pressure_drop_window_relative_change is None:
+                    picard_message += "; pressure_drop_rel{}=pending".format(
+                        pressure_drop_convergence_window,
+                    )
+                else:
+                    picard_message += "; pressure_drop_rel{}={:.3e}".format(
+                        pressure_drop_convergence_window,
+                        pressure_drop_window_relative_change,
+                    )
             if not flow_converged:
                 picard_message += "; flow solve did not meet tolerances before SA update"
             if checkpoint_saved:
@@ -688,16 +742,16 @@ def run_steady_sa_ipcs_picard(
                 picard_message += "; checkpoint not saved because flow solve did not meet tolerances"
             print(picard_message)
 
-        picard_converged = False
+        field_converged = False
         if convergence_type == "field_norm":
-            picard_converged = (
+            field_converged = (
                 flow_converged
                 and picard_errors[0] <= tolerance_u
                 and picard_errors[1] <= tolerance_p
                 and picard_errors[2] <= tolerance_nu_tilde
             )
         elif convergence_type == "diagnostic_window_relative_change":
-            picard_converged = (
+            field_converged = (
                 diagnostic_window_relative_change is not None
                 and diagnostic_window_relative_change <= convergence_relative_tolerance
                 and (flow_converged or not convergence_require_flow)
@@ -705,6 +759,15 @@ def run_steady_sa_ipcs_picard(
                 and (picard_errors[1] <= tolerance_p or not convergence_require_pressure)
                 and (picard_errors[2] <= tolerance_nu_tilde or not convergence_require_nu_tilde)
             )
+        pressure_drop_converged = (
+            pressure_drop_convergence_window > 0
+            and pressure_drop_window_relative_change is not None
+            and pressure_drop_window_relative_change <= pressure_drop_convergence_relative_tolerance
+            and (flow_converged or not pressure_drop_convergence_require_flow)
+        )
+        picard_converged = field_converged
+        if pressure_drop_convergence_window > 0:
+            picard_converged = picard_converged and pressure_drop_converged
 
         if picard_converged:
             converged = True
@@ -735,6 +798,11 @@ def run_steady_sa_ipcs_picard(
                     convergence_diagnostic_key,
                     convergence_window,
                     diagnostic_window_relative_change,
+                )
+            if pressure_drop_window_relative_change is not None:
+                convergence_message += "; pressure_drop_rel{}={:.3e}".format(
+                    pressure_drop_convergence_window,
+                    pressure_drop_window_relative_change,
                 )
             convergence_message += "."
             root_print(

@@ -25,6 +25,11 @@ def infer_mesh_label_from_path(path):
 
 MESH_LABEL = infer_mesh_label_from_path(MESH_DIRECTORY)
 
+
+RESTART_FROM_SAVED_STATE = True
+
+
+
 # ============================================================================================
 # Channel wall-distance mode:
 #   "exact"        -> analytical d(y)=min(y-y_min, y_max-y)
@@ -171,7 +176,6 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 # Restart controls. With RESTART_REQUIRE_FILES disabled, the first run in a new
 # result directory starts from the initial condition, while later runs resume
 # from the checkpointed HDF5 state if all fields are present.
-RESTART_FROM_SAVED_STATE = True
 RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 

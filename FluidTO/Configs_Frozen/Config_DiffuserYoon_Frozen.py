@@ -206,7 +206,13 @@ OUTLET_BC_TYPE = "velocity"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 
-RESULTS_ROOT_NAME = "Results_Frozen/Results_DiffuserYoon_Frozen"
+RESULTS_ROOT_BASE_NAME = "Results_Frozen/Results_DiffuserYoon_Frozen"
+if OUTLET_BC_TYPE == "velocity":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_VelocityOutlet"
+elif OUTLET_BC_TYPE == "pressure":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_PressureOutlet"
+else:
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

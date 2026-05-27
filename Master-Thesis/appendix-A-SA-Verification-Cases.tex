@@ -91,25 +91,31 @@ To guarantee that the numerical results were independent of the spatial discreti
 	\caption{Wall-resolved channel mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the streamwise resolution, wall-normal resolution, and inflation-layer resolution are refined.}
 	\label{tab:app_A_channel_meshes}
 	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{2pt}
-	\begin{tabularx}{\textwidth}{lccc}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_FEniCS} & \textbf{Medium\_FEniCS} & \textbf{Fine\_FEniCS} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
 		Streamwise cells & $10$ & $20$ & $40$ \\
 		Wall-normal cells & $42$ & $51$ & $68$ \\
-		First-layer height $\Delta y_1$ [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
-		Minimum wall-normal spacing [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
-		Maximum wall-normal spacing [m] & $7.707 \times 10^{-2}$ & $8.454 \times 10^{-2}$ & $7.589 \times 10^{-2}$ \\
+		$\Delta y_1$ [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
+		$\Delta y_{\min}$ [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
+		$\Delta y_{\max}$ [m] & $7.707 \times 10^{-2}$ & $8.454 \times 10^{-2}$ & $7.589 \times 10^{-2}$ \\
 		Inflation layers per wall & $10$ & $14$ & $18$ \\
 		Growth ratio & $1.45$ & $1.35$ & $1.25$ \\
 		Vertices & $473$ & $1{,}092$ & $2{,}829$ \\
-		Triangular elements & $840$ & $2{,}040$ & $5{,}440$ \\
-		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $16.923$ & $18.489$ & $18.472$ \\
-		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $9.25$ & -- \\
-		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & $0.09$ \\
+		Elements & $840$ & $2{,}040$ & $5{,}440$ \\
 		\hline
-	\end{tabularx}
+		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $16.923$ & $18.489$ & $18.472$ \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $9.25$ & $0.09$ \\
+		\hline
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 Visual confirmation of this spatial convergence is provided by the wall-normal velocity profiles plotted in Figure~\ref{fig:app_A_channel_mesh_independence}. In each case, the profile is extracted at the streamwise mid-plane, $x=0.5L$, with the wall-normal coordinate $y$ varied across the full channel height. The \texttt{Fine\_FEniCS} grid was consequently selected for the final verification against the Ansys Fluent baseline, while the coarser grids demonstrate that the wall-normal velocity profile is already asymptotically converged.
@@ -129,24 +135,31 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 	\caption{Wall-resolved channel mesh hierarchy used for the Ansys grid-independence study.}
 	\label{tab:app_A_channel_meshes_ansys}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{lccc}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 		\hline
-		\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
-		Mesh method & MultiZone & MultiZone & MultiZone \\
-		Free face mesh type & All quad & All quad & All quad \\
-		Streamwise edge divisions & $80$ & $160$ & $240$ \\
-		Wall-normal edge divisions & $96$ & $144$ & $192$ \\
-		Wall-normal bias type & Two-sided & Two-sided & Two-sided \\
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & MultiZone & MultiZone & MultiZone \\
+		Face type & All quad & All quad & All quad \\
+		$N_x$ & $80$ & $160$ & $240$ \\
+		$N_y$ & $96$ & $144$ & $192$ \\
+		Bias type & Two-sided & Two-sided & Two-sided \\
 		Bias factor & $47$ & $28$ & $19$ \\
-		Approx. first-layer height $\Delta y_1$ [m] & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ \\
+		Approx. $\Delta y_1$ [m] & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ \\
 		Nodes & $10{,}500$ & $26{,}448$ & $49{,}551$ \\
 		Elements & $10{,}296$ & $26{,}123$ & $49{,}104$ \\
-		Bulk velocity $U_{\mathrm{bulk}}$ [m/s] & $18.120$ & $17.267$ & \textit{TBD} \\
-		Relative change $U_{\mathrm{bulk}}$, Coarse--Medium [\%] & -- & $4.71$ & -- \\
-		Relative change $U_{\mathrm{bulk}}$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
 		\hline
-	\end{tabularx}
+		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $18.120$ & $17.267$ & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $4.71$ & \textit{TBD} \\
+		\hline
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} $N_x$ and $N_y$ are the streamwise and wall-normal edge divisions. For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
 \end{table}
 
 \begin{figure}[htpb]
@@ -250,27 +263,33 @@ where $|\Gamma|=\int_{\Gamma}1\,\mathrm{d}\Gamma$ is the FEniCS boundary measure
 
 	\begin{table}[htbp]
 		\centering
-		\scriptsize
+		\footnotesize
 		\caption{Wall-resolved U-bend mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the bulk element size and inflation-layer resolution are refined.}
 		\label{tab:app_A_ubend_meshes}
 		\renewcommand{\arraystretch}{1.2}
-		\setlength{\tabcolsep}{4pt}
-		\begin{tabular}{@{}lccc@{}}
+		\setlength{\tabcolsep}{5pt}
+		\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 			\hline
-			\textbf{Parameter} & \textbf{Coarse\_FEniCS} & \textbf{Medium\_FEniCS} & \textbf{Fine\_FEniCS} \\
+			\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 			\hline
-			Bulk element size [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
-			First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
+			\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+			$h_{\mathrm{bulk}}$ [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
+			$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
 			Inflation layers & $10$ & $14$ & $18$ \\
 			Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
-			Inflation thickness [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
+			$t_{\mathrm{infl}}$ [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
 			Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
-			Triangular elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
-			Static pressure drop $\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-			Relative change $\Delta p$, Coarse--Medium [\%] & -- & \textit{TBD} & -- \\
-			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & \textit{TBD} \\
+			Elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
 			\hline
-		\end{tabular}
+			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+			$\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+			$\epsilon_{\mathrm{rel}}(\Delta p)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+			\hline
+		\end{tabular*}
+		\vspace{2pt}
+		\begin{minipage}{0.98\textwidth}
+			\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\end{minipage}
 	\end{table}
 
 Convergence was visually verified by extracting the velocity profiles directly at the bend exit across the pipe diameter $D=0.028$ m, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
@@ -286,30 +305,36 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 
 \begin{table}[htbp]
 	\centering
-		\scriptsize
+		\footnotesize
 		\caption{Wall-resolved U-bend mesh hierarchy used for the Ansys grid-independence study.}
 		\label{tab:app_A_ubend_meshes_ansys}
 		\renewcommand{\arraystretch}{1.2}
-		\setlength{\tabcolsep}{4pt}
-		\begin{tabular}{@{}lccc@{}}
+		\setlength{\tabcolsep}{5pt}
+		\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
 			\hline
-			\textbf{Parameter} & \textbf{Coarse\_Ansys} & \textbf{Medium\_Ansys} & \textbf{Fine\_Ansys} \\
+			\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 			\hline
-			Mesh method & Quad-dominant & Quad-dominant & Quad-dominant \\
-			Face element size [m] & $4.00 \times 10^{-3}$ & $2.00 \times 10^{-3}$ & $1.25 \times 10^{-3}$ \\
+			\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+			Mesh type & Quad-dom. & Quad-dom. & Quad-dom. \\
+			$h_{\mathrm{face}}$ [m] & $4.00 \times 10^{-3}$ & $2.00 \times 10^{-3}$ & $1.25 \times 10^{-3}$ \\
 			Curvature angle & $22^\circ$ & $12^\circ$ & $8^\circ$ \\
 			Inflation option & First layer & First layer & First layer \\
-			First-layer height $\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
+			$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
 			Inflation layers & $10$ & $16$ & $22$ \\
 			Growth rate & $1.35$ & $1.22$ & $1.16$ \\
-			Inflation thickness [m] & $6.55 \times 10^{-4}$ & $1.59 \times 10^{-3}$ & $2.17 \times 10^{-3}$ \\
+			$t_{\mathrm{infl}}$ [m] & $6.55 \times 10^{-4}$ & $1.59 \times 10^{-3}$ & $2.17 \times 10^{-3}$ \\
 			Nodes & $14{,}525$ & $47{,}707$ & $106{,}460$ \\
 			Elements & $13{,}984$ & $46{,}640$ & $104{,}763$ \\
-			Static pressure drop $\Delta p$ [Pa] & $814.109$ & $796.804$ & $792.995$ \\
-			Relative change $\Delta p$, Coarse--Medium [\%] & -- & $2.13$ & -- \\
-			Relative change $\Delta p$, Medium--Fine [\%] & -- & -- & $0.48$ \\
 			\hline
-		\end{tabular}
+			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+			$\Delta p$ [Pa] & $814.109$ & $796.804$ & $792.995$ \\
+			$\epsilon_{\mathrm{rel}}(\Delta p)$ [\%] & -- & $2.13$ & $0.48$ \\
+			\hline
+		\end{tabular*}
+		\vspace{2pt}
+		\begin{minipage}{0.98\textwidth}
+			\scriptsize \textit{Note.} Quad-dom. = quad-dominant. For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\end{minipage}
 	\end{table}
 
 \begin{figure}[htpb]
