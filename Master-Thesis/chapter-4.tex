@@ -70,6 +70,23 @@ The primary application of the Brinkman penalty is the modification of the stead
 \end{equation}
 The topology-optimization residual retains the full symmetric rate-of-strain tensor. Since the turbulent eddy viscosity ($\mu_t$) varies across the spatial domain \cite{Pope2000}, the effective viscosity is not constant and the transposed gradient term contributes to the momentum balance. In regions where the optimizer places solid material ($\bar{\gamma} \to 0$), the large magnitude of $\alpha_{solid}\mathbf{u}$ dominates the local balance and drives the velocity toward zero.
 
+The final steady flow state used by the frozen adjoint is assembled as a weak residual. With $\mu_{\mathrm{eff}}=\mu+\mu_t^{fr}$ and test functions $(\mathbf{v},q)$, the implemented residual is: find $(\mathbf{u},p)$ such that
+\begin{equation}
+	\begin{aligned}
+		R_{\mathrm{NS}}((\mathbf{u},p),(\mathbf{v},q)) =
+		&\int_\Omega \rho(\mathbf{u}\cdot\nabla)\mathbf{u}\cdot\mathbf{v}\,dx
+		+\frac{1}{2}\int_\Omega \mu_{\mathrm{eff}}
+		\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right):
+		\left(\nabla\mathbf{v}+\nabla\mathbf{v}^{T}\right)\,dx \\
+		&+\int_\Omega \nabla p\cdot\mathbf{v}\,dx
+		+\int_\Omega q\,\nabla\cdot\mathbf{u}\,dx
+		+\int_\Omega \alpha(\bar{\gamma})\mathbf{u}\cdot\mathbf{v}\,dx
+		=0 .
+	\end{aligned}
+	\label{eq:penalized_momentum_weak}
+\end{equation}
+Equation~\ref{eq:penalized_momentum_weak} is the differentiable state equation used for the velocity-pressure adjoint. The forward Picard updates may use IPCS warm starts for robustness, but the final sensitivity solve differentiates this steady weak residual.
+
 \subsection{Modified Spalart-Allmaras Transport Equation}
 As the Fictitious Domain Method forces velocity to zero in solid regions, turbulence generation inside those regions should theoretically cease. However, numerical diffusion can allow the SA working variable ($\tilde{\nu}$) to bleed into solid regions. This unphysical behavior destabilizes the solver and distorts the adjoint sensitivity analysis.
 
@@ -85,6 +102,28 @@ To enforce a zero-turbulence state inside solid structures, a corresponding pena
 \end{equation}
 The last term is the topology penalty used to suppress the SA working variable in solid material. Because $\bar{\gamma}=1$ denotes fluid and $\bar{\gamma}=0$ denotes solid, the penalty is applied to the local solid fraction $(1-\bar{\gamma})$. The coefficient $\alpha_{\tilde{\nu}}$ sets the damping strength and the exponent $N_{\tilde{\nu}}$ controls how sharply the damping grows as a cell becomes solid. In the final benchmark computations these two parameters are held constant throughout the optimization.
 
+In the Picard-linearized finite-element solve, the topology penalty enters as an additional reaction term in the weak SA equation. Using the previous Picard field $\tilde{\nu}^{k}$ to evaluate $\tilde{S}^{k}$, $f_w^{k}$, and the explicit source terms, the topology-aware SA step solves for $\tilde{\nu}^{k+1}$ from
+\begin{equation}
+	\begin{aligned}
+		&\int_\Omega (\mathbf{u}\cdot\nabla\tilde{\nu}^{k+1})\xi\,dx
+		+\frac{1}{\sigma}\int_\Omega(\nu+\tilde{\nu}^{k})
+		\nabla\tilde{\nu}^{k+1}\cdot\nabla\xi\,dx \\
+		&+\int_\Omega c_{w1}f_w^{k}\frac{\tilde{\nu}^{k}}{y^2}
+		\tilde{\nu}^{k+1}\xi\,dx
+		+\int_\Omega \alpha_{\tilde{\nu}}(1-\bar{\gamma})^{N_{\tilde{\nu}}}
+		\tilde{\nu}^{k+1}\xi\,dx \\
+		&=
+		\int_\Omega
+		\left[
+			c_{b1}\tilde{S}^{k}\tilde{\nu}^{k}
+			+\frac{c_{b2}}{\sigma}
+			\nabla\tilde{\nu}^{k}\cdot\nabla\tilde{\nu}^{k}
+		\right]\xi\,dx .
+	\end{aligned}
+	\label{eq:penalized_sa_weak}
+\end{equation}
+This weak form makes the artificial solid damping explicit: as $\bar{\gamma}$ approaches zero, the reaction term forces the SA working variable toward zero in the same cells where the Brinkman term suppresses velocity.
+
 \subsection{Reciprocal Penalized Wall-Distance Equation}
 The Spalart-Allmaras model is highly sensitive to the wall distance, $y$. While differential equations for wall distance computation are well-established \cite{Tucker2003}, topology optimization introduces a unique challenge. The location of the wall is not only a static mesh boundary, but also the dynamically evolving $\bar{\gamma} = 0$ contour. Therefore, the relaxed Eikonal equation must be penalized to dynamically recognize fictitious solid as a physical boundary \cite{Yoon2016}:
 \begin{equation}
@@ -97,6 +136,20 @@ The wall-distance equation uses the same power-law topology concept. The coeffic
 	\label{eq:reciprocal_wall_distance_recovery}
 \end{equation}
 then collapses the SA wall distance toward zero inside topology-created solid regions while retaining the physical wall distance in fluid regions. As in the standalone solver, small numerical floors and non-negativity safeguards are used in the implementation to avoid division-by-zero artifacts, but they are not part of the mathematical model statement.
+
+The corresponding nonlinear weak residual is obtained by multiplying Eq.~\ref{eq:penalized_eikonal} by a scalar test function $z$ and integrating the $\sigma_wG\nabla^2G$ contribution by parts:
+\begin{equation}
+	\begin{aligned}
+		R_G(G,z)=
+		&(1-\sigma_w)\int_\Omega |\nabla G|^2 z\,dx
+		-\sigma_w\int_\Omega G\nabla G\cdot\nabla z\,dx
+		-(1+2\sigma_w)\int_\Omega G^4z\,dx \\
+		&-\int_\Omega \alpha_G(1-\bar{\gamma})^{N_G}(G-G_0)z\,dx
+		=0 .
+	\end{aligned}
+	\label{eq:penalized_eikonal_weak}
+\end{equation}
+The last term is what turns topology-created solid into an artificial wall-distance boundary in the continuous-density setting.
 
 \section{Boundary Conditions and Turbulence Initialization}
 \label{sec:boundary_conditions}
@@ -115,12 +168,13 @@ Let $\mathbf{s}=(\mathbf{u},p)$ denote the final velocity-pressure state used fo
 \begin{equation}
 	R(\mathbf{s},\bar{\gamma};\nu_t^{fr},G^{fr})=0 .
 \end{equation}
+In the implementation, this abstract residual is the weak RANS-Brinkman form in Eq.~\ref{eq:penalized_momentum_weak}. The dependence on $\bar{\gamma}$ therefore enters directly through the Brinkman interpolation $\alpha(\bar{\gamma})$ and, for the dissipation objective, through the objective's Brinkman drag contribution. The dependence of $\nu_t^{fr}$ and $G^{fr}$ on the design is not differentiated in the adjoint step.
 For an objective $J(\mathbf{s},\bar{\gamma})$, the reduced Lagrangian is
 \begin{equation}
 	\mathcal{L}(\mathbf{s},\bar{\gamma},\mathbf{s}^*) =
 	J(\mathbf{s},\bar{\gamma}) + \mathbf{s}^* R(\mathbf{s},\bar{\gamma};\nu_t^{fr},G^{fr}),
 \end{equation}
-where $\mathbf{s}^*$ is the adjoint state. The adjoint equation is obtained by eliminating the dependence of the total derivative on the forward-state variation:
+where $\mathbf{s}^*$ is the adjoint state. In finite-element notation, the product $\mathbf{s}^*R$ represents the assembled residual weighted by the adjoint velocity and pressure test functions, not a pointwise multiplication. The adjoint equation is obtained by eliminating the dependence of the total derivative on the forward-state variation:
 \begin{equation}
 	\left(\frac{\partial R}{\partial \mathbf{s}}\right)^T\mathbf{s}^*
 	=
@@ -173,12 +227,12 @@ The distinction between active and passive domains introduced in Section~\ref{se
 \end{equation}
 Here $\Omega_D$ denotes the optimized design domain used for objective integration, excluding fixed non-design inlet and outlet extensions, and $\mu_{\mathrm{eff}}=\mu+\mu_t$ under the frozen-turbulence flow solve.
 
-For the pipe-bend and U-bend benchmarks considered in this thesis, the engineering goal is instead expressed as a global pressure-loss objective: guide a prescribed inflow from inlet to outlet with the lowest possible hydraulic resistance. Because the outlet pressure is fixed to zero, this loss is represented by the average pressure on the physical inlet boundary,
+For completeness, the implementation also supports an average inlet-pressure objective. Because the outlet pressure is fixed to zero in the pressure-outlet cases, this pressure can be used as a proxy for the pressure loss required to drive the imposed flow rate through the topology:
 \begin{equation}
 	J_p(p) = \frac{1}{|\Gamma_{\mathrm{in}}|} \int_{\Gamma_{\mathrm{in}}} p \, d\Gamma .
 	\label{eq:inlet_pressure_objective}
 \end{equation}
-Here $\Gamma_{\mathrm{in}}$ is the inlet boundary of the fixed non-design extension, not an internal design-domain pressure plane. When the outlet pressure is used as the gauge reference, minimizing $J_p$ is equivalent to minimizing the pressure loss required to drive the imposed flow rate through the topology. The Bayat pipe-bend and U-bend cases use $J_p$, while the Yoon diffuser benchmark uses $J_D$ from Eq.~\ref{eq:dissipation_objective}.
+Here $\Gamma_{\mathrm{in}}$ is the inlet boundary of the fixed non-design extension, not an internal design-domain pressure plane; the division by $|\Gamma_{\mathrm{in}}|$ is required so that the objective is an average pressure. Preliminary pressure-objective runs used this functional, but the final turbulent optimization framework uses $J_D$ from Eq.~\ref{eq:dissipation_objective} for the pipe-bend, U-bend, and diffuser campaigns. This choice follows the physical interpretation that pressure loss is proportional to mechanical energy dissipation in steady internal flow, while the domain-integrated $J_D$ provides a less localized design signal by summing the objective contribution over all design cells. The code keeps $J_p$ as a diagnostic and fallback objective, but pressure-drop results are interpreted alongside the dissipation objective rather than replacing it.
 
 \subsection{Volume Constraint}
 Because the goal is to design a targeted manifold or pipe system, a strict volume constraint must be imposed. The volume fraction constraint is evaluated only over the prescribed volume mask $\Omega_V$, rather than over the entire computational mesh:
@@ -195,9 +249,9 @@ Combining the selected objective function, the governing equations, and the cons
 		& \underset{\gamma(\mathbf{x}) \in [0, 1]}{\text{minimize}}
 		& & J(\mathbf{u}, p, \bar{\gamma}) \\
 		& \text{subject to}
-		& & \text{Modified RANS Equations (Eq.~\ref{eq:penalized_momentum})} \\
-		& & & \text{Modified Spalart-Allmaras Equation (Eq.~\ref{eq:penalized_sa})} \\
-		& & & \text{Penalized Wall-Distance Equation (Eq.~\ref{eq:penalized_eikonal})} \\
+		& & \text{Modified RANS weak residual (Eq.~\ref{eq:penalized_momentum_weak})} \\
+		& & & \text{Modified Spalart-Allmaras weak form (Eq.~\ref{eq:penalized_sa_weak})} \\
+		& & & \text{Penalized wall-distance weak residual (Eq.~\ref{eq:penalized_eikonal_weak})} \\
 		& & & g(\bar{\gamma}) \leq 0 .
 	\end{aligned}
 \end{equation}
@@ -234,25 +288,25 @@ Figure~\ref{fig:filter_domain_schematic} illustrates this masking convention. Th
 	\label{fig:filter_domain_schematic}
 \end{figure}
 
-\begin{lstlisting}[caption={Pseudocode for active-mask-normalized density filtering and transpose-gradient filtering.}, label={lst:pde_filter}]
-	# Forward filter: only active cells influence the smoothed field.
-	denominator = helmholtz_solve(active_mask)
-	numerator = helmholtz_solve(active_mask * gamma_raw)
-	gamma_filtered = safe_divide(numerator, denominator)
-
-	# Projection and hard restoration of prescribed non-design cells.
-	gamma_projected = heaviside_projection(gamma_filtered, beta, eta)
-	gamma_effective = gamma_lower + (gamma_upper - gamma_lower) * gamma_projected
-	gamma_effective[passive_fluid_cells] = 1.0
-	gamma_effective[passive_solid_cells] = 0.0
-
-	# Transpose filter: map sensitivities back to active cells.
-	dJ_dgamma_projected = dJ_dgamma_effective * (gamma_upper - gamma_lower)
-	dJ_dgamma_filtered = dJ_dgamma_projected * projection_slope(gamma_filtered, beta, eta)
-	filter_rhs = active_mask * safe_divide(dJ_dgamma_filtered, denominator)
-	dJ_dgamma_raw = helmholtz_solve(filter_rhs)
-	dJ_dgamma_raw[inactive_cells] = 0.0
-\end{lstlisting}
+The same Helmholtz operator is used in the reverse sensitivity chain. If $s_{\bar{\gamma}}$ denotes a cellwise derivative with respect to the bounded physical density, then the projection and bound mapping give
+\begin{equation}
+	s_{\tilde{\gamma}} =
+	s_{\bar{\gamma}}
+	(\gamma_{\mathrm{upper}}-\gamma_{\mathrm{lower}})
+	\frac{\partial \Pi_\beta}{\partial \tilde{\gamma}} .
+	\label{eq:projection_sensitivity_chain}
+\end{equation}
+The transpose of the active-mask-normalized filter then maps this quantity back to the raw active design space:
+\begin{equation}
+	s_{\gamma}
+	=
+	M\,\mathcal{H}^{-T}
+	\left(
+		\frac{s_{\tilde{\gamma}}}{\mathcal{H}(M)}
+	\right) .
+	\label{eq:active_filter_transpose}
+\end{equation}
+Because the Helmholtz bilinear form in Eq.~\ref{eq:dg_helmholtz_filter} is symmetric, $\mathcal{H}^{-T}$ is evaluated by another Helmholtz solve with the transpose-filter right-hand side. Passive cells are set to zero in $s_{\gamma}$ because MMA updates only the active design variables.
 
 \subsection{Heaviside Projection}
 While the Helmholtz filter imposes a minimum length scale, it smooths the design field and creates a gray transition zone between solid and fluid. To recover a sharper topology, a continuous Heaviside projection is applied to the filtered variable \cite{Guest2004,Wang2011}:
@@ -290,47 +344,11 @@ The optimization architecture supports non-converged acceptance during difficult
 \subsection{Algorithm and Continuation Strategy}
 To encourage convergence to a physically meaningful binary design, the algorithm iterates over a continuation schedule. The projection steepness ($\beta$) is increased as the optimization progresses, while the Brinkman RAMP parameter ($q$) is advanced according to the prescribed penalty schedule and MMA move limits are tightened. The SA and wall-distance power penalties do not use this continuation in the final benchmark runs; their amplitudes and exponents remain fixed while the local penalty magnitude changes through the evolving topology field.
 
-\begin{lstlisting}[caption={Pseudocode for the frozen-turbulence topology optimization loop.}, label={lst:to_loop}]
-	for stage in continuation_schedule:
-	    ramp_convexity = stage.ramp_convexity
-	    beta = stage.projection_steepness
-	    move_limit = stage.move_limit
-	    set_fixed_sa_and_wall_penalties()
+Within each continuation stage, one MMA iteration consists of the following mathematical sequence. First, the raw active design field is filtered with Eq.~\ref{eq:dg_helmholtz_filter}, normalized by the active-mask denominator $\mathcal{H}(M)$, projected with Eq.~\ref{eq:tanh_projection}, and restored to the prescribed passive-cell bounds. The resulting $\bar{\gamma}$ defines the Brinkman resistance $\alpha(\bar{\gamma})$, the SA damping coefficient in Eq.~\ref{eq:penalized_sa_weak}, and the wall-distance forcing in Eq.~\ref{eq:penalized_eikonal_weak}.
 
-	    while not mma_converged and inner_iter < stage.max_iterations:
-	        gamma_filtered = density_filter(gamma_raw, active_mask)
-	        gamma_effective = project_and_restore_bounds(gamma_filtered, beta)
-	        alpha = brinkman_ramp(gamma_effective, alpha_solid,
-	                              alpha_fluid, ramp_convexity)
+Second, the forward turbulence state is updated. The reciprocal wall-distance residual in Eq.~\ref{eq:penalized_eikonal_weak} is solved for the current topology, the velocity-pressure equations are advanced with the current eddy viscosity, and the penalized SA weak form in Eq.~\ref{eq:penalized_sa_weak} updates $\tilde{\nu}$ and therefore $\mu_t$. These Picard updates continue until the configured residual criteria are accepted for the current design step.
 
-	        wall_distance = update_wall_distance(gamma_effective)
-
-	        for picard_iter in range(max_picard_iterations):
-	            velocity, pressure = solve_flow_warm_start(alpha, nu_t)
-	            nu_tilde = solve_spalart_allmaras(velocity, wall_distance,
-	                                              gamma_effective)
-	            nu_t = eddy_viscosity_from(nu_tilde)
-	            if residuals_are_accepted():
-	                break
-
-	        nu_t_frozen = freeze_eddy_viscosity(nu_t)
-	        velocity, pressure = solve_final_state(alpha, nu_t_frozen)
-	        adjoint = solve_frozen_turbulence_adjoint(velocity, pressure,
-	                                                   nu_t_frozen)
-
-	        dJ_dgamma_effective = assemble_objective_sensitivity(adjoint,
-	                                                             gamma_effective)
-	        dV_dgamma_effective = assemble_volume_sensitivity(gamma_effective)
-	        dJ_dgamma_raw = transpose_filter(dJ_dgamma_effective, active_mask)
-	        dV_dgamma_raw = transpose_filter(dV_dgamma_effective, active_mask)
-
-	        gamma_raw[active_design_cells] = MMA.update(
-	            gamma_raw[active_design_cells],
-	            J, dJ_dgamma_raw,
-	            g, dV_dgamma_raw,
-	            move_limit,
-	        )
-\end{lstlisting}
+Third, the final frozen-viscosity flow state is solved with Eq.~\ref{eq:penalized_momentum_weak}. The adjoint equation from Section~\ref{sec:frozen_turbulence} is then assembled from the same weak residual and the selected objective; in the final turbulent benchmark campaigns this is $J_D$ from Eq.~\ref{eq:dissipation_objective}. The design derivative is obtained from Eq.~\ref{eq:frozen_design_gradient}, chained through the projection derivative in Eq.~\ref{eq:projection_sensitivity_chain}, and mapped back to the active raw variables through the transpose filter in Eq.~\ref{eq:active_filter_transpose}. MMA finally updates only those active raw density degrees of freedom, subject to the volume constraint in Eq.~\ref{eq:volume_constraint} and the current move limit.
 
 \section{Conclusion}
 This chapter has established the mathematical and algorithmic framework used for the turbulent topology optimization results in this thesis. By employing the Fictitious Domain Method with Brinkman momentum resistance \cite{Borrvall2003,Gersborg2005}, the evolving structural topology is integrated into a fixed computational grid. The SA working-variable and reciprocal wall-distance equations are coupled to the topology through power-law penalties, while the DG0 Helmholtz interior penalty filter \cite{Lazarov2011,Bourdin2001} and continuous Heaviside projection \cite{Guest2004,Wang2011} enforce a minimum length scale and reduce mesh-dependent numerical artifacts.

@@ -93,6 +93,10 @@ FEniCS uses a SA-solver optimiser, can fail when flow separation starts playing 
 <-> for pipe bend: turbulent design shows that SST k-omega values (dissipation, pressure drop) in Ansys are close to SA values (SA gives 0.0153 W/m & 0.1457 Pa for turbulent design in Ansys, while SST gives 0.0166 W/m & 0.1522 Pa) 
 <-> for pipe bend: turbulent design performs better than laminar design when simulating turbulent flow, both with SA and k-omega in Ansys (lower dissipation and pressure drop for turbulent design)
 
+** Prof. Blommaert **
+You can even check wether SA fails for flow separation with e.g. a backwards facing step simulation (can be FEniCS and/or Ansys)
+Which metrics do you use then?
+
 For diffuser: turbulent design performs better than laminar when simulating turbulent flow (Re=3000) in Ansys with SA, but turbulent design performs worse when simulating turbulent flow with SST k-omega
 Try pressure BC in outlet (diffuser) instead of velocity outlet
 Are separation zones (diverging channel) still there after optimization with this new BC?Run for +/- 30 MMA iterations

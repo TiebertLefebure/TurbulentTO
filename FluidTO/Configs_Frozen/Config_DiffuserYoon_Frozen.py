@@ -183,6 +183,7 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
 ]
 
 # ============================================
+
 PICARD_STEPS = 3
 TURBULENCE_RELAXATION = 0.15
 
@@ -201,8 +202,10 @@ FORWARD_IPCS_P_SOLVER = "bicgstab"
 FORWARD_IPCS_P_PRECONDITIONER = "ilu"
 FORWARD_IPCS_LOG_EVERY = 50
 FORWARD_IPCS_ACCEPT_BEST_SCORE = 1.00
+
 # ============================================
-OUTLET_BC_TYPE = "velocity"
+
+OUTLET_BC_TYPE = "pressure" # "velocity" or "pressure"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 

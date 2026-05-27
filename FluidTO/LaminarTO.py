@@ -123,6 +123,11 @@ filtered_gradient = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 df0dx_centered_plot = Function(DensitySpace)
+j_d_per_cell_plot = Function(DensitySpace)
+viscous_dissipation_per_cell_plot = Function(DensitySpace)
+cell_integral_test = TestFunction(DensitySpace)
+j_d_per_cell_plot.rename("J_D", "J_D")
+viscous_dissipation_per_cell_plot.rename("viscous_dissipation", "viscous_dissipation")
 
 
 def _as_density_function(value, density_space):
@@ -409,6 +414,16 @@ filter_work = Function(DensitySpace)
 active_design_indicator = Function(DensitySpace)
 filter_denominator = Function(DensitySpace)
 n = FacetNormal(mesh)
+
+
+def assemble_cell_integral_field(integrand, target, name):
+    """Store one DG0 value per cell equal to the integral over that cell."""
+    target.vector().set_local(assemble(integrand * cell_integral_test * dx).get_local())
+    target.vector().apply("insert")
+    target.rename(name, name)
+    return target
+
+
 h = CellDiameter(mesh)
 h_avg = (h("+") + h("-")) / 2.0
 
@@ -515,11 +530,13 @@ else:
     deformation = nabla_grad(u) + nabla_grad(u).T
     dissipation_density = 0.5 * mu_fluid * inner(deformation, deformation)
 
+J_D_integrand = ObjectiveRegion * (
+    dissipation_density + alpha(rho_effective) * inner(u, u)
+)
+viscous_dissipation_integrand = ObjectiveRegion * dissipation_density
 objective_type = str(globals().get("OBJECTIVE_TYPE", "dissipation")).strip().lower()
 if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
-    ObjFunctional = ObjectiveRegion * (
-        dissipation_density + alpha(rho_effective) * inner(u, u)
-    ) * dx
+    ObjFunctional = J_D_integrand * dx
     objective_log_column = "J_dissipation_W_per_m"
     objective_console_label = "J_dissipation"
     objective_console_unit = " W/m"
@@ -548,7 +565,7 @@ else:
     )
 # The nondesign diagnostic mirrors dP_nondesign: use the full simulated domain.
 ViscousDissipationNondesignFunctional = dissipation_density * dx
-ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
+ViscousDissipationFunctional = viscous_dissipation_integrand * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx)
 lagrangian_form = ObjFunctional + state_form
@@ -569,6 +586,8 @@ rho_dir = os.path.join(results_root, "rho")
 rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
 p_dir = os.path.join(results_root, "p")
+j_d_dir = os.path.join(results_root, "J_D")
+viscous_dissipation_dir = os.path.join(results_root, "viscous_dissipation")
 design_dir = os.path.join(results_root, "design")
 df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
 
@@ -594,6 +613,10 @@ save_df0dx_centered_field = output_flag(
     "SAVE_DF0DX_CENTERED_FOLDER",
     globals().get("SAVE_DF0DX_CENTERED_FIELD", log_df0dx_stats),
 )
+save_cellwise_dissipation_fields = output_flag(
+    "SAVE_CELLWISE_DISSIPATION_FIELDS",
+    True,
+)
 
 checkpoint_path = optimization_checkpoint_path(results_root)
 resume_requested = resume_optimization_requested(globals())
@@ -616,6 +639,8 @@ if resume_from_checkpoint:
         output_dirs.append(u_dir)
     if save_pressure_field:
         output_dirs.append(p_dir)
+    if save_cellwise_dissipation_fields:
+        output_dirs.extend([j_d_dir, viscous_dissipation_dir])
     if save_design_text_files:
         output_dirs.append(design_dir)
     if save_df0dx_centered_field:
@@ -638,6 +663,9 @@ else:
         ensure_clean_dir(u_dir)
     if save_pressure_field:
         ensure_clean_dir(p_dir)
+    if save_cellwise_dissipation_fields:
+        ensure_clean_dir(j_d_dir)
+        ensure_clean_dir(viscous_dissipation_dir)
     if save_design_text_files:
         ensure_clean_dir(design_dir)
     if save_df0dx_centered_field:
@@ -659,6 +687,12 @@ rho_out = make_vtk_writer(save_rho_field, rho_dir, "plot_rho.pvd")
 rhop_out = make_vtk_writer(save_rho_projected_field, rho_p_dir, "plot_rho_projected.pvd")
 u_out = make_vtk_writer(save_velocity_field, u_dir, "plot_u.pvd")
 p_out = make_vtk_writer(save_pressure_field, p_dir, "plot_p.pvd")
+j_d_out = make_vtk_writer(save_cellwise_dissipation_fields, j_d_dir, "J_D.pvd")
+viscous_dissipation_out = make_vtk_writer(
+    save_cellwise_dissipation_fields,
+    viscous_dissipation_dir,
+    "viscous_dissipation.pvd",
+)
 df0dx_centered_out = make_vtk_writer(
     save_df0dx_centered_field,
     df0dx_centered_dir,
@@ -974,6 +1008,17 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         f0val_mma = float(f0val) / objective_scale_reference
         viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
+        if save_cellwise_dissipation_fields:
+            j_d_out << assemble_cell_integral_field(
+                J_D_integrand,
+                j_d_per_cell_plot,
+                "J_D",
+            )
+            viscous_dissipation_out << assemble_cell_integral_field(
+                viscous_dissipation_integrand,
+                viscous_dissipation_per_cell_plot,
+                "viscous_dissipation",
+            )
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
         )

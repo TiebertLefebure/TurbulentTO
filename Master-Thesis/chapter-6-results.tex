@@ -56,7 +56,19 @@ To bridge this gap, the primary validation metric is the physical viscous dissip
 	\,d\Omega ,
 	\label{eq:ch6_validation_dissipation}
 \end{equation}
-where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys and $\mathbf{S}=\frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right)$ is the symmetric strain-rate tensor. The integrand in Eq.~\ref{eq:ch6_validation_dissipation} can therefore also be written as $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$. In the Ansys Fluent post-processing, the scalar strain-rate magnitude is $\dot{\gamma}=\sqrt{2\mathbf{S}:\mathbf{S}}$, so the custom field function $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ is equivalent to the integrand in Eq.~\ref{eq:ch6_validation_dissipation}. The effective viscosity is $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent evaluations and $\mu_{\mathrm{eff}}=\mu$ for laminar reference solves. Furthermore, because pressure drop is the most direct and practical engineering interpretation of these flow losses, $\Delta p$ is also reported from the Ansys validation runs. All two-dimensional dissipation quantities are evaluated per unit depth.
+where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys and $\mathbf{S}=\frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right)$ is the symmetric strain-rate tensor. The integrand in Eq.~\ref{eq:ch6_validation_dissipation} can therefore also be written as $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$. In the Ansys Fluent post-processing, the scalar strain-rate magnitude is $\dot{\gamma}=\sqrt{2\mathbf{S}:\mathbf{S}}$, so the custom field function $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ is equivalent to the integrand in Eq.~\ref{eq:ch6_validation_dissipation}. The effective viscosity is $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent evaluations and $\mu_{\mathrm{eff}}=\mu$ for laminar reference solves.
+
+The second global validation metric is the static pressure drop between the physical inlet and outlet sections,
+\begin{equation}
+	\Delta p =
+	\bar{p}_{\mathrm{in}}-\bar{p}_{\mathrm{out}},
+	\qquad
+	\bar{p}_{\Gamma} =
+	\frac{1}{|\Gamma|}
+	\int_{\Gamma} p_s\,d\Gamma ,
+	\label{eq:ch6_static_pressure_drop}
+\end{equation}
+where $p_s$ is the static pressure and $|\Gamma|=\int_{\Gamma}1\,d\Gamma$ is the boundary length in the two-dimensional model. In Ansys Fluent, $p_s$ is taken directly from the area-weighted average static pressure on the inlet and outlet surfaces. For FEniCS results that use kinematic pressure, the corresponding static pressure is obtained as $p_s=\rho p_k$ before evaluating Eq.~\ref{eq:ch6_static_pressure_drop}. Pressure drop is retained throughout Chapter~\ref{ch:benchmark_results} because it is the most direct engineering interpretation of the same mechanical losses measured by $\Phi_D$. All two-dimensional dissipation quantities are evaluated per unit depth.
 
 \section{Pipe Bend Benchmark}
 \label{sec:alexandersen_pipebend}

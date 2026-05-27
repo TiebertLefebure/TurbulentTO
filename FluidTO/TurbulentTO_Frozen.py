@@ -24,6 +24,7 @@ from Utilities_SharedTO import (
     build_sa_inlet_nu_tilde_targets,
     build_pressure_pin_expression_from_config,
     compute_filter_base_length_from_config,
+    config_truthy,
     create_design_mesh_from_config,
     checkpoint_scalar,
     ensure_clean_dir,
@@ -442,14 +443,27 @@ unfiltered_gradient = Function(DensitySpace)
 filtered_gradient = Function(DensitySpace)
 df0dx_plot = Function(DensitySpace)
 df0dx_centered_plot = Function(DensitySpace)
+j_d_per_cell_plot = Function(DensitySpace)
+viscous_dissipation_per_cell_plot = Function(DensitySpace)
 unfiltered_s_vol = Function(DensitySpace)
 filtered_s_vol = Function(DensitySpace)
 unfiltered_constraint_gradient = Function(DensitySpace)
 filtered_constraint_gradient = Function(DensitySpace)
+cell_integral_test = TestFunction(DensitySpace)
 
 rho.rename("rho", "rho")
 rho_f.rename("rho_filtered", "rho_filtered")
 rho_proj_plot.rename("rho_projected", "rho_projected")
+j_d_per_cell_plot.rename("J_D", "J_D")
+viscous_dissipation_per_cell_plot.rename("viscous_dissipation", "viscous_dissipation")
+
+
+def assemble_cell_integral_field(integrand, target, name):
+    """Store one DG0 value per cell equal to the integral over that cell."""
+    target.vector().set_local(assemble(integrand * cell_integral_test * dx).get_local())
+    target.vector().apply("insert")
+    target.rename(name, name)
+    return target
 
 
 def _as_density_function(value, density_space):
@@ -1262,12 +1276,14 @@ else:
 # Objective:
 #   - dissipation: Dilgen-style volume power loss with Brinkman drag.
 #   - average_inlet_pressure: Alexandersen-style physical inlet boundary pressure.
+J_D_integrand = ObjectiveRegion * (
+    dissipation_density
+    + alpha(rho_effective) * inner(u, u)
+)
+viscous_dissipation_integrand = ObjectiveRegion * dissipation_density
 objective_type = str(globals().get("OBJECTIVE_TYPE", "dissipation")).strip().lower()
 if objective_type in ("dissipation", "power_dissipation", "volume_dissipation"):
-    ObjFunctional = ObjectiveRegion * (
-        dissipation_density
-        + alpha(rho_effective) * inner(u, u)
-    ) * dx
+    ObjFunctional = J_D_integrand * dx
     objective_log_column = "J_dissipation_W_per_m"
     objective_console_label = "J_dissipation"
     objective_console_unit = " W/m"
@@ -1296,7 +1312,7 @@ else:
     )
 # The nondesign diagnostic mirrors dP_nondesign: use the full simulated domain.
 ViscousDissipationNondesignFunctional = dissipation_density * dx
-ViscousDissipationFunctional = ObjectiveRegion * dissipation_density * dx
+ViscousDissipationFunctional = viscous_dissipation_integrand * dx
 
 state_form = build_state_form(u, p, v, q, rho_effective, dx, nu_tilde_frozen)
 flow_test_u, flow_test_p = TestFunctions(FlowSpace)
@@ -3108,6 +3124,8 @@ u_dir = os.path.join(results_root, "u")
 u_magnitude_dir = os.path.join(results_root, "u_magnitude")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
+j_d_dir = os.path.join(results_root, "J_D")
+viscous_dissipation_dir = os.path.join(results_root, "viscous_dissipation")
 nu_tilde_raw_dir = os.path.join(results_root, "nu_tilde_raw_sa_solve")
 nu_tilde_preclip_dir = os.path.join(results_root, "nu_tilde_relaxed_preclip")
 nu_tilde_clip_floor_dir = os.path.join(results_root, "nu_tilde_floor_clip_mask")
@@ -3121,6 +3139,9 @@ design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
 paper_data_dir = os.path.join(results_root, "paper_data")
 save_dilgen_paper_data = bool(globals().get("SAVE_DILGEN_PAPER_DATA", False))
+save_cellwise_dissipation_fields = config_truthy(
+    globals().get("SAVE_CELLWISE_DISSIPATION_FIELDS", True)
+)
 save_ipcs_residual_plots = (
     bool(globals().get("SAVE_IPCS_RESIDUAL_PLOTS", False))
     and (
@@ -3153,6 +3174,8 @@ output_dirs = [
     df0dx_centered_dir,
     design_dir,
 ]
+if save_cellwise_dissipation_fields:
+    output_dirs.extend([j_d_dir, viscous_dissipation_dir])
 if save_dilgen_paper_data:
     output_dirs.extend([u_magnitude_dir, df0dx_dir, df0dx_normalized_dir, paper_data_dir])
 if save_sa_clipping_diagnostics:
@@ -3194,6 +3217,12 @@ if save_dilgen_paper_data:
     u_magnitude_out = ResilientVTKFile(output_series_path(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd")), COMM)
 p_out = ResilientVTKFile(output_series_path(os.path.join(p_dir, "plot_p.pvd")), COMM)
 nu_tilde_out = ResilientVTKFile(output_series_path(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd")), COMM)
+if save_cellwise_dissipation_fields:
+    j_d_out = ResilientVTKFile(output_series_path(os.path.join(j_d_dir, "J_D.pvd")), COMM)
+    viscous_dissipation_out = ResilientVTKFile(
+        output_series_path(os.path.join(viscous_dissipation_dir, "viscous_dissipation.pvd")),
+        COMM,
+    )
 if save_sa_clipping_diagnostics:
     nu_tilde_raw_out = ResilientVTKFile(
         output_series_path(os.path.join(nu_tilde_raw_dir, "plot_nu_tilde_raw_sa_solve.pvd")), COMM
@@ -3668,6 +3697,17 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         f0val_mma = float(f0val) / objective_scale_reference
         viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
+        if save_cellwise_dissipation_fields:
+            j_d_out << assemble_cell_integral_field(
+                J_D_integrand,
+                j_d_per_cell_plot,
+                "J_D",
+            )
+            viscous_dissipation_out << assemble_cell_integral_field(
+                viscous_dissipation_integrand,
+                viscous_dissipation_per_cell_plot,
+                "viscous_dissipation",
+            )
         pressure_drop_nondesign_now = pressure_drop_between_boundaries(
             w_fwd.sub(1), ds, MARK["inlet"], MARK["outlet"]
         )
