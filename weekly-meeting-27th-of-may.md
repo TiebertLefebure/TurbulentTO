@@ -96,6 +96,10 @@ FEniCS uses a SA-solver optimiser, can fail when flow separation starts playing 
 ** Prof. Blommaert **
 You can even check wether SA fails for flow separation with e.g. a backwards facing step simulation (can be FEniCS and/or Ansys)
 Which metrics do you use then?
+Suggested answer:
+Use Ansys as the main evidence if time is limited, because the same backwards-facing-step case can be compared directly with SA and SST k-omega. Use FEniCS-SA only as a supporting check of the in-house solver. The main metric should be the reattachment length x_r/h, obtained from the lower-wall shear stress or skin-friction coefficient changing sign after the step. Add recirculation-zone size or reverse-flow length, pressure recovery/drop, and local eddy-viscosity or dissipation-density plots if the goal is to connect the result to the diffuser discrepancy.
+Placement: Chapter 2 should contain the short physical argument that SA is known to be weaker in separated adverse-pressure-gradient flow. A computed backwards-facing-step result belongs with solver/model verification, so Chapter 5 or Appendix A, not Chapter 4. Chapter 6 can then refer back to it when explaining the diffuser.
+Steady run: yes. A steady RANS backwards-facing-step calculation is defensible because it represents the mean flow. The current FEniCS file is `TurbulenceModels/BackStepSimulation_SpalartAllmaras_Steady.py`, with config `TurbulenceModels/Configs/ConfigBackStep_SpalartAllmaras_Steady.py`. It uses the shared steady SA IPCS/Picard driver and logs reattachment length, reverse-flow size, pressure drop, eddy-viscosity levels, and dissipation-proxy metrics.
 
 For diffuser: turbulent design performs better than laminar when simulating turbulent flow (Re=3000) in Ansys with SA, but turbulent design performs worse when simulating turbulent flow with SST k-omega
 Try pressure BC in outlet (diffuser) instead of velocity outlet
