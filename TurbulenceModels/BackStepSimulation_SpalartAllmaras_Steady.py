@@ -33,6 +33,21 @@ def _boundary_average(field, markers, ds_measure):
     return weighted_value / boundary_measure
 
 
+def _boundary_flux(velocity, markers, ds_measure):
+    normal = FacetNormal(velocity.function_space().mesh())
+    flux = 0.0
+    for marker in _as_marker_list(markers):
+        flux += float(assemble(dot(velocity, normal) * ds_measure(int(marker))))
+    return flux
+
+
+def _relative_mass_imbalance(velocity, inlet_markers, outlet_markers, ds_measure):
+    inlet_flux = _boundary_flux(velocity, inlet_markers, ds_measure)
+    outlet_flux = _boundary_flux(velocity, outlet_markers, ds_measure)
+    flux_scale = max(abs(inlet_flux), abs(outlet_flux), 1.0e-30)
+    return abs(inlet_flux + outlet_flux) / flux_scale
+
+
 def _first_negative_to_positive_crossing(xs, values):
     xs = np.asarray(xs, dtype=float)
     values = np.asarray(values, dtype=float)
@@ -129,6 +144,24 @@ def _sample_lower_wall(velocity, scalar_space, metrics_config, viscosity):
     }
 
 
+def _reattachment_length_over_h_for_velocity(velocity, scalar_space, metrics_config, viscosity):
+    wall_samples = _sample_lower_wall(
+        velocity,
+        scalar_space,
+        metrics_config,
+        viscosity,
+    )
+    reattachment_x = _first_negative_to_positive_crossing(
+        wall_samples["x"],
+        wall_samples["du_dy"],
+    )
+    if reattachment_x is None:
+        return float("nan")
+    return (
+        reattachment_x - float(metrics_config["STEP_X"])
+    ) / float(metrics_config["STEP_HEIGHT"])
+
+
 def _finite_min(values):
     finite = np.asarray(values, dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -152,6 +185,46 @@ def _format_metric(value, unit=""):
         return "not found"
     formatted = "{:.6e}".format(value_float)
     return "{} {}".format(formatted, unit).strip()
+
+
+def _build_backstep_picard_diagnostics(
+    *,
+    scalar_space,
+    metrics_config,
+    pressure_metric,
+    ds_measure,
+    viscosity,
+):
+    def reattachment_length_over_h(state):
+        return _reattachment_length_over_h_for_velocity(
+            state["u"],
+            scalar_space,
+            metrics_config,
+            viscosity,
+        )
+
+    def mass_imbalance(state):
+        return _relative_mass_imbalance(
+            state["u"],
+            pressure_metric.get("INLET_MARKERS"),
+            pressure_metric.get("OUTLET_MARKERS"),
+            ds_measure,
+        )
+
+    return [
+        {
+            "key": "reattachment_length_over_h",
+            "label": "x_r/h",
+            "format": "{:.6e}",
+            "evaluator": reattachment_length_over_h,
+        },
+        {
+            "key": "mass_imbalance",
+            "label": "mass imbalance",
+            "format": "{:.3e}",
+            "evaluator": mass_imbalance,
+        },
+    ]
 
 
 def _compute_backstep_metrics(
@@ -213,6 +286,12 @@ def _compute_backstep_metrics(
     )
     pressure_scale = float(pressure_metric.get("PRESSURE_SCALE", 1.0))
     pressure_drop = pressure_scale * (inlet_pressure - outlet_pressure)
+    mass_imbalance = _relative_mass_imbalance(
+        velocity,
+        pressure_metric.get("INLET_MARKERS"),
+        pressure_metric.get("OUTLET_MARKERS"),
+        ds_measure,
+    )
 
     nu_t_field = _project_scalar(nu_t, scalar_space, "nu_t")
     nu_t_local = nu_t_field.vector().get_local()
@@ -274,6 +353,7 @@ def _compute_backstep_metrics(
         "reverse_flow_area_fraction_downstream": reverse_flow_area / max(downstream_area, 1.0e-30),
         "pressure_drop": pressure_drop,
         "pressure_unit": pressure_metric.get("UNIT", ""),
+        "mass_imbalance": mass_imbalance,
         "inlet_pressure_average": inlet_pressure,
         "outlet_pressure_average": outlet_pressure,
         "reattachment_x": reattachment_x,
@@ -331,6 +411,7 @@ def _write_backstep_metrics(metrics, metrics_config, saving_directory):
         "  Static pressure drop: {}".format(
             _format_metric(metrics["pressure_drop"], metrics["pressure_unit"])
         ),
+        "  Mass imbalance: {}".format(_format_metric(metrics["mass_imbalance"])),
         "  Mean nu_t/nu: {}".format(_format_metric(metrics["mean_nu_t_over_nu"])),
         "  Max nu_t/nu: {}".format(_format_metric(metrics["max_nu_t_over_nu"])),
         "  Total strain-rate dissipation proxy: {}".format(
@@ -515,6 +596,13 @@ solutions, residuals = run_steady_sa_ipcs_picard(
     normalize_pressure_mean=bool(simulation_prm.get("FLOW_IPCS_NORMALIZE_PRESSURE_MEAN", False)),
     ds=ds,
     pressure_drop_metric=pressure_drop_metric,
+    picard_diagnostics=_build_backstep_picard_diagnostics(
+        scalar_space=K,
+        metrics_config=BACKSTEP_METRICS,
+        pressure_metric=pressure_drop_metric,
+        ds_measure=ds,
+        viscosity=float(physical_prm["VISCOSITY"]),
+    ),
     is_root=IS_ROOT,
 )
 

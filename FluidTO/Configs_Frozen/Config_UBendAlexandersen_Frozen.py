@@ -28,7 +28,9 @@ mesh_files = {
 DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
+
 RESUME_OPTIMIZATION = False
+
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)

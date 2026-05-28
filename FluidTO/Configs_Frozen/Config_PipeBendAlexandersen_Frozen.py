@@ -29,7 +29,9 @@ mesh_files = {
 DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
+
 RESUME_OPTIMIZATION = False
+
 
 def create_design_mesh():
     return load_mesh_from_xdmf(mesh_files["MESH_DIRECTORY"], MPI.comm_world)
@@ -96,7 +98,7 @@ SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
 SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
-SAVE_SA_CLIPPING_DIAGNOSTICS = True
+SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
 # The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
@@ -145,7 +147,7 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
 BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
 MOVE_LIMIT_SCHEDULE = [0.015, 0.012, 0.010, 0.006, 0.004, 0.003, 0.002]
-MAX_INNER_ITERATIONS_SCHEDULE = [40, 60, 90, 140, 180, 220, 260]
+MAX_INNER_ITERATIONS_SCHEDULE = [25, 45, 80, 130, 180, 220, 260]
 
 MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
 
@@ -185,7 +187,9 @@ FORWARD_PICARD_FLOW_SOLVER = "ipcs" # Solver for [Picard] flow
 FORWARD_SNES_WARM_START_WITH_IPCS = True
 FORWARD_SNES_IPCS_WARM_START_MODE = "final" # "initial" or "final"
 
-FORWARD_SNES_STRICT_FINAL_SOLVE = False
+
+FORWARD_SNES_STRICT_FINAL_SOLVE = True
+
 
 # =========================================================================== #
 # SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes"
@@ -202,7 +206,9 @@ FORWARD_SNES_ADAPTIVE_CONVECTION = True
 FORWARD_SNES_MIN_CONVECTION_STEP = 0.005
 FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 40
 
-FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
+
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = False
+
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},

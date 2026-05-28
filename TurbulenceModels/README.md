@@ -4,7 +4,7 @@ This repository contains code used in my master's thesis titled: *Turbulence mod
 
 Although only one turbulence model was implemented, namely the *Lam-Bremhorst* $k$ - $\varepsilon$ *model*, the repository is constructed in such a way that it should be easy to add other turbulence models in the ```TurbulenceModel.py``` file.
 
-Two test cases have been implemented to validate the model: fully developed channel flow (`ChannelSimulation.py`) and flow over a backward-facing step (`BackStepSimulation_K-Epsilon.py` / `BackStepSimulation_SpalartAllmaras_Steady.py`). However, meshes for flow around a cylinder and flow in a diffuser geometry are also provided.
+Two test cases have been implemented to validate the model: fully developed channel flow (`ChannelSimulation.py`) and flow over a backward-facing step (`BackStepSimulation_K-Epsilon_Steady.py` / `BackStepSimulation_SpalartAllmaras_Steady.py`). However, meshes for flow around a cylinder and flow in a diffuser geometry are also provided.
 
 ![Turbulent flow over a backward-facing step (image created in ParaView)](Static/plot.png)
 

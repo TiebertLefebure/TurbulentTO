@@ -1,0 +1,86 @@
+\documentclass[tikz,border=3mm]{standalone}
+\usetikzlibrary{arrows.meta,calc,positioning}
+\begin{document}
+\pagecolor{white}
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  flow/.style={-{Latex[length=2.8mm]}, line width=0.7pt, draw=blue!65!black},
+  dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
+  wall/.style={line width=1.25pt, draw=black!82},
+  sym/.style={line width=1.0pt, draw=green!45!black, dashed},
+  inlet/.style={line width=1.1pt, draw=blue!70!black},
+  outlet/.style={line width=1.1pt, draw=red!70!black},
+  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2.2pt, align=center}
+]
+
+% Schematic coordinates. Streamwise lengths are compressed for readability.
+\def\xin{0.0}
+\def\xwall{1.70}
+\def\xstep{8.00}
+\def\xout{12.30}
+\def\yb{-0.75}
+\def\y0{0.0}
+\def\yt{2.80}
+
+% Fluid domain.
+\fill[blue!5] (\xin,\y0) -- (\xin,\yt) -- (\xout,\yt) -- (\xout,\yb)
+  -- (\xstep,\yb) -- (\xstep,\y0) -- cycle;
+
+% Boundary-condition segments.
+\draw[inlet] (\xin,\y0) -- (\xin,\yt);
+\draw[sym] (\xin,\yt) -- (\xwall,\yt);
+\draw[wall] (\xwall,\yt) -- (\xout,\yt);
+\draw[outlet] (\xout,\yb) -- (\xout,\yt);
+\draw[wall] (\xout,\yb) -- (\xstep,\yb);
+\draw[wall] (\xstep,\yb) -- (\xstep,\y0);
+\draw[wall] (\xstep,\y0) -- (\xwall,\y0);
+\draw[sym] (\xwall,\y0) -- (\xin,\y0);
+
+% Split markers where symmetry changes to wall.
+\draw[black!65, line width=0.45pt] (\xwall,\y0-0.10) -- (\xwall,\y0+0.10);
+\draw[black!65, line width=0.45pt] (\xwall,\yt-0.10) -- (\xwall,\yt+0.10);
+
+% Flow arrows.
+\foreach \y in {0.70,1.40,2.10} {
+  \draw[flow] (0.65,\y) -- ++(0.85,0);
+  \draw[flow] (2.55,\y) -- ++(1.15,0);
+  \draw[flow] (4.80,\y) -- ++(1.15,0);
+  \draw[flow] (8.90,\y) -- ++(1.15,0);
+}
+\foreach \y in {-0.42,0.25} {
+  \draw[flow] (8.75,\y) -- ++(1.00,0);
+  \draw[flow] (10.35,\y) -- ++(0.90,0);
+}
+
+% Boundary labels.
+\node[bc, anchor=east, text width=32mm] at (\xin-0.85,{0.5*\yt})
+  {velocity inlet\\$\mathbf{u}=(25,0)$ m/s\\$\tilde{\nu}=0.18449$ m$^2$/s};
+\node[bc, anchor=south east, text width=27mm] at (\xout,\yt+0.38)
+  {pressure outlet\\$p=0$ Pa};
+\node[bc, anchor=south, text width=33mm] at ({0.5*(\xin+\xwall)},{\yt+0.82})
+  {symmetry / slip\\$u_n=0$};
+\node[bc, anchor=north, text width=31mm] at ({0.5*(\xin+\xwall)},{\y0-0.18})
+  {symmetry / slip\\$u_n=0$};
+\node[bc, anchor=south, text width=43mm] at ({0.5*(\xwall+\xout)},{\yt+0.36})
+  {no-slip walls\\$\mathbf{u}=0,\quad \tilde{\nu}=0$};
+
+% Dimensions.
+\draw[dim] (\xin,-1.55) -- node[below, fill=white, inner sep=1pt]
+  {$5.0$ m} (\xwall,-1.55);
+\draw[dim] (\xwall,-1.55) -- node[below, fill=white, inner sep=1pt]
+  {$27.5$ m upstream no-slip wall} (\xstep,-1.55);
+\draw[dim] (\xstep,-1.55) -- node[below, fill=white, inner sep=1pt]
+  {$12.5$ m downstream} (\xout,-1.55);
+
+\draw[dim] (\xin-0.28,\y0) -- node[right, fill=white, inner sep=1pt]
+  {$H_\mathrm{in}=2.0$ m} (\xin-0.28,\yt);
+\draw[dim] (\xout+0.42,\yb) -- node[right, fill=white, inner sep=1pt]
+  {$H_\mathrm{out}=2.25$ m} (\xout+0.42,\yt);
+\draw[dim] (\xstep-0.42,\yb) -- node[left, fill=white, inner sep=1pt]
+  {$h=0.25$ m} (\xstep-0.42,\y0);
+
+\node[anchor=west, text=black!65] at (\xin,-2.35)
+  {Streamwise direction compressed; dimensions shown in meters.};
+
+\end{tikzpicture}
+\end{document}

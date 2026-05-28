@@ -160,11 +160,30 @@ def run_steady_sa_ipcs_picard(
         "PICARD_CHECKPOINT_H5_DIRECTORY",
         simulation_prm.get("RESTART_H5_DIRECTORY", saving_directory.get("H5_FILES")),
     )
+    checkpoint_write_latest = bool(simulation_prm.get("PICARD_CHECKPOINT_WRITE_LATEST", False))
+    checkpoint_latest_dir_name = simulation_prm.get("PICARD_CHECKPOINT_LATEST_DIRECTORY_NAME", "latest")
+    checkpoint_archive_every = int(simulation_prm.get(
+        "PICARD_CHECKPOINT_ARCHIVE_EVERY",
+        0,
+    ))
+    checkpoint_archive_prefix = simulation_prm.get("PICARD_CHECKPOINT_ARCHIVE_PREFIX", "Picard")
+    checkpoint_archive_continue_numbering = bool(simulation_prm.get(
+        "PICARD_CHECKPOINT_ARCHIVE_CONTINUE_NUMBERING",
+        True,
+    ))
+    if checkpoint_archive_every < 0:
+        raise ValueError("PICARD_CHECKPOINT_ARCHIVE_EVERY must be >= 0.")
     checkpoint_save_pvd = bool(simulation_prm.get("PICARD_CHECKPOINT_SAVE_PVD", False))
     checkpoint_pvd_dir = simulation_prm.get(
         "PICARD_CHECKPOINT_PVD_DIRECTORY",
         saving_directory.get("PVD_FILES"),
     )
+    checkpoint_pvd_every = int(simulation_prm.get(
+        "PICARD_CHECKPOINT_PVD_EVERY",
+        picard_checkpoint_every,
+    ))
+    if checkpoint_pvd_every < 0:
+        raise ValueError("PICARD_CHECKPOINT_PVD_EVERY must be >= 0.")
 
     tolerance_global = float(simulation_prm.get("COUPLED_PICARD_TOLERANCE", simulation_prm.get("TOLERANCE", 1.0e-6)))
     tolerance_u = float(simulation_prm.get(
@@ -186,6 +205,10 @@ def run_steady_sa_ipcs_picard(
     flow_tolerance_p = float(simulation_prm.get(
         "FLOW_IPCS_PRESSURE_TOLERANCE",
         simulation_prm.get("FORWARD_IPCS_PRESSURE_RTOL", tolerance_p),
+    ))
+    flow_require_pressure_convergence = bool(simulation_prm.get(
+        "FLOW_IPCS_REQUIRE_PRESSURE_CONVERGENCE",
+        True,
     ))
 
     dt.assign(float(simulation_prm.get("FLOW_IPCS_TIME_STEP", simulation_prm.get("FORWARD_IPCS_DT"))))
@@ -402,11 +425,20 @@ def run_steady_sa_ipcs_picard(
             root_print(message, is_root=is_root)
             return False
 
-        restart_files = {
-            "u": os.path.join(restart_dir, "u.h5"),
-            "p": os.path.join(restart_dir, "p.h5"),
-            "nu_tilde": os.path.join(restart_dir, "nu_tilde.h5"),
-        }
+        def restart_files_for(directory):
+            return {
+                "u": os.path.join(directory, "u.h5"),
+                "p": os.path.join(directory, "p.h5"),
+                "nu_tilde": os.path.join(directory, "nu_tilde.h5"),
+            }
+
+        if bool(simulation_prm.get("RESTART_PREFER_LATEST_CHECKPOINT", True)):
+            latest_restart_dir = os.path.join(restart_dir, checkpoint_latest_dir_name)
+            latest_restart_files = restart_files_for(latest_restart_dir)
+            if all(os.path.exists(path) for path in latest_restart_files.values()):
+                restart_dir = latest_restart_dir
+
+        restart_files = restart_files_for(restart_dir)
         missing_files = [path for path in restart_files.values() if not os.path.exists(path)]
         if missing_files:
             message = "Restart skipped: missing HDF5 state file(s): {}.".format(
@@ -447,6 +479,35 @@ def run_steady_sa_ipcs_picard(
 
     maybe_restart_from_saved_state()
 
+    def ensure_checkpoint_directory(directory):
+        if directory in (None, ""):
+            return
+        if MPI4PY.COMM_WORLD.Get_rank() == 0:
+            os.makedirs(directory, exist_ok=True)
+        MPI4PY.COMM_WORLD.Barrier()
+
+    def discover_checkpoint_archive_offset():
+        if (
+            not checkpoint_archive_continue_numbering
+            or checkpoint_h5_dir in (None, "")
+            or not os.path.isdir(checkpoint_h5_dir)
+        ):
+            return 0
+
+        prefix = "{}_".format(checkpoint_archive_prefix)
+        highest_index = 0
+        for name in os.listdir(checkpoint_h5_dir):
+            if not name.startswith(prefix):
+                continue
+            try:
+                archive_index = int(name[len(prefix):])
+            except ValueError:
+                continue
+            highest_index = max(highest_index, archive_index)
+        return highest_index
+
+    checkpoint_archive_offset = discover_checkpoint_archive_offset()
+
     def save_h5_checkpoint_field(field, path):
         temporary_path = "{}.tmp".format(path)
         save_h5_file(field, temporary_path)
@@ -455,8 +516,8 @@ def run_steady_sa_ipcs_picard(
             os.replace(temporary_path, path)
         MPI4PY.COMM_WORLD.Barrier()
 
-    def save_picard_checkpoint():
-        if picard_checkpoint_every <= 0:
+    def save_picard_checkpoint(force=False, force_pvd=False, archive=True):
+        if picard_checkpoint_every <= 0 and not force:
             return False
         if checkpoint_h5_dir in (None, ""):
             return False
@@ -466,9 +527,34 @@ def run_steady_sa_ipcs_picard(
             "p": p0,
             "nu_tilde": turbulence_model.nu_tilde0,
         }
-        for key, field in checkpoint_fields.items():
-            save_h5_checkpoint_field(field, os.path.join(checkpoint_h5_dir, key + ".h5"))
-            if checkpoint_save_pvd and checkpoint_pvd_dir not in (None, ""):
+        checkpoint_directories = [checkpoint_h5_dir]
+        if checkpoint_write_latest:
+            checkpoint_directories.append(os.path.join(checkpoint_h5_dir, checkpoint_latest_dir_name))
+        if archive and checkpoint_archive_every > 0 and picard_iter > 0 and picard_iter % checkpoint_archive_every == 0:
+            archive_index = checkpoint_archive_offset + picard_iter
+            checkpoint_directories.append(
+                os.path.join(
+                    checkpoint_h5_dir,
+                    "{}_{:04d}".format(checkpoint_archive_prefix, archive_index),
+                )
+            )
+
+        for directory in checkpoint_directories:
+            ensure_checkpoint_directory(directory)
+            for key, field in checkpoint_fields.items():
+                save_h5_checkpoint_field(field, os.path.join(directory, key + ".h5"))
+
+        save_checkpoint_pvd = (
+            checkpoint_save_pvd
+            and checkpoint_pvd_dir not in (None, "")
+            and (
+                force_pvd
+                or checkpoint_pvd_every == 0
+                or (picard_iter > 0 and picard_iter % checkpoint_pvd_every == 0)
+            )
+        )
+        if save_checkpoint_pvd:
+            for key, field in checkpoint_fields.items():
                 save_pvd_file(field, os.path.join(checkpoint_pvd_dir, key + ".pvd"))
         return True
 
@@ -520,7 +606,7 @@ def run_steady_sa_ipcs_picard(
 
     def solve_flow_to_steady(label, max_iters=None, verbose=False):
         # Inner loop: keep SA viscosity fixed and advance the flow equations
-        # with IPCS substeps until the velocity and pressure changes are small.
+        # with IPCS substeps until the required field changes are small.
         step_limit = flow_max_iters if max_iters is None else int(max_iters)
         converged = False
         du_rel = dp_rel = np.inf
@@ -560,7 +646,11 @@ def run_steady_sa_ipcs_picard(
                     is_root=is_root,
                 )
 
-            if du_rel <= flow_tolerance_u and dp_rel <= flow_tolerance_p:
+            pressure_converged = (
+                (not flow_require_pressure_convergence)
+                or dp_rel <= flow_tolerance_p
+            )
+            if du_rel <= flow_tolerance_u and pressure_converged:
                 u0.assign(u1)
                 p0.assign(p1)
                 converged = True
@@ -572,7 +662,7 @@ def run_steady_sa_ipcs_picard(
 
         if verbose and not converged:
             terminal_print(
-                "    [{} IPCS] reached {} steps without meeting flow tolerances: du={:.3e}, dp={:.3e}".format(
+                "    [{} IPCS] reached {} steps without meeting required flow tolerances: du={:.3e}, dp={:.3e}".format(
                     label, step_limit, du_rel, dp_rel
                 ),
                 is_root=is_root,
@@ -581,6 +671,8 @@ def run_steady_sa_ipcs_picard(
         return float(du_rel), float(dp_rel), converged
 
     root_print("Steady RANS-SA solve: pseudo-time IPCS flow + steady SA Picard coupling", is_root=is_root)
+    if not flow_require_pressure_convergence:
+        root_print("  IPCS pressure change is diagnostic only; inner flow convergence uses velocity change.", is_root=is_root)
     if pressure_drop_description is not None:
         root_print("  Pressure-drop metric: {}.".format(pressure_drop_description), is_root=is_root)
     if pressure_drop_convergence_window > 0:
@@ -605,6 +697,9 @@ def run_steady_sa_ipcs_picard(
     # Outer Picard loop: alternate between a flow solve at fixed nu_t and an
     # SA transport solve at fixed velocity until all coupled fields stop moving.
     converged = False
+    interrupted = False
+    last_completed_picard = 0
+    picard_iter = 0
     for picard_iter in range(1, max_picard + 1):
         u_prev_picard.assign(u0)
         p_prev_picard.assign(p0)
@@ -612,22 +707,42 @@ def run_steady_sa_ipcs_picard(
 
         if log_flow_iterations:
             terminal_print("  [Picard {}] flow solve".format(picard_iter), is_root=is_root)
-        flow_du, flow_dp, flow_converged = solve_flow_to_steady(
-            "Picard {}".format(picard_iter),
-            verbose=log_flow_iterations,
-        )
+        try:
+            flow_du, flow_dp, flow_converged = solve_flow_to_steady(
+                "Picard {}".format(picard_iter),
+                verbose=log_flow_iterations,
+            )
+        except KeyboardInterrupt:
+            interrupted = True
+            root_print(
+                "KeyboardInterrupt received during Picard {} flow solve after {} completed Picard iterations. "
+                "Saving current state...".format(picard_iter, last_completed_picard),
+                is_root=is_root,
+            )
+            save_picard_checkpoint(force=True, force_pvd=True, archive=False)
+            break
 
         if log_flow_iterations:
             terminal_print("  [Picard {}] steady SA solve".format(picard_iter), is_root=is_root)
-        for sa_sweep in range(sa_sweeps):
-            # Rebuild SA forms with the latest flow, solve nu_tilde, then relax it.
-            turbulence_model.construct_forms(u0)
-            turbulence_model.solve_turbulence_model()
-            turbulence_model.update_variables(relaxation=sa_relaxation)
-            if nu_tilde_floor is not None:
-                bound_from_bellow(turbulence_model.nu_tilde0, float(nu_tilde_floor))
-                turbulence_model.enforce_boundary_conditions()
-                turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
+        try:
+            for sa_sweep in range(sa_sweeps):
+                # Rebuild SA forms with the latest flow, solve nu_tilde, then relax it.
+                turbulence_model.construct_forms(u0)
+                turbulence_model.solve_turbulence_model()
+                turbulence_model.update_variables(relaxation=sa_relaxation)
+                if nu_tilde_floor is not None:
+                    bound_from_bellow(turbulence_model.nu_tilde0, float(nu_tilde_floor))
+                    turbulence_model.enforce_boundary_conditions()
+                    turbulence_model.nu_tilde1.assign(turbulence_model.nu_tilde0)
+        except KeyboardInterrupt:
+            interrupted = True
+            root_print(
+                "KeyboardInterrupt received during Picard {} SA solve after {} completed Picard iterations. "
+                "Saving current state...".format(picard_iter, last_completed_picard),
+                is_root=is_root,
+            )
+            save_picard_checkpoint(force=True, force_pvd=True, archive=False)
+            break
 
         picard_errors = [
             l2_norm_diff(u0, u_prev_picard, dx),
@@ -742,6 +857,8 @@ def run_steady_sa_ipcs_picard(
                 picard_message += "; checkpoint not saved because flow solve did not meet tolerances"
             print(picard_message)
 
+        last_completed_picard = picard_iter
+
         field_converged = False
         if convergence_type == "field_norm":
             field_converged = (
@@ -811,7 +928,7 @@ def run_steady_sa_ipcs_picard(
             )
             break
 
-    if not converged:
+    if not converged and not interrupted:
         root_print(
             "Warning: steady RANS-SA Picard solve reached {} iterations without full convergence.".format(
                 max_picard
@@ -819,23 +936,40 @@ def run_steady_sa_ipcs_picard(
             is_root=is_root,
         )
 
-    if log_flow_iterations:
-        terminal_print("  [Final flow] IPCS with updated turbulent viscosity", is_root=is_root)
-    final_flow_du, final_flow_dp, _ = solve_flow_to_steady(
-        "Final flow",
-        max_iters=final_flow_max_iters,
-        verbose=log_flow_iterations,
-    )
-    residuals["flow_u"].append(float(final_flow_du))
-    residuals["flow_p"].append(float(final_flow_dp))
-    if pressure_drop_evaluator is not None:
-        final_pressure_drop = pressure_drop_evaluator(p0)
-        residuals["pressure_drop"].append(float(final_pressure_drop))
+    if not interrupted:
+        if log_flow_iterations:
+            terminal_print("  [Final flow] IPCS with updated turbulent viscosity", is_root=is_root)
+        try:
+            final_flow_du, final_flow_dp, _ = solve_flow_to_steady(
+                "Final flow",
+                max_iters=final_flow_max_iters,
+                verbose=log_flow_iterations,
+            )
+            residuals["flow_u"].append(float(final_flow_du))
+            residuals["flow_p"].append(float(final_flow_dp))
+            if pressure_drop_evaluator is not None:
+                final_pressure_drop = pressure_drop_evaluator(p0)
+                residuals["pressure_drop"].append(float(final_pressure_drop))
+                root_print(
+                    "Final flow {}={:.6e} {}.".format(
+                        pressure_drop_label,
+                        final_pressure_drop,
+                        pressure_drop_unit,
+                    ),
+                    is_root=is_root,
+                )
+        except KeyboardInterrupt:
+            interrupted = True
+            root_print(
+                "KeyboardInterrupt received during final flow solve after {} completed Picard iterations. "
+                "Saving current state...".format(last_completed_picard),
+                is_root=is_root,
+            )
+            save_picard_checkpoint(force=True, force_pvd=True, archive=False)
+    else:
         root_print(
-            "Final flow {}={:.6e} {}.".format(
-                pressure_drop_label,
-                final_pressure_drop,
-                pressure_drop_unit,
+            "Steady RANS-SA Picard solve interrupted after {} completed Picard iterations.".format(
+                last_completed_picard
             ),
             is_root=is_root,
         )
@@ -857,5 +991,8 @@ def run_steady_sa_ipcs_picard(
 
         for key, values in residuals.items():
             save_list(values, saving_directory["RESIDUALS"] + key + ".txt")
+
+        if interrupted:
+            root_print("Interrupted run state saved to PVD/H5/residual files.", is_root=is_root)
 
     return solutions, residuals

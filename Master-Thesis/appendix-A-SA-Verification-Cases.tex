@@ -2,10 +2,10 @@
 % APPENDIX A
 % =========================================================
 
-\chapter{Configuration and Grid Independence of the Spalart-Allmaras Verification Cases}
+\chapter{Configuration and Grid Independence of the Spalart-Allmaras Benchmark Cases}
 \label{app:A_baseline_configurations}
 
-To ensure complete scientific reproducibility and to prevent the disruption of the narrative flow in Chapter~\ref{ch:fenics_implementation}, all comprehensive configuration matrices and spatial grid independence studies for the fluid benchmarks are documented in this appendix.
+To ensure complete scientific reproducibility and to prevent the disruption of the narrative flow in Chapter~\ref{ch:fenics_implementation}, all comprehensive configuration matrices and spatial grid independence studies for the fluid benchmarks are documented in this appendix. The channel and U-bend cases are used for FEniCS implementation verification, while the backward-facing step is included as an Ansys-only model-validity benchmark for separated flow without curvature.
 
 Unless stated otherwise, all grid-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
 
@@ -152,8 +152,8 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 		Elements & $7{,}565$ & $26{,}123$ & $42{,}594$ \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
-		$U_{\mathrm{bulk}}$ [m/s] & \textit{TBD} & $18.114$ & \textit{TBD} \\
-		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $18.305$ & $18.114$ & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $1.04$ & \textit{TBD} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
@@ -343,5 +343,58 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
 	\label{fig:app_A_ubend_mesh_indep_ansys}
 \end{figure}
+
+\FloatBarrier
+
+\section{Ansys Benchmark 3: Backward-Facing Step}
+\label{sec:app_A_backstep_ansys}
+
+The backward-facing-step case is not used as a FEniCS implementation-verification benchmark in Chapter~\ref{ch:fenics_implementation}. It is instead an Ansys Fluent benchmark supporting the model-validity discussion in Chapter~\ref{ch:turbulence_modeling}. The purpose is to test the Spalart--Allmaras closure on a separated internal flow without streamline curvature, so that separation effects can be evaluated independently of the Dean-number discussion.
+
+\subsection{Wall-Resolved Ansys Mesh-Independence Study}
+\label{subsec:app_A_backstep_mesh_ansys}
+
+The mesh-independence study uses the same backward-facing-step geometry and named selections as Section~\ref{sec:ansys_benchmarks}. The no-slip wall boundaries are inflated with a fixed first-layer height of $\Delta y_1=1.30\times10^{-4}$ m. This first-layer height is kept constant on all three grids because the Reynolds number and target wall resolution are unchanged. The mesh refinement is therefore applied through the number of inflation layers, inflation growth rate, and streamwise element sizing.
+
+\begin{table}[htbp]
+	\centering
+	\scriptsize
+	\caption{Wall-resolved backward-facing-step mesh hierarchy for the Ansys Fluent mesh-independence study. The first-layer height is fixed to maintain $y^+\approx1$, while the boundary-layer thickness and streamwise resolution are refined.}
+	\label{tab:app_A_backstep_meshes_ansys}
+	\renewcommand{\arraystretch}{1.2}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh method & Quad-dom. & Quad-dom. & Quad-dom. \\
+		Element order & Linear & Linear & Linear \\
+		Inflation option & First layer & First layer & First layer \\
+		Inflated boundaries & No-slip walls & No-slip walls & No-slip walls \\
+		$\Delta y_1$ [m] & $1.30 \times 10^{-4}$ & $1.30 \times 10^{-4}$ & $1.30 \times 10^{-4}$ \\
+		Inflation layers & $28$ & $36$ & $44$ \\
+		Growth rate & $1.18$ & $1.15$ & $1.12$ \\
+		Near-step wall size [m] & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ & $6.25 \times 10^{-3}$ \\
+		Top-wall size [m] & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ \\
+		Inlet/outlet/symmetry size [m] & $1.00 \times 10^{-1}$ & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ \\
+		Nodes & \textit{TBD} & $193{,}276$ & \textit{TBD} \\
+		Elements & \textit{TBD} & $192{,}131$ & \textit{TBD} \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+		Maximum wall $y^+$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+		$x_r/h$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+		$\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(\Delta p)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+		\hline
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} Quad-dom. = quad-dominant. The near-step wall size is applied to \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}. The inflated no-slip walls are \texttt{top\_wall}, \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}; the inlet, outlet, and symmetry boundaries are not inflated. For the $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
+\end{table}
+
+The primary grid-independence metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the sign change of the wall shear stress on the downstream lower wall. Velocity profiles should additionally be extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region. The pressure drop $\Delta p$ is retained as a secondary metric because it combines the separation loss with the long-channel wall-friction contribution.
 
 \FloatBarrier

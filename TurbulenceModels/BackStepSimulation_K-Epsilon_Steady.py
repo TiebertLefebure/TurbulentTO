@@ -4,8 +4,8 @@ import importlib.util as _ilu
 import os
 import time
 
-# importlib is required because hyphenated filenames are not valid Python identifiers
-_cfg = _ilu.spec_from_file_location("ConfigBackStep_KE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "Configs", "ConfigBackStep_K-Epsilon.py"))
+# importlib is required because hyphenated filenames are not valid Python identifiers.
+_cfg = _ilu.spec_from_file_location("ConfigBackStep_KE_Steady", os.path.join(os.path.dirname(os.path.abspath(__file__)), "Configs", "ConfigBackStep_K-Epsilon_Steady.py"))
 _cfg = _ilu.module_from_spec(_cfg); _cfg.__spec__.loader.exec_module(_cfg)
 globals().update({k: v for k, v in vars(_cfg).items() if not k.startswith('_')}); del _cfg
 
@@ -57,9 +57,17 @@ y = calculate_Distance_field(K, marked_facets, boundary_markers['WALLS'], 0.01)
 # Initialize functions
 u,v,u1,u0,p,q,p1,p0,w1,w0 = initialize_mixed_functions(W, Constant((*initial_conditions['U'], initial_conditions['P'])))
 
+if MPI.COMM_WORLD.Get_rank() == 0:
+    print("BackStep steady Lam-Bremhorst k-epsilon setup")
+    print("  Mesh: {}".format(mesh_files['MESH_DIRECTORY']))
+    print("  Re_h: {:.6e}".format(REYNOLDS_NUMBER_STEP))
+    print("  Re_Hin: {:.6e}".format(REYNOLDS_NUMBER_INLET_HEIGHT))
+    print("  Target first-layer height for y+ ~= 1: {:.6e} m".format(TARGET_FIRST_LAYER_HEIGHT))
+    print("  Near-wall treatment: low-Re wall-resolved damping, no wall functions")
+
 # Initialize turbulence model
-turbulence_model = KEpsilon(K, bck, bce, initial_conditions['K'], initial_conditions['E'],
-                            nu, force, dx, ds, y)
+turbulence_model = KEpsilonSteadyState(K, bck, bce, initial_conditions['K'], initial_conditions['E'],
+                                       nu, force, dx, ds, y)
 turbulence_model.construct_forms(u1)
 
 # Construct RANS form

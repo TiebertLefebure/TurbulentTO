@@ -4,8 +4,8 @@ import os
 # Mesh and output paths.
 # Medium_WallResolved is the default SA channel validation mesh. Use
 # Coarse_WallResolved for quick diagnostics or Fine_WallResolved for final runs.
-MESH_DIRECTORY = "Meshes/Channel/Fine_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/Channel/Fine_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/Channel/Medium_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/Channel/Medium_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -26,8 +26,7 @@ def infer_mesh_label_from_path(path):
 MESH_LABEL = infer_mesh_label_from_path(MESH_DIRECTORY)
 
 
-RESTART_FROM_SAVED_STATE = True
-
+RESTART_FROM_SAVED_STATE = False
 
 
 # ============================================================================================
@@ -154,7 +153,8 @@ SA_NU_TILDE_FLOOR = 1.0e-12
 PICARD_CHECKPOINT_EVERY = 1
 
 PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE = False
-CHANNEL_BULK_CONVERGENCE_WINDOW = 250
+PICARD_CHECKPOINT_SAVE_PVD = True
+CHANNEL_BULK_CONVERGENCE_WINDOW = 100
 CHANNEL_BULK_CONVERGENCE_RELATIVE_TOLERANCE = 1.0e-3
 
 # Inner pseudo-time flow solve used inside each outer Picard step.
@@ -162,6 +162,9 @@ FLOW_IPCS_TIME_STEP = 5.0e-3
 FLOW_IPCS_MAX_STEPS = 500
 FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-6
 FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-6
+# In body-force periodic channel mode, pressure is a mean-normalized correction
+# field, so its relative change is diagnostic rather than a robust stop metric.
+FLOW_IPCS_REQUIRE_PRESSURE_CONVERGENCE = CHANNEL_DRIVE_MODE_NORMALIZED != "body_force"
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
 FLOW_IPCS_PRESSURE_RELAXATION = 0.3
 FLOW_IPCS_LOG_EVERY = 10
@@ -232,10 +235,12 @@ steady_sa_solver_parameters = {
     "SA_NU_TILDE_FLOOR": SA_NU_TILDE_FLOOR,
     "PICARD_CHECKPOINT_EVERY": PICARD_CHECKPOINT_EVERY,
     "PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE": PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE,
+    "PICARD_CHECKPOINT_SAVE_PVD": PICARD_CHECKPOINT_SAVE_PVD,
     "FLOW_IPCS_TIME_STEP": FLOW_IPCS_TIME_STEP,
     "FLOW_IPCS_MAX_STEPS": FLOW_IPCS_MAX_STEPS,
     "FLOW_IPCS_VELOCITY_TOLERANCE": FLOW_IPCS_VELOCITY_TOLERANCE,
     "FLOW_IPCS_PRESSURE_TOLERANCE": FLOW_IPCS_PRESSURE_TOLERANCE,
+    "FLOW_IPCS_REQUIRE_PRESSURE_CONVERGENCE": FLOW_IPCS_REQUIRE_PRESSURE_CONVERGENCE,
     "FLOW_IPCS_VELOCITY_RELAXATION": FLOW_IPCS_VELOCITY_RELAXATION,
     "FLOW_IPCS_PRESSURE_RELAXATION": FLOW_IPCS_PRESSURE_RELAXATION,
     "FLOW_IPCS_LOG_EVERY": FLOW_IPCS_LOG_EVERY,

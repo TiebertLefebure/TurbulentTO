@@ -116,6 +116,17 @@ C.~B. Dilgen, S.~B. Dilgen, D.~R. Fuhrman, O.~Sigmund, and B.~S. Lazarov.
 \newblock {\em Computer Methods in Applied Mechanics and Engineering},
   331:363--393, 2018.
 
+\bibitem{DriverSeegmiller1985}
+D.~M. Driver and H.~L. Seegmiller.
+\newblock Features of a reattaching turbulent shear layer in divergent channel
+  flow.
+\newblock {\em AIAA Journal}, 23(2):163--171, 1985.
+
+\bibitem{EatonJohnston1981}
+J.~K. Eaton and J.~P. Johnston.
+\newblock A review of research on subsonic turbulent flow reattachment.
+\newblock {\em AIAA Journal}, 19(9):1093--1100, 1981.
+
 \bibitem{Enayet1982}
 M.~M. Enayet, M.~M. Gibson, A.~M. K.~P. Taylor, and M.~Yianneskis.
 \newblock Laser-doppler measurements of laminar and turbulent flow in a pipe
@@ -166,6 +177,12 @@ L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
 \newblock {\em International Journal of Heat and Mass Transfer}, 163:120543,
   2020.
 
+\bibitem{KimKlineJohnston1980}
+J.~Kim, S.~J. Kline, and J.~P. Johnston.
+\newblock Investigation of a reattaching turbulent shear layer: Flow over a
+  backward-facing step.
+\newblock {\em Journal of Fluids Engineering}, 102(3):302--308, 1980.
+
 \bibitem{Langtangen2016}
 H.~P. Langtangen and A.~Logg.
 \newblock {\em Solving PDEs in Python: The FEniCS Tutorial I}.
@@ -195,6 +212,12 @@ F.~R. Menter.
 \newblock Two-equation eddy-viscosity turbulence models for engineering
   applications.
 \newblock {\em AIAA Journal}, 32(8):1598--1605, 1994.
+
+\bibitem{NasaBackstepTMR}
+{NASA Turbulence Modeling Resource}.
+\newblock {2D Backward Facing Step Validation Case}.
+\newblock \url{https://tmbwg.github.io/turbmodels/backstep_val.html}.
+\newblock Accessed 28 May 2026.
 
 \bibitem{Maute2023}
 L.~No\"{e}l and K.~Maute.
