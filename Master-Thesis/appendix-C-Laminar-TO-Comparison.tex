@@ -11,7 +11,7 @@ Each benchmark is solved twice. The laminar reference design is optimized at $Re
 
 Because most FEniCS physical and numerical settings are inherited directly from the turbulent benchmark definitions in Appendix~\ref{app:B_validation_configurations}, they are not repeated in full. Instead, each benchmark lists only the laminar-specific differences from the corresponding turbulent setup.
 
-After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST $k-\omega$, the laminar-design comparison uses the higher-fidelity SST $k-\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and pressure drop.
+After optimization, both projected density fields are thresholded and extracted as sharp geometries. The extracted laminar and turbulent designs are then evaluated in Ansys Fluent under the same turbulent operating condition. Because Chapter~\ref{ch:benchmark_results} already validates the extracted turbulent topologies with both Ansys-SA and Ansys-SST $k-\omega$, the laminar-design comparison uses the higher-fidelity SST $k-\omega$ closure. This keeps the comparison focused on topology performance under an independent two-equation turbulence model, rather than repeating the SA cross-code validation for the laminar reference geometries. The key performance metrics are viscous dissipation and static pressure drop.
 
 All Fluent mesh-independence studies in this appendix use the same convergence and acceptance criteria as Appendix~\ref{app:B_validation_configurations}, but only for the SST $k-\omega$ model. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation. Mass conservation is additionally checked from the inlet and outlet mass-flow reports.
 
@@ -89,14 +89,14 @@ Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-inde
 		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.0293$ & $0.0310$ & $0.0313$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $5.82$ & $0.95$ \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & $0.5229$ & $0.5420$ & $0.5444$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $3.65$ & $0.45$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $0.5229$ & $0.5420$ & $0.5444$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $3.65$ & $0.45$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
@@ -175,14 +175,14 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.101$ & $0.105$ & $0.107$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $3.96$ & $1.90$ \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & $1.125$ & $1.141$ & $1.150$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $1.42$ & $0.79$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $1.125$ & $1.141$ & $1.150$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $1.42$ & $0.79$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
@@ -260,18 +260,18 @@ Table~\ref{tab:app_C_yoon_diffuser_lam_mesh} reports the Ansys mesh-independence
 		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & $1.2643 \times 10^{4}$ & $1.2983 \times 10^{4}$ & $1.3077 \times 10^{4}$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $2.69$ & $0.72$ \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & $3.6628 \times 10^{4}$ & $3.6693 \times 10^{4}$ & $3.6464 \times 10^{4}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $0.18$ & $0.62$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $3.6628 \times 10^{4}$ & $3.6693 \times 10^{4}$ & $3.6464 \times 10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $0.18$ & $0.62$ \\
 		$\Phi_D^{\mathrm{SA}}$ [W/m] & $1.4296 \times 10^{5}$ & $1.4315 \times 10^{5}$ & $1.4333 \times 10^{5}$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $0.13$ & $0.13$ \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & $1.4191 \times 10^{5}$ & $1.4276 \times 10^{5}$ & $1.4200 \times 10^{5}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $0.60$ & $0.53$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & $1.4191 \times 10^{5}$ & $1.4276 \times 10^{5}$ & $1.4200 \times 10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & $0.60$ & $0.53$ \\
 		Selected comparison mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The SA rows are re-evaluations for turbulence-model sensitivity.
+		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The SA rows are re-evaluations for turbulence-model sensitivity.
 	\end{minipage}
 \end{table}
 

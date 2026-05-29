@@ -81,7 +81,7 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
 		Outlet condition & Pressure outlet $p=0$ on the lower outlet, with the normal/tangential component constraint used by the FEniCS configuration \\
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls; topology-created solids enter through the design-density penalties \\
-		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Validation metrics & Average inlet pressure, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -149,16 +149,16 @@ The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patc
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $5.38$ & $1.32$ \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.0150$ & $0.0164$ & $0.0166$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $9.04$ & $1.22$ \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & $0.1423$ & $0.1449$ & $0.1457$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $1.84$ & $0.55$ \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & $0.1481$ & $0.1516$ & $0.1522$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $2.36$ & $0.40$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & $0.1423$ & $0.1449$ & $0.1457$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & $1.84$ & $0.55$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $0.1481$ & $0.1516$ & $0.1522$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $2.36$ & $0.40$ \\
 		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
@@ -193,7 +193,7 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
 		Outlet condition & Pressure outlet $p=0$ on the lower left port, with the component constraint used by the FEniCS configuration \\
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls and the fixed separator; topology-created solids enter through the design-density penalties \\
-		Validation metrics & Average inlet pressure, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Validation metrics & Average inlet pressure, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -254,16 +254,16 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
+		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
 		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
@@ -300,7 +300,7 @@ The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-b
 		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on the top and bottom walls and on the right boundary outside the outlet \\
 		Brinkman solid resistance & $\alpha_{\mathrm{solid}}=10^9$, $\alpha_{\mathrm{fluid}}=0$ \\
 		Optimization objective & Dissipation objective $J_D$, including physical viscous dissipation and Brinkman drag over the design domain \\
-		Validation metrics & $J_D$, pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Validation metrics & $J_D$, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -370,16 +370,16 @@ The extracted turbulent diffuser geometry is meshed with the same wall-resolved 
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $0.35$ & $0.22$ \\
 		$\Phi_D^{\mathrm{SST}}$ [W/m] & $1.5296\times10^{4}$ & $1.5570\times10^{4}$ & $1.5725\times10^{4}$ \\
 		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $1.79$ & $0.99$ \\
-		$\Delta p^{\mathrm{SA}}$ [Pa] & $1.2460\times10^{5}$ & $1.2449\times10^{5}$ & $1.2422\times10^{5}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SA}})$ [\%] & -- & $0.09$ & $0.22$ \\
-		$\Delta p^{\mathrm{SST}}$ [Pa] & $4.2412\times10^{4}$ & $4.2034\times10^{4}$ & $4.1833\times10^{4}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p^{\mathrm{SST}})$ [\%] & -- & $0.89$ & $0.48$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & $1.2460\times10^{5}$ & $1.2449\times10^{5}$ & $1.2422\times10^{5}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & $0.09$ & $0.22$ \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $4.2412\times10^{4}$ & $4.2034\times10^{4}$ & $4.1833\times10^{4}$ \\
+		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $0.89$ & $0.48$ \\
 		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} WR = wall-resolved; ST = smooth-transition; $\Phi_D$ = viscous dissipation; $\Delta p$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} WR = wall-resolved; ST = smooth-transition; $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
