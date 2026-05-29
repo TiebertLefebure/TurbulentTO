@@ -55,7 +55,7 @@
 % Boundary labels.
 \node[bc, anchor=east, text width=32mm] at (\xin-0.85,{0.5*\yt})
   {velocity inlet\\$\mathbf{u}=(25,0)$ m/s\\$\tilde{\nu}=0.18449$ m$^2$/s};
-\node[bc, anchor=south east, text width=27mm] at (\xout,\yt+0.38)
+\node[bc, anchor=west, text width=27mm] at (\xout+2.20,{0.5*(\yb+\yt)})
   {pressure outlet\\$p=0$ Pa};
 \node[bc, anchor=south, text width=33mm] at ({0.5*(\xin+\xwall)},{\yt+0.82})
   {symmetry / slip\\$u_n=0$};
@@ -74,8 +74,8 @@
 
 \draw[dim] (\xin-0.28,\y0) -- node[right, fill=white, inner sep=1pt]
   {$H_\mathrm{in}=2.0$ m} (\xin-0.28,\yt);
-\draw[dim] (\xout+0.42,\yb) -- node[right, fill=white, inner sep=1pt]
-  {$H_\mathrm{out}=2.25$ m} (\xout+0.42,\yt);
+\draw[dim] (\xout+0.62,\yb) -- node[right, fill=white, inner sep=1pt]
+  {$H_\mathrm{out}=2.25$ m} (\xout+0.62,\yt);
 \draw[dim] (\xstep-0.42,\yb) -- node[left, fill=white, inner sep=1pt]
   {$h=0.25$ m} (\xstep-0.42,\y0);
 

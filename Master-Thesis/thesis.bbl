@@ -177,6 +177,12 @@ L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
 \newblock {\em International Journal of Heat and Mass Transfer}, 163:120543,
   2020.
 
+\bibitem{joove_keps}
+{joove123}.
+\newblock k-epsilon fenics implementation.
+\newblock \url{https://github.com/joove123/k-epsilon.git}, 2026.
+\newblock Accessed 28 May 2026.
+
 \bibitem{KimKlineJohnston1980}
 J.~Kim, S.~J. Kline, and J.~P. Johnston.
 \newblock Investigation of a reattaching turbulent shear layer: Flow over a
@@ -200,6 +206,13 @@ A.~Logg, K.-A. Mardal, and G.~N. Wells.
 \newblock {\em Automated Solution of Differential Equations by the Finite
   Element Method: The FEniCS Book}, volume~84.
 \newblock Springer Science \& Business Media, 2012.
+
+\bibitem{Marcibal2024}
+J.~Marcib\'{a}l.
+\newblock Turbulence modeling in computational fluid dynamics.
+\newblock Master's thesis, University of Southern Denmark, 6 2024.
+\newblock Master's thesis in Applied Mathematics, Department of Mathematics and
+  Computer Science.
 
 \bibitem{Margetis2024}
 A.-S. Margetis, E.~Papoutsis-Kiachagias, and K.~Giannakoglou.

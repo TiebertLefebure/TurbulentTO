@@ -378,11 +378,15 @@ The mesh-independence study uses the same backward-facing-step geometry and name
 		Near-step wall size [m] & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ & $6.25 \times 10^{-3}$ \\
 		Top-wall size [m] & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ \\
 		Inlet/outlet/symmetry size [m] & $1.00 \times 10^{-1}$ & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ \\
-		Nodes & \textit{TBD} & $193{,}276$ & \textit{TBD} \\
-		Elements & \textit{TBD} & $192{,}131$ & \textit{TBD} \\
+		Nodes & $77{,}725$ & $193{,}276$ & \textit{TBD} \\
+		Elements & $86{,}371$ & $192{,}131$ & \textit{TBD} \\
 		\hline
-		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
-		Maximum wall $y^+$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+		\multicolumn{4}{@{}l}{\textit{Grid metrics: Spalart--Allmaras}} \\
+		$x_r/h$ & \textit{TBD} & $5.83$ & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+		$\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+		$\epsilon_{\mathrm{rel}}(\Delta p)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+		\multicolumn{4}{@{}l}{\textit{Grid metrics: SST $k-\omega$}} \\
 		$x_r/h$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
 		$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
 		$\Delta p$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
@@ -395,6 +399,6 @@ The mesh-independence study uses the same backward-facing-step geometry and name
 	\end{minipage}
 \end{table}
 
-The primary grid-independence metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the sign change of the wall shear stress on the downstream lower wall. Velocity profiles should additionally be extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region. The pressure drop $\Delta p$ is retained as a secondary metric because it combines the separation loss with the long-channel wall-friction contribution.
+The primary grid-independence metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the downstream zero-crossing of the streamwise wall shear stress on the lower wall associated with the end of the primary recirculation region. Because the final velocity-profile comparison uses both SA and SST $k-\omega$, the scalar grid-independence metrics are reported for both turbulence closures. The pressure drop $\Delta p$ is retained as a secondary metric and is computed from the area-weighted inlet-to-outlet static-pressure difference. Velocity profiles should additionally be extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region; the profile comparison is only shown for the final selected mesh after both turbulence closures have passed the scalar mesh-independence check.
 
 \FloatBarrier

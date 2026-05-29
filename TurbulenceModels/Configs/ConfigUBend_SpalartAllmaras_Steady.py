@@ -31,7 +31,7 @@ BOUNDARY_MARKERS = {
 }
 
 
-RESTART_FROM_SAVED_STATE = False
+RESTART_FROM_SAVED_STATE = True
 
 
 # Physical parameters.

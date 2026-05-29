@@ -30,6 +30,9 @@ BOUNDARY_MARKERS = {
 }
 
 
+RESTART_FROM_SAVED_STATE = True
+
+
 # Geometry inferred from the supplied mesh/facet markers.
 INLET_X = -32.5
 OUTLET_X = 12.5
@@ -133,7 +136,6 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 
 # Restart controls. The first run starts from the initial condition. Later runs
 # resume from checkpointed HDF5 fields if the files exist.
-RESTART_FROM_SAVED_STATE = True
 RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 PICARD_CHECKPOINT_EVERY = 1

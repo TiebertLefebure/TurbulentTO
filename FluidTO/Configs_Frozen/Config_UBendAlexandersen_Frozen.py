@@ -29,7 +29,7 @@ DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
 
-RESUME_OPTIMIZATION = False
+RESUME_OPTIMIZATION = True
 
 
 def create_design_mesh():
@@ -171,7 +171,10 @@ FORWARD_FLOW_SOLVER = "snes"
 FORWARD_PICARD_FLOW_SOLVER = "ipcs"
 FORWARD_SNES_WARM_START_WITH_IPCS = True
 FORWARD_SNES_IPCS_WARM_START_MODE = "final"
-FORWARD_SNES_STRICT_FINAL_SOLVE = False
+
+
+FORWARD_SNES_STRICT_FINAL_SOLVE = True
+
 
 # ============================================================================ #
 # SNES forward solver parameters, used when FORWARD_FLOW_SOLVER = "snes".
@@ -185,7 +188,10 @@ FORWARD_SNES_MAX_ITERS = 260
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
 FORWARD_SNES_MIN_CONVECTION_STEP = 0.005
 FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 40
-FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
+
+
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = False
+
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
     {"convection_weight": 0.00, "max_iters": 80, "atol": 2.0e-7, "accept_norm": 2.0e-4, "accept_nonconverged": True},
