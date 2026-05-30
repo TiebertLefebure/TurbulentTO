@@ -131,15 +131,6 @@ OBJECTIVE_STREAK_TO_STOP = 10
 INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
-# Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
-# Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
-# when ALPHA_FLUID = 0, so q_penal = 1 / q_a.
-
-#PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 30.0, 15.0]
-#Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
-#BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
-#MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
-#MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
 
 # Stabilized pressure-drop continuation for frozen-SA bend optimization.
 # The late hold stage and smaller move limits damp MMA oscillations after
@@ -188,7 +179,7 @@ FORWARD_SNES_WARM_START_WITH_IPCS = True
 FORWARD_SNES_IPCS_WARM_START_MODE = "final" # "initial" or "final"
 
 
-FORWARD_SNES_STRICT_FINAL_SOLVE = True
+FORWARD_SNES_STRICT_FINAL_SOLVE = False
 
 
 # =========================================================================== #
@@ -207,7 +198,7 @@ FORWARD_SNES_MIN_CONVECTION_STEP = 0.005
 FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 40
 
 
-FORWARD_SNES_STOP_AT_ACCEPT_NORM = False
+FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
 
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [
@@ -287,7 +278,6 @@ FORWARD_IPCS_PICARD_VELOCITY_RTOL = 1.0e-3
 FORWARD_IPCS_PICARD_ACCEPT_BEST_SCORE = 1.5
 # =========================================================================== #
 
-
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 QUADRATURE_DEGREE = 6
@@ -307,6 +297,7 @@ LOG_DILGEN_FIG8_COLUMNS = False
 SAVE_DF0DX_VECTOR = True
 SAVE_IPCS_RESIDUAL_PLOTS = False
 SAVE_IPCS_RESIDUAL_SVGS = False
+
 RESULTS_ROOT_BASE_NAME = "Results_Frozen/Results_PipeBendAlexandersen_Frozen"
 if OBJECTIVE_TYPE == "dissipation":
     RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_JD"

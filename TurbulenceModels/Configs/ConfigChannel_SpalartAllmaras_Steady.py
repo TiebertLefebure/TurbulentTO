@@ -4,8 +4,8 @@ import os
 # Mesh and output paths.
 # Medium_WallResolved is the default SA channel validation mesh. Use
 # Coarse_WallResolved for quick diagnostics or Fine_WallResolved for final runs.
-MESH_DIRECTORY = "Meshes/Channel/Medium_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/Channel/Medium_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/Channel/Fine_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/Channel/Fine_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):

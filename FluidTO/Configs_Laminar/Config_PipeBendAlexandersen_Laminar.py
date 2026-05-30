@@ -67,28 +67,17 @@ ALPHA_SOLID = 1.0e5
 # Re = U_MAX_INLET * INLET_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 1.
 
 VOL_FRAC = 0.25
-OBJECTIVE_TYPE = "average_inlet_pressure"
+OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 1.0e-6
 OBJECTIVE_STREAK_TO_STOP = 10
 INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
-# Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
-# Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
-# when ALPHA_FLUID = 0, so q_penal = 1 / q_a.
 
-#PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 30.0, 15.0]
-#Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
-#BETA_PROJ_SCHEDULE = [4.0, 6.0, 9.0, 13.0]
-#MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
-#MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-
-# Alexandersen reports the continuation values but not the MMA move limit.
-
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
-MOVE_LIMIT_SCHEDULE = [0.04, 0.03, 0.02, 0.012, 0.008, 0.005, 0.003]
-MAX_INNER_ITERATIONS_SCHEDULE = [80, 100, 140, 200, 200, 240, 260]
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.20]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0, 16.0]
+MOVE_LIMIT_SCHEDULE = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015, 0.0015]
+MAX_INNER_ITERATIONS_SCHEDULE = [12, 25, 45, 80, 120, 160, 220, 200]
 
 SNES_LINEAR_SOLVER = "mumps"
 FILTER_BASE_LENGTH = H_MAX
@@ -114,8 +103,14 @@ ENABLE_PRESSURE_PIN = False
 SAVE_DF0DX_VECTOR = True
 LOG_DF0DX_STATS = True
 SAVE_DF0DX_CENTERED_FIELD = True
-RESULTS_ROOT_NAME = "Results_Laminar/Results_PipeBendAlexandersen_LaminarTO"
 
+RESULTS_ROOT_BASE_NAME = "Results_Laminar/Results_PipeBendAlexandersen_Laminar"
+if OBJECTIVE_TYPE == "dissipation":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_JD"
+elif OBJECTIVE_TYPE == "average_inlet_pressure":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_Jp"
+else:
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 
 

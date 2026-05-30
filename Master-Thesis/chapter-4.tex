@@ -36,28 +36,45 @@ Prior to this comparative analysis, the Ansys baseline itself was verified for g
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
-		\caption{Ansys Fluent velocity magnitude contour}
+		\includegraphics[width=\textwidth]{Channel-Ansys-Velocity}
+		\caption{Ansys Fluent SA contour for $u$}
 		\label{fig:channel_ansys}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Channel-FEniCS-Velocity}
-		\caption{FEniCS velocity magnitude contour}
+		\includegraphics[width=\textwidth]{Channel-FEniCS-Velocity-Magnitude}
+		\caption{FEniCS SA contour for $u$}
 		\label{fig:channel_fenics}
 	\end{subfigure}
-
 	\vspace{0.5cm}
-
 	\begin{subfigure}[b]{\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Channel-Verification}
-		\caption{Velocity profiles}
+		\includegraphics[width=\textwidth]{Channel-Verification-Velocity}
+		\caption{Velocity profiles extracted at the streamwise mid-plane of the channel}
 		\label{fig:channel_profiles}
 	\end{subfigure}
 	\caption{Verification of the 2D channel flow ($Re_H \approx 20{,}300$). The comparison includes qualitative velocity contours from Ansys Fluent and FEniCS, plus quantitative velocity profiles extracted at the streamwise mid-plane, $x=0.5L$, while varying the wall-normal coordinate $y$.}
 	\label{fig:channel_benchmark}
+\end{figure}
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Channel-Ansys-NuTilde}
+		\caption{Ansys Fluent SA contour for $\tilde{\nu}$}
+		\label{fig:channel_ansys_nutilde}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Channel-FEniCS-NuTilde}
+		\caption{FEniCS SA contour for $\tilde{\nu}$}
+		\label{fig:channel_fenics_nutilde}
+	\end{subfigure}
+	\caption{Modified turbulent viscosity (SA transport variable) for the 2D channel benchmark.}
+	\label{fig:channel_benchmark_nutilde}
 \end{figure}
 
 As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation show good agreement with the Ansys Fluent baseline. For the quantitative comparison, velocity profiles are extracted from both solvers across the middle of the channel, i.e. at $x=0.5L$, with $y$ varied from the lower wall to the upper wall. The custom solver resolves the logarithmic region of the turbulent boundary layer and predicts the turbulent diffusion toward the channel center.
@@ -139,28 +156,45 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{UBend-Ansys-Velocity}
-		\caption{Ansys Fluent SA contour}
+		\includegraphics[width=\textwidth]{UBend-Ansys-Velocity-Magnitude}
+		\caption{Ansys Fluent SA contour for $u$}
 		\label{fig:ubend_ansys}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{example-image}
-		\caption{FEniCS SA contour}
+		\caption{FEniCS SA contour for $u$.}
 		\label{fig:ubend_fenics}
 	\end{subfigure}
-
 	\vspace{0.5cm}
-
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{example-image}
-		\caption{Velocity profiles}
+		\caption{Velocity profiles extracted at the bend exit.}
 		\label{fig:ubend_profiles}
 	\end{subfigure}
 	\caption{Verification of the 2D U-bend flow ($Re_D \approx 44{,}700$, $De \approx 15{,}000$). The comparison includes qualitative velocity contours from Ansys Fluent and FEniCS, showing separation characteristics, plus quantitative velocity profiles extracted at the bend exit across the pipe diameter $D=0.028$ m.}
 	\label{fig:ubend_verification}
+\end{figure}
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{UBend-Ansys-NuTilde}
+		\caption{Ansys Fluent SA contour for $\tilde{\nu}$}
+		\label{fig:ubend_ansys_nutilde}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.48\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image}
+		\caption{FEniCS SA contour for $\tilde{\nu}$}
+		\label{fig:ubend_fenics_nutilde}
+	\end{subfigure}
+	\caption{Modified turbulent viscosity for the 2D U-bend benchmark.}
+	\label{fig:ubend_verification_nutilde}
 \end{figure}
 
 As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and separation regions observed in the qualitative velocity contours demonstrate visual agreement. To provide a more robust assessment, velocity data are extracted along a cross-sectional line probe positioned at the bend exit, spanning the full pipe diameter $D=0.028$ m from the inner wall to the outer wall. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary-layer growth and the momentum shift toward the outer wall.

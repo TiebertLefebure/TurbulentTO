@@ -1,7 +1,3 @@
-% =========================================================
-% APPENDIX A
-% =========================================================
-
 \chapter{Configuration and Grid Independence of the Spalart-Allmaras Benchmark Cases}
 \label{app:A_baseline_configurations}
 
@@ -152,8 +148,8 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 		Elements & $7{,}565$ & $26{,}123$ & $42{,}594$ \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
-		$U_{\mathrm{bulk}}$ [m/s] & $18.305$ & $18.114$ & \textit{TBD} \\
-		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $1.04$ & \textit{TBD} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $18.305$ & $18.114$ & $17.977$ \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $1.04$ & $0.76$ \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
@@ -164,7 +160,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your Ansys channel mesh independence plot
+	\includegraphics[width=\textwidth]{Channel-Ansys-Mesh-Independence} % Replace with your Ansys channel mesh independence plot
 	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
 	\label{fig:app_A_channel_mesh_indep_ansys}
 \end{figure}
@@ -349,17 +345,17 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 \section{Ansys Benchmark 3: Backward-Facing Step}
 \label{sec:app_A_backstep_ansys}
 
-The backward-facing-step case is not used as a FEniCS implementation-verification benchmark in Chapter~\ref{ch:fenics_implementation}. It is instead an Ansys Fluent benchmark supporting the model-validity discussion in Chapter~\ref{ch:turbulence_modeling}. The purpose is to test the Spalart--Allmaras closure on a separated internal flow without streamline curvature, so that separation effects can be evaluated independently of the Dean-number discussion.
+The backward-facing-step case is not used as a FEniCS implementation-verification benchmark in Chapter~\ref{ch:fenics_implementation}. It is instead an Ansys Fluent benchmark supporting the model-sensitivity discussion in Chapter~\ref{ch:turbulence_modeling}. The purpose is to test the Spalart--Allmaras closure on a separated internal flow without streamline curvature, so that separation effects can be evaluated independently of the Dean-number discussion.
 
-\subsection{Wall-Resolved Ansys Mesh-Independence Study}
+\subsection{Wall-Resolved Ansys Grid-Sensitivity Study}
 \label{subsec:app_A_backstep_mesh_ansys}
 
-The mesh-independence study uses the same backward-facing-step geometry and named selections as Section~\ref{sec:ansys_benchmarks}. The no-slip wall boundaries are inflated with a fixed first-layer height of $\Delta y_1=1.30\times10^{-4}$ m. This first-layer height is kept constant on all three grids because the Reynolds number and target wall resolution are unchanged. The mesh refinement is therefore applied through the number of inflation layers, inflation growth rate, and streamwise element sizing.
+The grid-sensitivity study uses the same backward-facing-step geometry and named selections as Section~\ref{sec:ansys_benchmarks}. The no-slip wall boundaries are inflated with a fixed first-layer height of $\Delta y_1=1.30\times10^{-4}$ m. This first-layer height is kept constant on all three grids because the Reynolds number and target wall resolution are unchanged. The mesh refinement is therefore applied through the number of inflation layers, inflation growth rate, and streamwise element sizing. Unlike the attached channel and bend verification cases, this separated-flow benchmark is treated as a grid-sensitivity record rather than a strict verification case, while the SA--SST comparison in Section~\ref{sec:ansys_benchmarks} uses the finest converged mesh for each closure.
 
 \begin{table}[htbp]
 	\centering
 	\scriptsize
-	\caption{Wall-resolved backward-facing-step mesh hierarchy for the Ansys Fluent mesh-independence study. The first-layer height is fixed to maintain $y^+\approx1$, while the boundary-layer thickness and streamwise resolution are refined.}
+	\caption{Wall-resolved backward-facing-step mesh hierarchy for the Ansys Fluent grid-sensitivity study. The first-layer height is fixed to maintain $y^+\approx1$, while the boundary-layer thickness and streamwise resolution are refined.}
 	\label{tab:app_A_backstep_meshes_ansys}
 	\renewcommand{\arraystretch}{1.2}
 	\setlength{\tabcolsep}{5pt}
@@ -373,18 +369,18 @@ The mesh-independence study uses the same backward-facing-step geometry and name
 		Inflation option & First layer & First layer & First layer \\
 		Inflated boundaries & No-slip walls & No-slip walls & No-slip walls \\
 		$\Delta y_1$ [m] & $1.30 \times 10^{-4}$ & $1.30 \times 10^{-4}$ & $1.30 \times 10^{-4}$ \\
-		Inflation layers & $28$ & $36$ & $44$ \\
-		Growth rate & $1.18$ & $1.15$ & $1.12$ \\
-		Near-step wall size [m] & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ & $6.25 \times 10^{-3}$ \\
-		Top-wall size [m] & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ \\
-		Inlet/outlet/symmetry size [m] & $1.00 \times 10^{-1}$ & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ \\
-		Nodes & $77{,}725$ & $193{,}276$ & $457{,}175$ \\
-		Elements & $86{,}371$ & $192{,}131$ & $454{,}431$ \\
+			Inflation layers & $28$ & $36$ & $44$ \\
+			Growth rate & $1.18$ & $1.15$ & $1.12$ \\
+			Near-step wall size [m] & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ & $6.25 \times 10^{-3}$ \\
+			Top-wall size [m] & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ & $1.25 \times 10^{-2}$ \\
+			Inlet/outlet/symmetry size [m] & $1.00 \times 10^{-1}$ & $5.00 \times 10^{-2}$ & $2.50 \times 10^{-2}$ \\
+			Nodes & $77{,}725$ & $193{,}276$ & $457{,}175$ \\
+			Elements & $86{,}371$ & $192{,}131$ & $454{,}431$ \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Grid metrics: Spalart--Allmaras}} \\
-		$x_r/h$ & $5.92$ & $5.83$ & \textit{TBD} \\
-		$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & $1.56$ & \textit{TBD} \\
-		Total pressure loss $\Delta p_t$ [Pa] & $46.743$ & \textit{TBD} & \textit{TBD} \\
+			$x_r/h$ & $5.92$ & $5.83$ & $5.69$ \\
+			$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & $1.52$ & $2.46$ \\
+		Total pressure loss $\Delta p_t$ [Pa] & $46.743$ & \textit{TBD} & $46.53076$ \\
 		$\epsilon_{\mathrm{rel}}(\Delta p_t)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
 		\multicolumn{4}{@{}l}{\textit{Grid metrics: SST $k-\omega$}} \\
 		$x_r/h$ & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
@@ -395,10 +391,10 @@ The mesh-independence study uses the same backward-facing-step geometry and name
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} Quad-dom. = quad-dominant. The near-step wall size is applied to \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}. The inflated no-slip walls are \texttt{top\_wall}, \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}; the inlet, outlet, and symmetry boundaries are not inflated. For the $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+			\scriptsize \textit{Note.} Quad-dom. = quad-dominant. The near-step wall size is applied to \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}. The inflated no-slip walls are \texttt{top\_wall}, \texttt{upstream\_lower\_wall}, \texttt{step\_wall}, and \texttt{downstream\_lower\_wall}; the inlet, outlet, and symmetry boundaries are not inflated. For the $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The SA reattachment length is reported as grid-sensitivity evidence rather than proof of strict mesh independence.
 	\end{minipage}
 \end{table}
 
-The primary grid-independence metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the downstream zero-crossing of the streamwise wall shear stress on the lower wall associated with the end of the primary recirculation region. Because the final velocity-profile comparison uses both SA and SST $k-\omega$, the scalar grid-independence metrics are reported for both turbulence closures. The total pressure loss $\Delta p_t$ is retained as a secondary metric and is computed from the mass-flow-weighted inlet-to-outlet total-pressure difference. Velocity profiles should additionally be extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region; the profile comparison is only shown for the final selected mesh after both turbulence closures have passed the scalar mesh-independence check.
+The primary grid-sensitivity metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the downstream zero-crossing of the streamwise wall shear stress on the lower wall associated with the end of the primary recirculation region. The SA reattachment length decreases from $x_r/h=5.92$ on the coarse grid to $5.83$ on the medium grid and $5.69$ on the fine grid; the resulting medium--fine change remains above a strict one-percent mesh-independence criterion for this separated-flow metric. The total pressure loss $\Delta p_t$ is retained as a secondary metric and is computed from the mass-flow-weighted inlet-to-outlet total-pressure difference. Velocity profiles should additionally be extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region; the SA--SST comparison is made using the finest converged mesh available for each turbulence closure.
 
 \FloatBarrier

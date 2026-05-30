@@ -1,69 +1,110 @@
-\documentclass[tikz,border=3mm]{standalone}
+\documentclass[tikz,border=4pt]{standalone}
+\usepackage{amsmath}
 \usetikzlibrary{arrows.meta,calc}
+
 \begin{document}
-\pagecolor{white}
 \begin{tikzpicture}[
-  font=\sffamily\footnotesize,
-  flow/.style={-{Latex[length=2.8mm]}, line width=0.75pt, draw=blue!65!black},
-  dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
-  section/.style={draw=red!70!black, line width=1.1pt},
-  profile/.style={draw=black!65, dashed, line width=0.85pt},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center}
+    >=Latex,
+    line cap=round,
+    line join=round,
+    font=\sffamily,
+    note/.style={draw=black!60, rounded corners=1.5pt, fill=white,
+                 align=center, inner xsep=7pt, inner ysep=5pt,
+                 font=\sffamily\small},
+    flow/.style={blue!80!black, -{Latex[length=4mm,width=2.5mm]}, line width=1.0pt},
+    wall/.style={black!78, line width=2.0pt},
+    bc/.style={red!75!black, line width=1.4pt},
+    profile/.style={black!55, dashed, line width=1.0pt}
 ]
 
-\node[font=\sffamily\bfseries\small, anchor=west] at (0.10,4.90)
-  {VMFL030: 3D $90^\circ$ pipe bend};
-\node[font=\sffamily\scriptsize, anchor=west] at (0.10,4.57)
-  {symmetry-plane view of the 3D half-domain};
+\def\cx{3.2}
+\def\cy{1.95}
+\def\R{1.65}
+\def\a{0.34}
+\def\yb{0.10}
+\def\xr{8.25}
 
-\def\r{1.35}
-\def\xc{7.35}
-\def\yc{2.12}
-\def\w{0.30}
-\def\xin{3.05}
-\def\yin{\yc-\r}
-\def\xout{\xc+\r}
-\def\yout{4.05}
+\coordinate (outerStart) at ({\cx-\R-\a},\yb);
+\coordinate (innerStart) at ({\cx-\R+\a},\yb);
+\coordinate (outerBendStart) at ({\cx-\R-\a},\cy);
+\coordinate (innerBendStart) at ({\cx-\R+\a},\cy);
+\coordinate (outerOutletEnd) at (\xr,{\cy+\R+\a});
+\coordinate (innerOutletEnd) at (\xr,{\cy+\R-\a});
 
-\draw[black!82, line width=22pt, line cap=butt, line join=round]
-  (\xin,\yin) -- (\xc,\yin) arc[start angle=-90,end angle=0,radius=\r] -- (\xout,\yout);
-\draw[blue!6, line width=17pt, line cap=butt, line join=round]
-  (\xin,\yin) -- (\xc,\yin) arc[start angle=-90,end angle=0,radius=\r] -- (\xout,\yout);
+% Fluid domain.
+\fill[blue!6]
+    (outerStart) --
+    (outerBendStart)
+    arc[start angle=180,end angle=90,radius={\R+\a}] --
+    (outerOutletEnd) --
+    (innerOutletEnd) --
+    ({\cx},{\cy+\R-\a})
+    arc[start angle=90,end angle=180,radius={\R-\a}] --
+    (innerStart) -- cycle;
 
-% Boundary planes and labels.
-\draw[section] (\xin,\yin-\w) -- (\xin,\yin+\w);
-\draw[section] (\xout-\w,\yout) -- (\xout+\w,\yout);
-\node[bc, anchor=east, text width=37mm] at (\xin-0.30,\yin)
-  {fully developed\\turbulent inlet profile\\zero transverse velocity};
-\node[bc, anchor=west, text width=28mm] at (\xout+0.45,\yout)
-  {pressure outlet\\$p=0$ Pa};
+% Wall outlines.
+\draw[wall]
+    (outerStart) --
+    (outerBendStart)
+    arc[start angle=180,end angle=90,radius={\R+\a}] --
+    (outerOutletEnd);
+\draw[wall]
+    (innerStart) --
+    (innerBendStart)
+    arc[start angle=180,end angle=90,radius={\R-\a}] --
+    (innerOutletEnd);
 
-% Flow direction.
-\draw[flow] (3.80,\yin) -- (5.10,\yin);
-\draw[flow] (5.75,\yin) -- (6.75,\yin);
-\draw[flow] ({\xc+\r*cos(-62)},{\yc+\r*sin(-62)}) arc[start angle=-62,end angle=-24,radius=\r];
-\draw[flow] (\xout,2.85) -- (\xout,3.70);
+% Inlet and outlet boundaries.
+\draw[bc] (outerStart) -- (innerStart);
+\draw[bc] (outerOutletEnd) -- (innerOutletEnd);
 
-% Bend radius and diameter.
-\coordinate (bendcenter) at (\xc,\yc);
-\coordinate (radiuspoint) at ({\xc+\r*cos(-38)},{\yc+\r*sin(-38)});
-\draw[dim] (bendcenter) -- (radiuspoint);
-\node[fill=white, inner sep=1pt, anchor=east] at (7.28,1.53)
-  {$R_c=2.8D$};
-\fill[black] (bendcenter) circle (1.1pt);
+% Flow direction arrows.
+\draw[flow] ({\cx-\R},0.55) -- ({\cx-\R},1.20);
+\draw[flow] ({\cx-\R},1.25) -- ({\cx-\R},1.90);
+\draw[flow] ({\cx-1.22},{\cy+0.45})
+    arc[start angle=196,end angle=116,radius=1.25];
+\draw[flow] (4.25,{\cy+\R}) -- (5.00,{\cy+\R});
+\draw[flow] (5.45,{\cy+\R}) -- (6.20,{\cy+\R});
+\draw[flow] (6.65,{\cy+\R}) -- (7.40,{\cy+\R});
 
-\draw[dim] (4.10,\yin-\w) -- node[left, fill=white, inner sep=1pt]
-  {$D=1$ m} (4.10,\yin+\w);
+% 75 degree velocity-profile plane, measured from the bend inlet.
+\pgfmathsetmacro{\theta}{105}
+\coordinate (profInner) at ({\cx+(\R-\a)*cos(\theta)},{\cy+(\R-\a)*sin(\theta)});
+\coordinate (profOuter) at ({\cx+(\R+\a)*cos(\theta)},{\cy+(\R+\a)*sin(\theta)});
+\coordinate (profMid) at ({\cx+\R*cos(\theta)},{\cy+\R*sin(\theta)});
+\draw[profile] (profInner) -- (profOuter);
+\node[note, anchor=west] (profileLabel) at (5.35,2.95)
+    {$75^\circ$ along bend\\velocity-profile plane};
+\draw[-{Latex[length=2.5mm,width=1.8mm]}, black!55]
+    (profileLabel.west) -- ($(profMid)+(0.12,0.02)$);
 
-% 75 degree velocity-profile plane.
-\coordinate (profileInner) at ({\xc+(\r-\w)*cos(-15)},{\yc+(\r-\w)*sin(-15)});
-\coordinate (profileOuter) at ({\xc+(\r+\w)*cos(-15)},{\yc+(\r+\w)*sin(-15)});
-\draw[profile] (profileInner) -- (profileOuter);
-\node[bc, anchor=west, text width=31mm] at ($(profileOuter)+(0.45,-0.10)$)
-  {$75^\circ$ along bend\\velocity-profile plane};
+% Bend-radius annotation.
+\coordinate (bendCenter) at (\cx,\cy);
+\fill[black] (bendCenter) circle (1.1pt);
+\draw[black!65] (bendCenter) -- ($(bendCenter)!0.58!(profMid)$);
+\node[font=\rmfamily\small, fill=white, inner sep=1pt] at (2.85,2.72)
+    {$R_c = 2.8D$};
 
-\node[bc, text width=44mm] at (5.95,-0.40)
-  {shown symmetry plane\\3D half-domain simulation\\$Re_D\approx43{,}000$};
+% Diameter annotation at the inlet.
+\draw[<->, black!70] ({\cx-\R-\a},0.33) -- ({\cx-\R+\a},0.33);
+\node[font=\rmfamily\small, fill=white, inner sep=1pt] at ({\cx-\R},0.55)
+    {$D=1~\mathrm{m}$};
+
+% Boundary-condition labels.
+\node[note, anchor=east] at (0.95,0.55)
+    {fully developed\\turbulent inlet profile\\zero transverse velocity};
+\node[note, anchor=south west] at (6.70,4.18)
+    {pressure outlet\\$p=0~\mathrm{Pa}$};
+
+% Context label.
+\node[note, anchor=north] at (3.85,-0.30)
+    {shown symmetry plane\\3D half-domain simulation\\$Re_D \approx 43{,}000$};
+
+% Title.
+\node[anchor=west, font=\sffamily\bfseries\large] at (0.25,5.18)
+    {VMFL030: 3D $90^\circ$ pipe bend};
+\node[anchor=west, font=\sffamily\normalsize] at (0.25,4.90)
+    {symmetry-plane view of the 3D half-domain};
 
 \end{tikzpicture}
 \end{document}
