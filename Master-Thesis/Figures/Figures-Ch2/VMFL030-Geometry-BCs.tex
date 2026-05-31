@@ -3,108 +3,83 @@
 \usetikzlibrary{arrows.meta,calc}
 
 \begin{document}
+\pagecolor{white}
 \begin{tikzpicture}[
     >=Latex,
     line cap=round,
     line join=round,
     font=\sffamily,
     note/.style={draw=black!60, rounded corners=1.5pt, fill=white,
-                 align=center, inner xsep=7pt, inner ysep=5pt,
+                 align=center, inner xsep=6pt, inner ysep=4pt,
                  font=\sffamily\small},
-    flow/.style={blue!80!black, -{Latex[length=4mm,width=2.5mm]}, line width=1.0pt},
-    wall/.style={black!78, line width=2.0pt},
+    flow/.style={blue!78!black, -{Latex[length=3.6mm,width=2.2mm]}, line width=0.9pt},
+    wall/.style={black!82, line width=28pt},
+    fluid/.style={blue!6, line width=22pt},
     bc/.style={red!75!black, line width=1.4pt},
-    profile/.style={black!55, dashed, line width=1.0pt}
+    profile/.style={black!55, dashed, line width=0.95pt},
+    dim/.style={<->, black!70, line width=0.55pt}
 ]
 
-\def\cx{3.2}
-\def\cy{1.95}
-\def\R{1.65}
+\def\R{1.75}
 \def\a{0.34}
-\def\yb{0.10}
-\def\xr{8.25}
+\def\cx{2.25}
+\def\cy{2.75}
+\def\xout{6.55}
 
-\coordinate (outerStart) at ({\cx-\R-\a},\yb);
-\coordinate (innerStart) at ({\cx-\R+\a},\yb);
-\coordinate (outerBendStart) at ({\cx-\R-\a},\cy);
-\coordinate (innerBendStart) at ({\cx-\R+\a},\cy);
-\coordinate (outerOutletEnd) at (\xr,{\cy+\R+\a});
-\coordinate (innerOutletEnd) at (\xr,{\cy+\R-\a});
+\coordinate (inletCenter) at ({\cx-\R},0.35);
+\coordinate (bendStart) at ({\cx-\R},\cy);
+\coordinate (bendEnd) at (\cx,{\cy+\R});
+\coordinate (outletCenter) at (\xout,{\cy+\R});
+\coordinate (bendCenter) at (\cx,\cy);
 
-% Fluid domain.
-\fill[blue!6]
-    (outerStart) --
-    (outerBendStart)
-    arc[start angle=180,end angle=90,radius={\R+\a}] --
-    (outerOutletEnd) --
-    (innerOutletEnd) --
-    ({\cx},{\cy+\R-\a})
-    arc[start angle=90,end angle=180,radius={\R-\a}] --
-    (innerStart) -- cycle;
+% Pipe drawn as a stroked centerline, keeping the flow arrows away from walls.
+\draw[wall] (inletCenter) -- (bendStart)
+    arc[start angle=180,end angle=90,radius=\R] -- (outletCenter);
+\draw[fluid] (inletCenter) -- (bendStart)
+    arc[start angle=180,end angle=90,radius=\R] -- (outletCenter);
 
-% Wall outlines.
-\draw[wall]
-    (outerStart) --
-    (outerBendStart)
-    arc[start angle=180,end angle=90,radius={\R+\a}] --
-    (outerOutletEnd);
-\draw[wall]
-    (innerStart) --
-    (innerBendStart)
-    arc[start angle=180,end angle=90,radius={\R-\a}] --
-    (innerOutletEnd);
+% Boundary planes.
+\draw[bc] ({\cx-\R-\a},0.35) -- ({\cx-\R+\a},0.35);
+\draw[bc] (\xout,{\cy+\R-\a}) -- (\xout,{\cy+\R+\a});
 
-% Inlet and outlet boundaries.
-\draw[bc] (outerStart) -- (innerStart);
-\draw[bc] (outerOutletEnd) -- (innerOutletEnd);
+% Flow direction arrows on the centerline.
+\draw[flow] ({\cx-\R},0.78) -- ({\cx-\R},1.45);
+\draw[flow] ({\cx-\R},1.80) -- ({\cx-\R},2.45);
+\draw[flow] ({\cx+\R*cos(158)},{\cy+\R*sin(158)})
+    arc[start angle=158,end angle=112,radius=\R];
+\draw[flow] (2.75,{\cy+\R}) -- (3.55,{\cy+\R});
+\draw[flow] (4.35,{\cy+\R}) -- (5.15,{\cy+\R});
 
-% Flow direction arrows.
-\draw[flow] ({\cx-\R},0.55) -- ({\cx-\R},1.20);
-\draw[flow] ({\cx-\R},1.25) -- ({\cx-\R},1.90);
-\draw[flow] ({\cx-1.22},{\cy+0.45})
-    arc[start angle=196,end angle=116,radius=1.25];
-\draw[flow] (4.25,{\cy+\R}) -- (5.00,{\cy+\R});
-\draw[flow] (5.45,{\cy+\R}) -- (6.20,{\cy+\R});
-\draw[flow] (6.65,{\cy+\R}) -- (7.40,{\cy+\R});
-
-% 75 degree velocity-profile plane, measured from the bend inlet.
+% 75 degree profile plane measured from the bend inlet.
 \pgfmathsetmacro{\theta}{105}
 \coordinate (profInner) at ({\cx+(\R-\a)*cos(\theta)},{\cy+(\R-\a)*sin(\theta)});
 \coordinate (profOuter) at ({\cx+(\R+\a)*cos(\theta)},{\cy+(\R+\a)*sin(\theta)});
 \coordinate (profMid) at ({\cx+\R*cos(\theta)},{\cy+\R*sin(\theta)});
 \draw[profile] (profInner) -- (profOuter);
-\node[note, anchor=west] (profileLabel) at (5.35,2.95)
-    {$75^\circ$ along bend\\velocity-profile plane};
-\draw[-{Latex[length=2.5mm,width=1.8mm]}, black!55]
-    (profileLabel.west) -- ($(profMid)+(0.12,0.02)$);
 
-% Bend-radius annotation.
-\coordinate (bendCenter) at (\cx,\cy);
-\fill[black] (bendCenter) circle (1.1pt);
-\draw[black!65] (bendCenter) -- ($(bendCenter)!0.58!(profMid)$);
-\node[font=\rmfamily\small, fill=white, inner sep=1pt] at (2.85,2.72)
-    {$R_c = 2.8D$};
+% Radius and diameter annotations.
+\fill[black] (bendCenter) circle (1.05pt);
+\draw[dim] (bendCenter) -- node[above, sloped, fill=white, inner sep=1pt]
+    {$R_c=2.8D$} ($(bendCenter)!0.72!(profMid)$);
+\draw[dim] ({\cx-\R-\a},0.72) -- node[above, fill=white, inner sep=1pt]
+    {$D=1~\mathrm{m}$} ({\cx-\R+\a},0.72);
 
-% Diameter annotation at the inlet.
-\draw[<->, black!70] ({\cx-\R-\a},0.33) -- ({\cx-\R+\a},0.33);
-\node[font=\rmfamily\small, fill=white, inner sep=1pt] at ({\cx-\R},0.55)
-    {$D=1~\mathrm{m}$};
-
-% Boundary-condition labels.
-\node[note, anchor=east] at (0.95,0.55)
+% Labels are kept outside the flow region to avoid overlaps.
+\node[note, anchor=east, text width=35mm] at (-0.35,0.70)
     {fully developed\\turbulent inlet profile\\zero transverse velocity};
-\node[note, anchor=south west] at (6.70,4.18)
+\node[note, anchor=south, text width=26mm] at (\xout,5.55)
     {pressure outlet\\$p=0~\mathrm{Pa}$};
+\node[note, anchor=west, text width=32mm] (profileLabel) at (4.35,3.55)
+    {$75^\circ$ along bend\\velocity-profile plane};
+\draw[-{Latex[length=2.4mm,width=1.6mm]}, black!55, line width=0.65pt]
+    (profileLabel.west) -- ($(profMid)+(0.08,0.02)$);
 
-% Context label.
-\node[note, anchor=north] at (3.85,-0.30)
-    {shown symmetry plane\\3D half-domain simulation\\$Re_D \approx 43{,}000$};
-
-% Title.
-\node[anchor=west, font=\sffamily\bfseries\large] at (0.25,5.18)
+\node[note, anchor=north, text width=40mm] at (2.90,-0.05)
+    {shown symmetry plane\\3D half-domain simulation\\$Re_D\approx43{,}000$};
+\node[font=\sffamily\bfseries\large, anchor=west] at (-0.35,5.45)
     {VMFL030: 3D $90^\circ$ pipe bend};
-\node[anchor=west, font=\sffamily\normalsize] at (0.25,4.90)
-    {symmetry-plane view of the 3D half-domain};
+\node[font=\sffamily\small, anchor=west, text=black!70] at (-0.35,5.15)
+    {flow arrows indicate the pipe centerline direction};
 
 \end{tikzpicture}
 \end{document}

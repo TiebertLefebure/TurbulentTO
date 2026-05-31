@@ -132,13 +132,13 @@ INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
 
-# Stabilized pressure-drop continuation for frozen-SA bend optimization.
-# The late hold stage and smaller move limits damp MMA oscillations after
-# projection and Brinkman penalization become stiff.
+# Stabilized continuation for frozen-SA bend optimization.
+# Keep the early low-penalty stages long enough to settle the flow/topology
+# before increasing projection and Brinkman stiffness.
 Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
 BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
 MOVE_LIMIT_SCHEDULE = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015]
-MAX_INNER_ITERATIONS_SCHEDULE = [12, 25, 45, 80, 120, 160, 220]
+MAX_INNER_ITERATIONS_SCHEDULE = [60, 80, 100, 120, 160, 180, 220]
 
 MAX_INNER_ITERATIONS = MAX_INNER_ITERATIONS_SCHEDULE[0]
 
@@ -189,16 +189,22 @@ FORWARD_SNES_LINE_SEARCH = "bt"
 FORWARD_SNES_LINEAR_SOLVER = "mumps"
 FORWARD_SNES_RTOL = 1.0e-6
 FORWARD_SNES_ATOL = 1.0e-8
-FORWARD_SNES_MAX_ITERS = 220
+FORWARD_SNES_MAX_ITERS = 260
 
 FORWARD_SNES_ADAPTIVE_CONVECTION = True
 #FORWARD_SNES_MIN_CONVECTION_STEP = 0.03
 #FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 16
-FORWARD_SNES_MIN_CONVECTION_STEP = 0.005
-FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 40
+FORWARD_SNES_MIN_CONVECTION_STEP = 0.0025
+FORWARD_SNES_MAX_ADAPTIVE_CONVECTION_STEPS = 80
 
 
 FORWARD_SNES_STOP_AT_ACCEPT_NORM = True
+FORWARD_SNES_ACCEPT_NORM_SOLVE_FACTOR = 0.5
+
+# If one MMA update creates a design whose forward solve cannot be continued,
+# retry smaller fractions of that last design step before giving up.
+FORWARD_RETRY_BACKTRACK_DESIGN = True
+FORWARD_RETRY_BACKTRACK_FACTORS = [0.5, 0.25, 0.10, 0.05]
 
 
 FORWARD_SNES_STARTUP_CONVECTION_SCHEDULE = [

@@ -33,7 +33,7 @@ build_density_bounds, build_volume_region, build_objective_region = build_cell_t
     design_tags=(DESIGN_DOMAIN_TAG,),
 )
 
-RESUME_OPTIMIZATION = True
+RESUME_OPTIMIZATION = False
 
 L = 1.0
 N = 180
@@ -65,25 +65,29 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 OBJECTIVE_TYPE = "dissipation"
 OBJECTIVE_CONVERGENCE_TOL = 1e-6
 OBJECTIVE_STREAK_TO_STOP = 10
-RESUME_OPTIMIZATION = True
 
 # Same continuation schedule as the frozen config for consistency.
-Q_PENAL_SCHEDULE = [
-    0.01, 0.02, 0.04, 0.08,
-    0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00,
-]
-BETA_PROJ_SCHEDULE = [
-    1.0, 2.0, 4.0, 8.0,
-    8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0,
-]
-MOVE_LIMIT_SCHEDULE = [
-    0.05, 0.04, 0.03, 0.02,
-    0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010,
-]
-MAX_INNER_ITERATIONS_SCHEDULE = [
-    50, 60, 80, 100,
-    200, 180, 220, 260, 260, 220, 260, 360,
-]
+#Q_PENAL_SCHEDULE = [
+#    0.01, 0.02, 0.04, 0.08,
+#    0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00,
+#]
+#BETA_PROJ_SCHEDULE = [
+#    1.0, 2.0, 4.0, 8.0,
+#    8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0,
+#]
+#MOVE_LIMIT_SCHEDULE = [
+#    0.05, 0.04, 0.03, 0.02,
+#    0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010,
+#]
+#MAX_INNER_ITERATIONS_SCHEDULE = [
+#    50, 60, 80, 100,
+#    200, 180, 220, 260, 260, 220, 260, 360,
+#]
+
+Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
+BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
+MOVE_LIMIT_SCHEDULE = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015]
+MAX_INNER_ITERATIONS_SCHEDULE = [12, 25, 45, 80, 120, 160, 220]
 
 SNES_LINEAR_SOLVER = "mumps"
 FILTER_BASE_LENGTH = H_MAX
@@ -98,7 +102,7 @@ SNES_MAX_ITERS = 200
 BETA_PROJ_VALUE = BETA_PROJ_SCHEDULE[0]
 ETA_I = 0.50
 
-OUTLET_BC_TYPE = "velocity"
+OUTLET_BC_TYPE = "pressure"
 ENABLE_PRESSURE_PIN = True
 PRESSURE_PIN_POINT = (DOMAIN_X_MIN, DOMAIN_Y_MIN)
 
@@ -112,7 +116,14 @@ SAVE_DESIGN_FOLDER = True
 SAVE_DF0DX_CENTERED_FOLDER = False
 SAVE_DF0DX_VECTOR = True
 LOG_DF0DX_STATS = True
-RESULTS_ROOT_NAME = "Results_Laminar/Results_DiffuserYoon_LaminarTO"
+
+RESULTS_ROOT_BASE_NAME = "Results_Laminar/Results_DiffuserYoon_Laminar"
+if OUTLET_BC_TYPE == "velocity":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_VelocityOutlet"
+elif OUTLET_BC_TYPE == "pressure":
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_PressureOutlet"
+else:
+    RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
 
 MARK = {"generic": 0, "walls": 1, "inlet": 2, "outlet": 3}
 

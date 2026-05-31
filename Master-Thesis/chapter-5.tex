@@ -279,14 +279,7 @@ To handle boundary interactions near designated inlet and outlet buffers, this f
 \end{equation}
 where $\mathcal{H}$ represents the Helmholtz PDE solution operator and $M$ represents the isolated active design indicator mask. The numerator smooths the active raw design field, while the denominator renormalizes the local averaging footprint. As a result, inlet extensions, outlet buffers, and other passive regions do not artificially pull the nearby active design toward their prescribed density values. During sensitivity analysis, the transpose of this normalized filter maps objective and volume gradients back into the active DG0 design space.
 
-Figure~\ref{fig:filter_domain_schematic} illustrates this masking convention. The Helmholtz filter is applied to the active design contribution and normalized by the filtered active mask, so fixed passive-fluid cells do not dilute nearby design densities. After projection, the passive-fluid bounds are restored before the physical flow equations are assembled. The same chain is traversed in reverse when objective and volume sensitivities are mapped back to the active raw density variables.
-
-\begin{figure}[!ht]
-	\centering
-	\includegraphics[width=0.92\textwidth]{Filter-Domain-Schematic}
-	\caption{Schematic of active design cells, passive fluid cells, objective and volume masks, and the active-mask-normalized Helmholtz filtering chain. The filter concept follows the PDE-filter formulation of Lazarov and Sigmund and the regularization motivation of Bourdin \cite{Lazarov2011,Bourdin2001}.}
-	\label{fig:filter_domain_schematic}
-\end{figure}
+In practice, the Helmholtz filter is applied to the active design contribution and normalized by the filtered active mask, so fixed passive-fluid cells do not dilute nearby design densities. After projection, the passive-fluid bounds are restored before the physical flow equations are assembled. The same chain is traversed in reverse when objective and volume sensitivities are mapped back to the active raw density variables.
 
 The same Helmholtz operator is used in the reverse sensitivity chain. If $s_{\bar{\gamma}}$ denotes a cellwise derivative with respect to the bounded physical density, then the projection and bound mapping give
 \begin{equation}
@@ -332,7 +325,7 @@ Figure~\ref{fig:turbulent_to_workflow} summarizes the full optimization workflow
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=\textwidth]{Turbulent-TO-Workflow}
-	\caption{Workflow of the density-based frozen-turbulence topology optimization algorithm. The forward turbulence fields are updated in the flow loop, while the adjoint differentiates only the final frozen-viscosity residual.}
+	\caption{Algorithmic path of the density-based frozen-turbulence topology optimization loop. The forward turbulence fields are updated before the final frozen-viscosity adjoint sensitivity is assembled and passed to MMA.}
 	\label{fig:turbulent_to_workflow}
 \end{figure}
 

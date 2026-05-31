@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Fine_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Fine_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -31,7 +31,7 @@ BOUNDARY_MARKERS = {
 }
 
 
-RESTART_FROM_SAVED_STATE = True
+RESTART_FROM_SAVED_STATE = False
 
 
 # Physical parameters.
@@ -90,8 +90,8 @@ QUADRATURE_DEGREE = 4
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
 COUPLED_PICARD_MAX_STEPS = 500
-COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
-COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
+COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-5
+COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-5
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
 PRESSURE_DROP_CONVERGENCE_WINDOW = 100
 PRESSURE_DROP_CONVERGENCE_RELATIVE_TOLERANCE = 5.0e-4

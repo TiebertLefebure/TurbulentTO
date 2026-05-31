@@ -3571,6 +3571,179 @@ def final_stage_metric_target_status(stage_idx, viscous_dissipation_design_value
     )
     return all(value <= target for _label, value, target, _unit in checks), target_status
 
+
+def configured_forward_design_backtracking_factors():
+    """Return MMA-step fractions to retry when a new design breaks the flow solve."""
+    if not bool(globals().get("FORWARD_RETRY_BACKTRACK_DESIGN", False)):
+        return []
+    raw_factors = globals().get("FORWARD_RETRY_BACKTRACK_FACTORS", (0.5, 0.25, 0.1))
+    if isinstance(raw_factors, np.ndarray):
+        raw_factors = raw_factors.tolist()
+    elif not isinstance(raw_factors, (list, tuple)):
+        raw_factors = [raw_factors]
+    factors = []
+    for raw_factor in raw_factors:
+        factor = float(raw_factor)
+        if 0.0 < factor < 1.0 and factor not in factors:
+            factors.append(factor)
+    return factors
+
+
+def assign_active_density_values(active_values):
+    """Assign active MMA values into rho/xval while preserving passive cells."""
+    clipped_active = np.clip(
+        np.asarray(active_values, dtype=float).reshape((num_mma,)),
+        active_density_lower_values,
+        active_density_upper_values,
+    )
+    density_values = np.clip(rho.vector().get_local(), density_lower_values, density_upper_values)
+    density_values[ActiveDV] = clipped_active
+    rho.vector().set_local(density_values)
+    rho.vector().apply("insert")
+    xval[:, 0] = clipped_active
+    return clipped_active
+
+
+def snapshot_forward_iteration_state():
+    """Capture mutable forward/Picard fields before trying a design."""
+    return {
+        "rho": rho.vector().get_local().copy(),
+        "rho_f": rho_f.vector().get_local().copy(),
+        "w_fwd": w_fwd.vector().get_local().copy(),
+        "nu_tilde": nu_tilde_frozen.vector().get_local().copy(),
+        "sa0": sa_model.nu_tilde0.vector().get_local().copy(),
+        "sa1": sa_model.nu_tilde1.vector().get_local().copy(),
+        "xval": xval.copy(),
+    }
+
+
+def restore_forward_iteration_state(state):
+    """Restore mutable forward/Picard fields after a failed design attempt."""
+    rho.vector().set_local(state["rho"])
+    rho.vector().apply("insert")
+    rho_f.vector().set_local(state["rho_f"])
+    rho_f.vector().apply("insert")
+    w_fwd.vector().set_local(state["w_fwd"])
+    w_fwd.vector().apply("insert")
+    nu_tilde_frozen.vector().set_local(state["nu_tilde"])
+    nu_tilde_frozen.vector().apply("insert")
+    sa_model.nu_tilde0.vector().set_local(state["sa0"])
+    sa_model.nu_tilde0.vector().apply("insert")
+    sa_model.nu_tilde1.vector().set_local(state["sa1"])
+    sa_model.nu_tilde1.vector().apply("insert")
+    xval[:, :] = state["xval"]
+
+
+def run_forward_picard_and_final_flow(stage_idx, inner_count, iter_count, q_val, beta_val):
+    """Evaluate the current design through filter, wall distance, Picard SA, and final flow."""
+    solver_log("  [Filter] design density")
+    pde_filter_design_density(rho, rho_f)
+    rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
+    solver_log("  [Wall distance] update")
+    update_wall_distance_field()
+
+    if iter_count == 0:
+        solver_log("  [Warm start] Stokes-Brinkman and initial SA field")
+        initialize_forward_guess_with_stokes()
+
+    root_print("  [Forward solve]")
+    picard_steps = max(1, int(globals().get("PICARD_STEPS", 1)))
+    last_sa_clipping_stats = None
+    for picard_idx in range(picard_steps):
+        solver_log("    [Picard {}/{}] flow".format(picard_idx + 1, picard_steps))
+        solve_forward_picard("stage{:02d}_iter{:03d}_picard{:02d}".format(
+            stage_idx + 1, inner_count, picard_idx + 1,
+        ))
+        velocity_for_sa = w_fwd.sub(0, deepcopy=True)
+        sa_model.construct_forms(velocity_for_sa)
+        sa_substeps_now = sa_pseudo_time_steps if sa_pseudo_time_stabilization else 1
+        for sa_substep_idx in range(sa_substeps_now):
+            if sa_substeps_now > 1:
+                solver_log(
+                    "    [Picard {}/{}] SA transport substep {}/{}".format(
+                        picard_idx + 1,
+                        picard_steps,
+                        sa_substep_idx + 1,
+                        sa_substeps_now,
+                    )
+                )
+            else:
+                solver_log("    [Picard {}/{}] SA transport".format(picard_idx + 1, picard_steps))
+            sa_model.solve_turbulence_model()
+            sa_model.update_variables(
+                relaxation=float(globals().get("TURBULENCE_RELAXATION", 1.0))
+            )
+            nu_tilde_frozen.assign(sa_model.nu_tilde0)
+            enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
+            if picard_idx == picard_steps - 1 and sa_substep_idx == sa_substeps_now - 1:
+                last_sa_clipping_stats = update_sa_clipping_diagnostics(
+                    stage_idx,
+                    q_val,
+                    beta_val,
+                    inner_count,
+                    iter_count,
+                    picard_idx,
+                )
+            sa_model.nu_tilde0.assign(nu_tilde_frozen)
+            sa_model.nu_tilde1.assign(nu_tilde_frozen)
+
+    final_flow_solver_label = format_forward_flow_solver_name(FORWARD_FLOW_SOLVER)
+    solver_log("    [Final flow] {} with updated turbulent viscosity".format(final_flow_solver_label))
+    final_flow_result = solve_forward("stage{:02d}_iter{:03d}_final".format(
+        stage_idx + 1, inner_count,
+    ))
+    return final_flow_result, last_sa_clipping_stats
+
+
+def run_forward_with_design_backtracking(stage_idx, inner_count, iter_count, q_val, beta_val):
+    """Retry a failed forward solve with a smaller fraction of the last MMA step."""
+    entry_state = snapshot_forward_iteration_state()
+    current_active_values = xval[:, 0].copy()
+    previous_active_values = None
+    if iter_count > 0 and xold1.shape == xval.shape:
+        previous_active_values = xold1[:, 0].copy()
+
+    retry_factors = []
+    if previous_active_values is not None:
+        retry_factors = configured_forward_design_backtracking_factors()
+    attempt_factors = [1.0] + retry_factors
+    last_error = None
+
+    for attempt_idx, step_fraction in enumerate(attempt_factors):
+        if attempt_idx > 0:
+            restore_forward_iteration_state(entry_state)
+            trial_active_values = previous_active_values + step_fraction * (
+                current_active_values - previous_active_values
+            )
+            assign_active_density_values(trial_active_values)
+            root_print(
+                "  [Forward solve] retrying with {:.0f}% of the last MMA design step.".format(
+                    100.0 * step_fraction
+                )
+            )
+        try:
+            final_flow_result, last_sa_clipping_stats = run_forward_picard_and_final_flow(
+                stage_idx, inner_count, iter_count, q_val, beta_val,
+            )
+            if attempt_idx > 0:
+                root_print(
+                    "  [Forward solve] accepted backtracked design step fraction {:.3f}.".format(
+                        step_fraction
+                    )
+                )
+            return final_flow_result, last_sa_clipping_stats, step_fraction
+        except RuntimeError as exc:
+            last_error = exc
+            restore_forward_iteration_state(entry_state)
+            if attempt_idx + 1 < len(attempt_factors):
+                root_print(
+                    "  [Forward solve] failed at design step fraction {:.3f}; trying a smaller step.".format(
+                        step_fraction
+                    )
+                )
+
+    raise last_error
+
 # ===============================================================
 # Continuation and MMA optimization loop.
 # Each iteration: filter design -> update wall distance -> Picard flow/SA
@@ -3603,67 +3776,14 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             stage_idx + 1, len(Q_PENAL_SCHEDULE), inner_count, iter_count,
         ))
 
-        # --- Filtering and wall distance ---
-        solver_log("  [Filter] design density")
-        rho_f = pde_filter_design_density(rho, rho_f)
-        rho_proj_plot.vector()[:] = project(rho_effective, DensitySpace).vector()[:]
-        solver_log("  [Wall distance] update")
-        update_wall_distance_field()
-
+        # --- Forward solve: configured flow solver + frozen SA Picard updates ---
+        (
+            (final_flow_du_ipcs, final_flow_dp_ipcs),
+            last_sa_clipping_stats,
+            accepted_design_step_fraction,
+        ) = run_forward_with_design_backtracking(stage_idx, inner_count, iter_count, q_val, beta_val)
         rho_out << rho
         rhop_out << rho_proj_plot
-
-        if iter_count == 0:
-            solver_log("  [Warm start] Stokes-Brinkman and initial SA field")
-            initialize_forward_guess_with_stokes()
-
-        # --- Forward solve: configured flow solver + frozen SA Picard updates ---
-        root_print("  [Forward solve]")
-        picard_steps = max(1, int(globals().get("PICARD_STEPS", 1)))
-        last_sa_clipping_stats = None
-        for picard_idx in range(picard_steps):
-            solver_log("    [Picard {}/{}] flow".format(picard_idx + 1, picard_steps))
-            solve_forward_picard("stage{:02d}_iter{:03d}_picard{:02d}".format(
-                stage_idx + 1, inner_count, picard_idx + 1,
-            ))
-            velocity_for_sa = w_fwd.sub(0, deepcopy=True)
-            sa_model.construct_forms(velocity_for_sa)
-            sa_substeps_now = sa_pseudo_time_steps if sa_pseudo_time_stabilization else 1
-            for sa_substep_idx in range(sa_substeps_now):
-                if sa_substeps_now > 1:
-                    solver_log(
-                        "    [Picard {}/{}] SA transport substep {}/{}".format(
-                            picard_idx + 1,
-                            picard_steps,
-                            sa_substep_idx + 1,
-                            sa_substeps_now,
-                        )
-                    )
-                else:
-                    solver_log("    [Picard {}/{}] SA transport".format(picard_idx + 1, picard_steps))
-                sa_model.solve_turbulence_model()
-                sa_model.update_variables(
-                    relaxation=float(globals().get("TURBULENCE_RELAXATION", 1.0))
-                )
-                nu_tilde_frozen.assign(sa_model.nu_tilde0)
-                enforce_scalar_bounds_inplace(nu_tilde_frozen, sa_nu_tilde_floor, sa_nu_tilde_ceiling)
-                if picard_idx == picard_steps - 1 and sa_substep_idx == sa_substeps_now - 1:
-                    last_sa_clipping_stats = update_sa_clipping_diagnostics(
-                        stage_idx,
-                        q_val,
-                        beta_val,
-                        inner_count,
-                        iter_count,
-                        picard_idx,
-                    )
-                sa_model.nu_tilde0.assign(nu_tilde_frozen)
-                sa_model.nu_tilde1.assign(nu_tilde_frozen)
-
-        final_flow_solver_label = format_forward_flow_solver_name(FORWARD_FLOW_SOLVER)
-        solver_log("    [Final flow] {} with updated turbulent viscosity".format(final_flow_solver_label))
-        final_flow_du_ipcs, final_flow_dp_ipcs = solve_forward("stage{:02d}_iter{:03d}_final".format(
-            stage_idx + 1, inner_count,
-        ))
 
         # --- Adjoint solve ---
         root_print("  [Adjoint solve]")
@@ -3918,6 +4038,8 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             constraint_status_text = " " + " ".join(mass_flow_status)
         if metric_target_status:
             constraint_status_text += " " + metric_target_status
+        if accepted_design_step_fraction < 1.0:
+            constraint_status_text += " backtrack={:.3f}".format(accepted_design_step_fraction)
 
         iteration_elapsed = time.perf_counter() - iteration_start_time
         optimization_elapsed = time.perf_counter() - optimization_start_time

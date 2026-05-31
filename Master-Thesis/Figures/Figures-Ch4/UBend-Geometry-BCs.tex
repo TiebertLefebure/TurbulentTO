@@ -4,57 +4,72 @@
 \pagecolor{white}
 \begin{tikzpicture}[
   font=\sffamily\small,
-  flow/.style={-{Latex[length=2.8mm]}, line width=0.75pt, draw=blue!65!black},
+  flow/.style={-{Latex[length=2.8mm,width=1.8mm]}, line width=0.78pt, draw=blue!65!black},
   dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center}
+  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center},
+  wall/.style={black!82, line width=24pt, line cap=butt, line join=round},
+  fluid/.style={blue!6, line width=20pt, line cap=butt, line join=round}
 ]
 
-\def\r{1.75}
-\def\cx{7.4}
-\def\cy{2.75}
-\def\w{0.42}
-\def\xleft{0.85}
-\def\ytop{\cy+\r}
-\def\ybot{\cy-\r}
+\def\r{1.65}
+\def\w{0.38}
+\def\xc{3.45}
+\def\cy{1.75}
+\def\xl{\xc-\r}
+\def\xr{\xc+\r}
+\def\ytop{6.00}
 
-% Centerline path drawn as a stroked channel. The coordinate half-width \w
-% matches the outer stroke, so dimension markers sit on the pipe walls.
-\draw[black!82, line width=24pt, line cap=butt, line join=round]
-  (\xleft,\ytop) -- (\cx,\ytop) arc[start angle=90,end angle=-90,radius=\r] -- (\xleft,\ybot);
-\draw[blue!6, line width=20pt, line cap=butt, line join=round]
-  (\xleft,\ytop) -- (\cx,\ytop) arc[start angle=90,end angle=-90,radius=\r] -- (\xleft,\ybot);
+\coordinate (leftTop) at (\xl,\ytop);
+\coordinate (leftBend) at (\xl,\cy);
+\coordinate (rightBend) at (\xr,\cy);
+\coordinate (rightTop) at (\xr,\ytop);
+\coordinate (bendCenter) at (\xc,\cy);
+
+% Vertical U-bend centerline: inlet top-left, outlet top-right.
+\draw[wall] (leftTop) -- (leftBend)
+  arc[start angle=180,end angle=360,radius=\r] -- (rightTop);
+\draw[fluid] (leftTop) -- (leftBend)
+  arc[start angle=180,end angle=360,radius=\r] -- (rightTop);
 
 % Inlet and outlet planes.
-\draw[red!70!black, line width=1.1pt] (\xleft,\ytop-\w) -- (\xleft,\ytop+\w);
-\draw[red!70!black, line width=1.1pt] (\xleft,\ybot-\w) -- (\xleft,\ybot+\w);
-\node[bc, anchor=east, text width=33mm] at (\xleft-0.25,\ytop) {inlet\\$\mathbf{u}_{in}=1.42$ m/s\\$\tilde{\nu}_{in}=9.34{\times}10^{-5}$};
-\node[bc, anchor=east, text width=26mm] at (\xleft-0.25,\ybot) {outlet\\$p=0$ Pa};
+\draw[red!70!black, line width=1.15pt] (\xl-\w,\ytop) -- (\xl+\w,\ytop);
+\draw[red!70!black, line width=1.15pt] (\xr-\w,\ytop) -- (\xr+\w,\ytop);
 
-% Flow arrows along the U bend.
-\draw[flow] (1.75,\ytop) -- (3.00,\ytop);
-\draw[flow] (4.75,\ytop) -- (6.00,\ytop);
-\draw[flow] ({\cx+\r*cos(42)},{\cy+\r*sin(42)}) arc[start angle=42,end angle=-42,radius=\r];
-\draw[flow] (6.00,\ybot) -- (4.75,\ybot);
-\draw[flow] (3.00,\ybot) -- (1.75,\ybot);
+% Flow direction arrows on centerline, away from walls.
+\draw[flow] (\xl,5.45) -- (\xl,4.55);
+\draw[flow] (\xl,3.85) -- (\xl,2.95);
+\draw[flow] ({\xc+\r*cos(210)},{\cy+\r*sin(210)})
+  arc[start angle=210,end angle=330,radius=\r];
+\draw[flow] (\xr,2.95) -- (\xr,3.85);
+\draw[flow] (\xr,4.55) -- (\xr,5.45);
 
-% Radius of curvature, drawn on top of the channel with a clear label.
-\coordinate (bendcenter) at (\cx,\cy);
-\coordinate (radiuspoint) at ({\cx+\r*cos(48)},{\cy+\r*sin(48)});
-\draw[dim] (bendcenter) -- (radiuspoint);
-\node[fill=white, inner sep=1pt, anchor=south west] at ($(bendcenter)!0.53!(radiuspoint)+(0.08,0.04)$) {$R_c=0.125$ m};
-\fill[black] (bendcenter) circle (1.2pt);
+% Radius of curvature.
+\draw[dim] (bendCenter) -- node[right, fill=white, inner sep=1pt]
+  {$R_c=0.125$ m} (\xc,{\cy-\r});
+\fill[black] (bendCenter) circle (1.15pt);
 
-% Pipe diameter. Arrowheads are shortened so they remain inside the pipe walls.
-\draw[black!55, line width=0.4pt] (4.00,\ybot-\w) -- (4.35,\ybot-\w);
-\draw[black!55, line width=0.4pt] (4.00,\ybot+\w) -- (4.35,\ybot+\w);
-\draw[dim] (4.18,\ybot-\w) -- node[left, fill=white, inner sep=1pt] {$D=0.028$ m} (4.18,\ybot+\w);
+% Pipe diameter, shown near the outlet leg to avoid the straight-leg dimension.
+\draw[dim] (\xr-\w,5.55) -- node[below, fill=white, inner sep=1pt]
+  {$D=0.028$ m} (\xr+\w,5.55);
 
 % Extraction line at the start of the outlet straight section.
-\draw[black!65, dashed, line width=0.8pt] (\cx,\ybot-\w) -- (\cx,\ybot+\w);
-\node[bc, anchor=north west, text width=29mm] at (\cx+0.15,\ybot-\w-0.12) {bend-exit\\profile line $\Gamma_D$};
+\draw[black!65, dashed, line width=0.8pt] (\xr-\w,\cy) -- (\xr+\w,\cy);
+\node[bc, anchor=west, text width=29mm] at (\xr+0.70,\cy)
+  {bend-exit\\profile line $\Gamma_D$};
 
-\draw[dim] (\xleft,\ytop+0.95) -- node[above, fill=white, inner sep=1pt] {shortened straight leg, $L=30D$} (\cx,\ytop+0.95);
-\node[bc, text width=38mm] at (4.55,\cy) {no-slip walls\\wall-resolved SA\\$Re_D\approx44{,}700$\\$De\approx15{,}000$};
+% Boundary-condition labels.
+\node[bc, anchor=south east, text width=32mm] at (\xl-0.35,\ytop+0.40)
+  {inlet\\$\mathbf{u}_{in}=1.42$ m/s\\$\tilde{\nu}_{in}=9.34{\times}10^{-5}$};
+\node[bc, anchor=south west, text width=25mm] at (\xr+0.35,\ytop+0.40)
+  {outlet\\$p=0$ Pa};
+\node[bc, text width=35mm] at (\xc,3.55)
+  {no-slip walls\\wall-resolved SA\\$Re_D\approx44{,}700$\\$De\approx15{,}000$};
+
+\draw[dim] (\xl-0.92,\ytop) -- node[midway, rotate=90, above, fill=white, inner sep=1pt]
+  {shortened straight leg, $L=30D$} (\xl-0.92,\cy);
+
+\node[anchor=west, text=black!65, font=\sffamily\footnotesize] at (0.15,-0.42)
+  {Flow enters at the top left, turns through the lower bend, and exits at the top right.};
 
 \end{tikzpicture}
 \end{document}

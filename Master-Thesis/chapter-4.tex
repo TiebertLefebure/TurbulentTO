@@ -73,11 +73,13 @@ Prior to this comparative analysis, the Ansys baseline itself was verified for g
 		\caption{FEniCS SA contour for $\tilde{\nu}$}
 		\label{fig:channel_fenics_nutilde}
 	\end{subfigure}
-	\caption{Modified turbulent viscosity (SA transport variable) for the 2D channel benchmark.}
+	\caption{Comparison of the modified turbulent viscosity $\tilde{\nu}$, i.e. the Spalart-Allmaras transported working variable, for the 2D channel benchmark. Both solvers drive $\tilde{\nu}$ to zero at the no-slip walls and recover a nearly streamwise-uniform turbulent core.}
 	\label{fig:channel_benchmark_nutilde}
 \end{figure}
 
-As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation show good agreement with the Ansys Fluent baseline. For the quantitative comparison, velocity profiles are extracted from both solvers across the middle of the channel, i.e. at $x=0.5L$, with $y$ varied from the lower wall to the upper wall. The custom solver resolves the logarithmic region of the turbulent boundary layer and predicts the turbulent diffusion toward the channel center.
+As shown in Figure~\ref{fig:channel_benchmark}, the qualitative velocity contours of the custom FEniCS implementation show good agreement with the Ansys Fluent baseline. Both solvers produce a fully developed, streamwise-uniform channel field with zero velocity at the walls and a broad high-speed core around the centerline. The remaining visual differences are confined mainly to the thickness of the near-wall color bands and the exact width of the central high-velocity region, which are expected to be sensitive to mesh resolution, plotting scale, and the different finite-element and finite-volume discretizations. For the quantitative comparison, velocity profiles are extracted from both solvers across the middle of the channel, i.e. at $x=0.5L$, with $y$ varied from the lower wall to the upper wall. The custom solver resolves the logarithmic region of the turbulent boundary layer and predicts the turbulent diffusion toward the channel center.
+
+Figure~\ref{fig:channel_benchmark_nutilde} shows the corresponding modified turbulent viscosity field. The two contours have the same physical structure: $\tilde{\nu}$ is suppressed at the no-slip walls by the SA boundary condition and wall-destruction term, then rises rapidly through the buffer/log region toward an almost uniform core value. The FEniCS field is slightly smoother in the wall-normal transition, but it preserves the same symmetry and wall-to-core trend as the Ansys reference. This agreement is important because $\tilde{\nu}$, rather than velocity alone, controls the eddy-viscosity field used by the momentum equation.
 
 Because the channel is driven by a prescribed pressure difference, $\Delta p=2.0$ Pa is identical by construction and is not a useful comparison metric. The retained global metric is therefore the bulk velocity,
 \begin{equation}
@@ -140,7 +142,7 @@ To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) 
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.86\textwidth]{UBend-Geometry-BCs}
-	\caption{Schematic of the shortened 2D U-bend verification setup based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}. The profile line $\Gamma_D$ is used for the bend-exit velocity comparison.}
+	\caption{Schematic of the shortened 2D U-bend verification setup based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}. The U-bend is shown vertically: the flow enters at the top left, moves down the first straight section, turns through the lower bend, and leaves upward through the outlet leg at the top right. The profile line $\Gamma_D$ is used for the bend-exit velocity comparison.}
 	\label{fig:ubend_geometry_bcs}
 \end{figure}
 
@@ -193,11 +195,13 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 		\caption{FEniCS SA contour for $\tilde{\nu}$}
 		\label{fig:ubend_fenics_nutilde}
 	\end{subfigure}
-	\caption{Modified turbulent viscosity for the 2D U-bend benchmark.}
+	\caption{Comparison of the modified turbulent viscosity $\tilde{\nu}$ for the 2D U-bend benchmark. The fields are expected to vanish at the no-slip walls and increase in the curved core where shear, convection, and adverse pressure-gradient effects transport the SA working variable through the bend.}
 	\label{fig:ubend_verification_nutilde}
 \end{figure}
 
-As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and separation regions observed in the qualitative velocity contours demonstrate visual agreement. To provide a more robust assessment, velocity data are extracted along a cross-sectional line probe positioned at the bend exit, spanning the full pipe diameter $D=0.028$ m from the inner wall to the outer wall. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary-layer growth and the momentum shift toward the outer wall.
+As shown in Figure~\ref{fig:ubend_verification}, the global flow fields and separation regions observed in the qualitative velocity contours demonstrate visual agreement. Both solvers recover the acceleration around the inner part of the bend, the momentum redistribution toward the outer radius, and the low-speed regions associated with the no-slip boundary layers. The most relevant differences are local rather than topological: small shifts in the separated or low-momentum region and in the near-wall velocity gradients are expected because the FEniCS case is a 2D finite-element approximation of a curved internal flow, whereas the Ansys reference uses a finite-volume formulation on its own mesh. To provide a more robust assessment, velocity data are extracted along a cross-sectional line probe positioned at the bend exit, spanning the full pipe diameter $D=0.028$ m from the inner wall to the outer wall. The quantitative velocity profile computed by the custom FEniCS implementation traces the commercial Ansys results closely, adequately capturing the boundary-layer growth and the momentum shift toward the outer wall.
+
+Figure~\ref{fig:ubend_verification_nutilde} provides the companion check on the SA transport variable. The similarity sought here is not pointwise identity of every contour band, but the same physical organization: low $\tilde{\nu}$ at all walls, elevated $\tilde{\nu}$ in the bend core and downstream leg, and smooth convection of the turbulent working variable through the curved section. Differences in peak value or band thickness indicate local discrepancies in modeled turbulence production, destruction, and numerical diffusion, but the shared spatial pattern verifies that the wall-distance field and SA transport equation remain coupled to the U-bend flow in the same qualitative way as the Ansys baseline.
 
 For the U-bend, the inlet velocity is prescribed rather than produced by a fixed pressure gradient, so pressure drop remains a meaningful global comparison metric. A channel-style friction coefficient is not retained because the curved geometry does not have a single fully developed wall-shear relation equivalent to the periodic channel. In FEniCS, the pressure-drop diagnostic is evaluated from boundary-measure-weighted mean pressures on the inlet and outlet facets,
 \begin{equation}

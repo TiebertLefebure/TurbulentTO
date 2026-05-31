@@ -227,7 +227,7 @@ The residual criterion refers to all Fluent-scaled residuals, including continui
 \end{table}
 
 \subsection{Mild Curvature: The U-Bend Case}
-The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$. The Fluent setup is summarized in Figure~\ref{fig:vmfl048_geometry_bcs}: the VMFL048 case uses a velocity-profile inlet, a zero-gauge pressure outlet, no-slip pipe walls, and a symmetry boundary on one side of the 3D domain. Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$. Consistent with the moderate-curvature literature evidence, the SA model performed well under these conditions. As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model reproduce the bulk flow distribution of the SST $k-\omega$ model. The velocity profiles in the lower panel are extracted along the pipe-radius line visible on the contour plots above, linking the one-dimensional profile comparison directly to the displayed exit-plane flow field. The quantitative velocity profiles agree well with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
+The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$. The Fluent setup is summarized in Figure~\ref{fig:vmfl048_geometry_bcs}: the VMFL048 case uses a velocity-profile inlet, a zero-gauge pressure outlet, no-slip pipe walls, and a symmetry boundary on one side of the 3D domain. Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$. Consistent with the moderate-curvature literature evidence, the SA model performed well under these conditions. As shown in Figure~\ref{fig:ansys_ubend_comparison}, the qualitative velocity contours of the SA model reproduce the bulk flow distribution of the SST $k-\omega$ model. In panels~(a) and~(b), the line drawn on the exit-plane contour is the radius along which the VMFL048 velocity profiles in panel~(c) are extracted. The profile coordinate follows this radius from left to right, i.e. from the inner part of the pipe at $x/R=0$ toward the pipe wall at $x/R=1$. This links the one-dimensional profile comparison directly to the displayed exit-plane flow field. The quantitative velocity profiles agree well with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.
 
 \begin{figure}[!ht]
 	\centering
@@ -251,14 +251,14 @@ The first benchmark evaluated a 3D U-bend geometry characterized by a moderate c
 		\caption{SA contour for $u$}
 		\label{fig:ubend_sa}
 	\end{subfigure}
-	\vspace{0.5cm}
+	\vspace{0.35cm}
 	\begin{subfigure}[b]{\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL048-Velocity-SA-vs-SST}
 		\caption{Velocity profiles extracted at the bend exit}
 		\label{fig:ch2_ubend_profiles}
 	\end{subfigure}
-	\caption{Flow predictions for a $180^\circ$ U-bend ($R_c \approx 4.46D$, $Re_D \approx 44,700$, $De \approx 15,000$). The SA model matches the SST $k-\omega$ contours and aligns with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.}
+	\caption{Flow predictions for the VMFL048 U-bend. Panels~(a) and~(b) show velocity contours with the radius used for profile extraction; panel~(c) compares the resulting velocity profiles from $x/R=0$ at the inner side of the pipe to $x/R=1$ at the wall. The SA model matches the SST $k-\omega$ contours and aligns with the experimental data from Takamasa and Kondo \cite{Takamasa1995}.}
 	\label{fig:ansys_ubend_comparison}
 \end{figure}
 
@@ -277,9 +277,11 @@ The first benchmark evaluated a 3D U-bend geometry characterized by a moderate c
 		\caption{SA contour  for $\mu_t/\mu$}
 		\label{fig:ubend_mut_mu_sa}
 	\end{subfigure}
-	\caption{Turbulent viscosity ratios for the U-bend. The SA model overpredicts turbulent viscosity.}
+	\caption{Turbulent-viscosity ratio contours for the VMFL048 U-bend. Both closures place the largest $\mu_t/\mu$ values in the wall-shear-dominated part of the cross-section, while SA predicts a somewhat broader high-viscosity region.}
 	\label{fig:ansys_ubend_mut_mu}
 \end{figure}
+
+Figure~\ref{fig:ansys_ubend_mut_mu} clarifies why the VMFL048 velocity agreement is good but not model-identical. Both closures damp $\mu_t/\mu$ to low values at the no-slip wall and generate the largest eddy viscosity away from the wall where mean shear and turbulent mixing are strongest. The SA field is smoother and more diffuse than the SST $k-\omega$ field because the one-equation model ties production mainly to the local vorticity scale and the wall distance, without solving a separate turbulent kinetic energy and length-scale balance. In this moderately curved U-bend, that extra diffusivity remains spatially aligned with the main shear region, so it does not strongly distort the extracted velocity profile.
 
 
 \subsection{Strong Curvature: The $90^\circ$ Bend Case}
@@ -292,7 +294,7 @@ The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by $
 	\label{fig:vmfl030_geometry_bcs}
 \end{figure}
 
-As shown in Figure~\ref{fig:ansys_90bend_comparison}, the velocity profile at the $75^\circ$ plane along the bend demonstrates clear deterioration of the SA prediction. Driven by the tighter bend radius and stronger anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall ($y/D=0$) when compared against both the SST $k-\omega$ prediction and the experimental data from Enayet et al. \cite{Enayet1982}.
+As shown in Figure~\ref{fig:ansys_90bend_comparison}, the velocity profile at the $75^\circ$ plane along the bend demonstrates clear deterioration of the SA prediction. The profile in panel~(c) is extracted along the pipe diameter. In the contour views of panels~(a) and~(b), this diameter coincides with the left edge of the plotted cross-section, so an additional guide line cannot be drawn without hiding the contour boundary. The coordinate follows the diameter from top to bottom, with $y/D=0$ at the top and $y/D=1$ at the bottom. Driven by the tighter bend radius and stronger anisotropic centrifugal effects, the SA model over-predicts the turbulent viscosity. This causes it to over-smooth the velocity profile, failing to capture the sharp velocity gradients near the inner wall when compared against both the SST $k-\omega$ prediction and the experimental data from Enayet et al. \cite{Enayet1982}.
 
 \begin{figure}[htpb]
 	\centering
@@ -309,14 +311,14 @@ As shown in Figure~\ref{fig:ansys_90bend_comparison}, the velocity profile at th
 		\caption{SA contour for $u$}
 		\label{fig:90bend_sa}
 	\end{subfigure}
-	\vspace{0.5cm}
+	\vspace{0.35cm}
 	\begin{subfigure}[b]{\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL030-Velocity-SA-vs-SST}
-		\caption{Velocity profiles extracted at 75° along the bend}
+		\caption{Velocity profiles extracted at $75^\circ$ along the bend}
 		\label{fig:90bend_profiles}
 	\end{subfigure}
-	\caption{Flow predictions at the $75^\circ$ plane along the $90^\circ$ pipe bend ($R_c = 2.8D$, $Re_D \approx 43,000$, $De \approx 18,000$). The SA model over-smooths the velocity gradients near the inner wall, deviating from both the SST $k-\omega$ model and the experimental data from Enayet et al. \cite{Enayet1982}.}
+	\caption{Flow predictions at the $75^\circ$ plane along the VMFL030 $90^\circ$ pipe bend. Panels~(a) and~(b) show velocity contours at the profile plane; panel~(c) compares profiles extracted along the pipe diameter from $y/D=0$ at the top to $y/D=1$ at the bottom. The SA model over-smooths the velocity gradients relative to SST $k-\omega$ and the data of Enayet et al. \cite{Enayet1982}.}
 	\label{fig:ansys_90bend_comparison}
 \end{figure}
 
@@ -335,9 +337,11 @@ As shown in Figure~\ref{fig:ansys_90bend_comparison}, the velocity profile at th
 		\caption{SA contour  for $\mu_t/\mu$}
 		\label{fig:90bend_mut_mu_sa}
 	\end{subfigure}
-	\caption{Turbulent viscosity ratios for the 90° pipe bend. The SA model massively overpredicts turbulent viscosity.}
+	\caption{Turbulent-viscosity ratio contours for the VMFL030 $90^\circ$ pipe bend. Compared with SST $k-\omega$, SA predicts a much larger and more spatially uniform eddy-viscosity field across the section.}
 	\label{fig:ansys_90bend_mut_mu}
 \end{figure}
+
+The turbulent-viscosity comparison in Figure~\ref{fig:ansys_90bend_mut_mu} explains the poorer SA velocity prediction in the tighter bend. The SST $k-\omega$ result keeps the high $\mu_t/\mu$ region more localized, with a low-viscosity core where the curvature-induced redistribution is not simply equivalent to local shear production. The SA result instead produces a broad high-viscosity region with a peak several times larger than the SST $k-\omega$ scale. Physically, the strong bend curvature drives secondary motion and Reynolds-stress anisotropy, while the standard SA closure still represents turbulence through a scalar eddy viscosity based on wall distance and a modified vorticity scale. It therefore converts too much of the curved mean strain field into turbulent diffusion. This behavior is much more severe than in VMFL048: in the U-bend the SA overprediction is moderate and spatially consistent with the SST field, whereas in VMFL030 the eddy-viscosity magnitude and distribution are both wrong enough to wash out the measured velocity-gradient structure.
 
 \subsection{Sudden Expansion: The Backward-Facing Step Case}
 The third benchmark evaluates the backward-facing-step geometry introduced in Section~\ref{sec:separated_flow_without_curvature}. This case is included to expose turbulence-model sensitivity in separated internal flow, not to replace the experimental validation evidence from the Driver-Seegmiller/NASA comparisons discussed above. The geometry and boundary conditions are based on the backward-facing-step configuration from Marcib\'{a}l's master thesis and accompanying GitHub repository \cite{Marcibal2024,joove_keps}. They are shown in Figure~\ref{fig:backstep_geometry_bcs}. The flow enters a channel of height $H_\mathrm{in}=2.0$ m with a uniform inlet velocity of $U_\mathrm{in}=25$ m/s. At $x=0$, the lower wall drops by the step height $h=0.25$ m, giving an outlet height of $H_\mathrm{out}=2.25$ m. The benchmark Reynolds number is defined using the step height,
