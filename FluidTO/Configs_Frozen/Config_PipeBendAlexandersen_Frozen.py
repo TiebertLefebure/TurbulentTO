@@ -72,7 +72,7 @@ ALPHA_FLUID = 0.0
 
 # Switch this between "dissipation" (J_D) and "average_inlet_pressure" (J_p).
 # Objective-specific settings below keep both continuation paths in one config.
-OBJECTIVE_TYPE = "average_inlet_pressure"
+OBJECTIVE_TYPE = "dissipation"
 _OBJECTIVE_TYPE_NORMALIZED = OBJECTIVE_TYPE.strip().lower()
 _USE_PRESSURE_OBJECTIVE = _OBJECTIVE_TYPE_NORMALIZED in (
     "average_inlet_pressure",
@@ -142,7 +142,7 @@ SAVE_SA_CLIPPING_DIAGNOSTICS = (
 # P_con=4 are used here as the closest SA analogues: wall penalty amplitude
 # and solid-indicator exponent.
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e5
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD = [1e1, 3e1, 1e2, 1e3, 1e4, 3e4, 1e5]
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5]
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = (
     SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP
@@ -155,7 +155,7 @@ SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_SIGMA = 0.1
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e5
-SA_WALL_PENALTY_ALPHA_SCHEDULE_JD = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
+SA_WALL_PENALTY_ALPHA_SCHEDULE_JD = [1e1, 3e1, 1e2, 1e3, 1e4, 3e4, 1e5]
 SA_WALL_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5]
 SA_WALL_PENALTY_ALPHA_SCHEDULE = (
     SA_WALL_PENALTY_ALPHA_SCHEDULE_JP
@@ -165,8 +165,8 @@ SA_WALL_PENALTY_N = 3.0
 SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
-SA_WALL_DENSITY_SOURCE = "design"
-SA_WALL_SOLID_THRESHOLD = 0.50
+SA_WALL_DENSITY_SOURCE = "passive" #"design"
+SA_WALL_SOLID_THRESHOLD = 0.15 #0.50
 SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
 # ================================================================== #
