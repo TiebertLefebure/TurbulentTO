@@ -359,43 +359,49 @@ because backward-facing-step results are conventionally compared using the step 
 
 The Fluent setup mirrors the wall-resolved SA assumptions used throughout this thesis. The inlet velocity is prescribed as $\mathbf{u}=(25,0)$ m/s, the outlet pressure is fixed at $p=0$ Pa, and the no-slip walls enforce $\tilde{\nu}=0$. The inlet modified turbulent viscosity is set to $\tilde{\nu}=0.18449$ m$^2$/s, corresponding to the eddy-viscosity level used in the FEniCS backstep configuration. The important comparison quantity is the reattachment length $x_r/h$, obtained from the downstream lower-wall shear stress changing sign from negative to positive. Secondary diagnostics are the size of the recirculation zone, the pressure recovery, and the near-wall skin-friction distribution.
 
-\begin{figure}[htpb]
-	\centering
-	\begin{subfigure}[b]{0.49\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Velocity-Magnitude-SSTkomega
-		\caption{SST $k-\omega$ contour for $u$}
-		\label{fig:backstep_velocity_komega}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.49\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Velocity-Magnitude-SA
-		\caption{SA contour for $u$}
-		\label{fig:backstep_velocity_sa}
-	\end{subfigure}
-	\caption{Velocity-magnitude contours for the backward-facing-step benchmark. The contours compare the same sudden-expansion domain for SST $k-\omega$ and SA using matched contour limits, so the recirculation zone and downstream recovery can be compared directly.}
-	\label{fig:ansys_backstep_velocity_contours}
-\end{figure}
+The contour plots below should therefore be read as a model-form comparison on the same sudden-expansion geometry. The streamwise-velocity fields identify the separated low-speed region and the downstream recovery, while the turbulent-viscosity ratio shows how each closure supplies the modeled momentum diffusion that controls this recovery. The velocity contours use the exported range of each Fluent solution, whereas the turbulent-viscosity plots use a common color scale.
 
 \begin{figure}[htpb]
 	\centering
-	\begin{subfigure}[b]{0.49\textwidth}
+	\begin{subfigure}[b]{\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Turbulent-Viscosity-Ratio-SSTkomega
-		\caption{SST $k-\omega$ contour for $\mu_t/\mu$}
+		\includegraphics[width=0.98\textwidth]{Backstep-X-Velocity-SSTkomega}
+		\caption{SST $k-\omega$ contour for $u_x$.}
+		\label{fig:backstep_velocity_komega}
+	\end{subfigure}
+	\vspace{0.25cm}
+	\begin{subfigure}[b]{\textwidth}
+		\centering
+		\includegraphics[width=0.98\textwidth]{Backstep-X-Velocity-SA}
+		\caption{SA contour for $u_x$.}
+		\label{fig:backstep_velocity_sa}
+	\end{subfigure}
+	\caption{Streamwise-velocity contours for the backward-facing-step benchmark. Both closures predict a low-speed or reversed-flow region immediately downstream of the step and gradual recovery farther downstream, but the size and diffusion of this region are visibly model dependent.}
+	\label{fig:ansys_backstep_velocity_contours}
+\end{figure}
+
+Figure~\ref{fig:ansys_backstep_velocity_contours} shows that the two closures give the same qualitative flow topology: separation at the step, a recirculating near-wall region, and redevelopment downstream. The difference is in the local recovery. The SA solution gives a smoother transition from reversed flow to positive streamwise velocity, whereas the SST $k-\omega$ solution retains a more structured low-speed region near the lower wall and a sharper separated shear layer. This is the expected sensitivity for a backward-facing step: reattachment is governed by shear-layer growth and turbulent transport, so small differences in the modeled eddy viscosity can change the local velocity field even when the global recirculation pattern remains plausible.
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{\textwidth}
+		\centering
+		\includegraphics[width=0.98\textwidth]{Backstep-Turbulent-Viscosity-Ratio-SSTkomega}
+		\caption{SST $k-\omega$ contour for $\mu_t/\mu$.}
 		\label{fig:backstep_mut_mu_komega}
 	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.49\textwidth}
+	\vspace{0.25cm}
+	\begin{subfigure}[b]{\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Turbulent-Viscosity-Ratio-SA
-		\caption{SA contour for $\mu_t/\mu$}
+		\includegraphics[width=0.98\textwidth]{Backstep-Turbulent-Viscosity-Ratio-SA}
+		\caption{SA contour for $\mu_t/\mu$.}
 		\label{fig:backstep_mut_mu_sa}
 	\end{subfigure}
-	\caption{Turbulent-viscosity ratio contours for the backward-facing-step benchmark. Matched contour limits show how the two closures distribute modeled eddy viscosity in the separated shear layer, recirculation region, and redeveloping downstream boundary layer.}
+	\caption{Turbulent-viscosity-ratio contours for the backward-facing-step benchmark, plotted with a common color scale. SA produces a smoother, more moderate eddy-viscosity field, while SST $k-\omega$ gives a more stratified distribution with stronger variation between the near-wall/reverse-flow region and the outer shear-dominated flow.}
 	\label{fig:ansys_backstep_mut_mu}
 \end{figure}
+
+The turbulent-viscosity contours in Figure~\ref{fig:ansys_backstep_mut_mu} explain the velocity differences. SA is a one-equation model: it transports a modified eddy-viscosity variable and reconstructs $\mu_t$ mainly from local vorticity and wall-distance effects. Its $\mu_t/\mu$ field is therefore relatively smooth in this separated channel. SST $k-\omega$ solves separate equations for turbulent kinetic energy and specific dissipation rate, with near-wall $k-\omega$ behavior and outer-flow blending. In this case it preserves lower eddy viscosity in the immediate wall-bounded/reversed-flow region while carrying a stronger non-uniform eddy-viscosity distribution through the outer part of the channel. The resulting difference is not a numerical detail; it is the model-form sensitivity that makes backward-facing-step flow a useful warning case for SA-based topology optimization.
 
 \begin{figure}[htpb]
 	\centering

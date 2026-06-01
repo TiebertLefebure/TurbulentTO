@@ -191,12 +191,11 @@ For the $Re=5{,}000$ U-bend operating point, the inlet-port height is $0.2L$ and
 \section{Diffuser Benchmark}
 \label{sec:app_C_yoon_diffuser}
 
-The diffuser benchmark tests whether the turbulent optimizer remains advantageous when the design must diffuse a full-height inflow into a center-third outflow while minimizing the dissipation objective $J_D$. The turbulent case in Chapter~\ref{ch:benchmark_results} uses the $V_f=0.30$, $Re=3{,}000$ design from Yoon~\cite{Yoon2016}.
-The topology-level comparison and final SST $k-\omega$ performance table are reported in Section~\ref{subsec:yoon_diffuser_laminar}.
+The diffuser benchmark tests whether the turbulent optimizer remains advantageous when the design must diffuse a full-height inflow into a center-third outflow while minimizing the dissipation objective $J_D$. The final main-text comparison is reserved for the pressure-outlet diffuser variant in Section~\ref{subsec:yoon_diffuser_pressure_laminar}. The material below documents the completed velocity-outlet laminar run and should be replaced or repeated with the pressure-outlet boundary condition before it is used in the final diffuser comparison.
 
 \subsection{Laminar FEniCS Configuration Differences}
 \label{subsec:app_C_yoon_diffuser_lam_config}
-The laminar diffuser reference is a completed FEniCS topology-optimization run from \texttt{Config\_DiffuserYoon\_Laminar.py}. It reuses the turbulent diffuser setup in Tables~\ref{tab:app_B_yoon_diffuser_physical} and~\ref{tab:app_B_yoon_diffuser_numerical} wherever not stated otherwise: the square $L=1~\mathrm{m}$ domain, full-height inlet, center-third outlet, parabolic velocity profiles, $V_f=0.30$ volume constraint, dissipation objective $J_D$, Brinkman limits, mesh, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations are unchanged. Table~\ref{tab:app_C_yoon_diffuser_lam_differences} therefore lists only the laminar-specific differences.
+The existing laminar diffuser reference is a completed FEniCS topology-optimization run from \texttt{Config\_DiffuserYoon\_Laminar.py}. It reuses the velocity-outlet turbulent diffuser setup in Tables~\ref{tab:app_B_yoon_diffuser_physical} and~\ref{tab:app_B_yoon_diffuser_numerical} wherever not stated otherwise: the square $L=1~\mathrm{m}$ domain, full-height inlet, center-third outlet, parabolic inlet and outlet velocity profiles, $V_f=0.30$ volume constraint, dissipation objective $J_D$, Brinkman limits, mesh, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations are unchanged. Table~\ref{tab:app_C_yoon_diffuser_lam_differences} therefore lists only the laminar-specific differences.
 
 \begin{table}[htbp]
 	\centering
