@@ -78,6 +78,8 @@ p, q, p1, p0 = initialize_functions(Q, Constant(initial_conditions["P"]))
 sa_options = {
     "LINEAR_SOLVER": simulation_prm.get("SA_TRANSPORT_LINEAR_SOLVER", "default"),
     "LINEAR_PRECONDITIONER": simulation_prm.get("SA_TRANSPORT_LINEAR_PRECONDITIONER", "default"),
+    "SUPG_FACTOR": simulation_prm.get("SA_TRANSPORT_SUPG_FACTOR", 0.0),
+    "PSEUDO_TIME_STEP": simulation_prm.get("SA_TRANSPORT_PSEUDO_TIME_STEP", None),
 }
 turbulence_model = SpalartAllmaras(
     K,
@@ -96,7 +98,7 @@ turbulence_model.construct_forms(u0)
 F1 = (
     dot((u - u0) / dt, v) * dx
     + dot(dot(u0, nabla_grad(u)), v) * dx
-    + inner((nu + turbulence_model.nu_t) * grad(u), grad(v)) * dx
+    + inner(2.0 * (nu + turbulence_model.nu_t) * sym(grad(u)), sym(grad(v))) * dx
     + dot(grad(p0), v) * dx
     - dot(force, v) * dx
 )

@@ -559,6 +559,7 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     newton_atol=1.0e-10,
     newton_max_iters=80,
     newton_relax=0.5,
+    newton_report=False,
     custom_dx=None,
 ):
     '''
@@ -592,7 +593,7 @@ def calculate_relaxed_wall_distance_field_yoon_eq19(
     )
     problem = NonlinearVariationalProblem(F, G, bcs=wall_bcs, J=derivative(F, G))
     solver = NonlinearVariationalSolver(problem)
-    solver.parameters["newton_solver"]["report"] = False
+    solver.parameters["newton_solver"]["report"] = bool(newton_report)
     solver.parameters["newton_solver"]["relative_tolerance"] = float(newton_rtol)
     solver.parameters["newton_solver"]["absolute_tolerance"] = float(newton_atol)
     solver.parameters["newton_solver"]["maximum_iterations"] = int(newton_max_iters)
@@ -620,6 +621,7 @@ def calculate_Distance_field(
     newton_atol=1.0e-10,
     newton_max_iters=80,
     newton_relax=0.5,
+    newton_report=False,
     custom_dx=None,
 ):
     '''computes distance to boundaries specified by wall_index on mf'''
@@ -638,6 +640,7 @@ def calculate_Distance_field(
             newton_atol=newton_atol,
             newton_max_iters=newton_max_iters,
             newton_relax=newton_relax,
+            newton_report=newton_report,
             custom_dx=custom_dx,
         )
     if method_normalized in {'originaleikonal', 'eikonal'}:

@@ -98,6 +98,14 @@ SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
 SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
+# Stabilize the advection-dominated SA working-variable transport in bend TO
+# cases. Keep pseudo-time damping disabled unless nu_tilde still spikes.
+SA_SUPG_STABILIZATION = True
+SA_SUPG_TAU_SCALE = 1.0
+SA_PSEUDO_TIME_STABILIZATION = False
+SA_PSEUDO_DT = 5.0e-2
+SA_PSEUDO_TIME_STEPS = 2
+
 SAVE_SA_CLIPPING_DIAGNOSTICS = False
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
@@ -300,7 +308,7 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ENABLE_PRESSURE_PIN = False
 SAVE_DILGEN_PAPER_DATA = False
 LOG_DILGEN_FIG8_COLUMNS = False
-SAVE_DF0DX_VECTOR = True
+SAVE_DF0DX_VECTOR = False
 SAVE_IPCS_RESIDUAL_PLOTS = False
 SAVE_IPCS_RESIDUAL_SVGS = False
 

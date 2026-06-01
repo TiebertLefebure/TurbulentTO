@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Fine_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Fine_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -30,8 +30,6 @@ BOUNDARY_MARKERS = {
     "WALLS": [4],
 }
 
-
-RESTART_FROM_SAVED_STATE = False
 
 
 # Physical parameters.
@@ -139,12 +137,18 @@ FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER = "ilu"
 SA_TRANSPORT_LINEAR_SOLVER = "default"
 SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 
+SA_TRANSPORT_SUPG_FACTOR = 1.0
+SA_TRANSPORT_PSEUDO_TIME_STEP = 5.0e-2
+
 # Restart controls. With RESTART_REQUIRE_FILES=False, the first run in a new
 # result directory starts from the initial condition; later runs resume once
-# checkpoint HDF5 files exist.
-RESTART_REQUIRE_FILES = False
+# checkpoint HDF5 files exist. 
+RESTART_REQUIRE_FILES = True
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 RESTART_PREFER_LATEST_CHECKPOINT = True
+
+RESTART_FROM_SAVED_STATE = True
+RESTART_CHECKPOINT_DIRECTORY = None
 
 # G-equation wall-distance parameters.
 WALL_DISTANCE_SIGMA_W = 0.1
@@ -157,6 +161,8 @@ WALL_DISTANCE_NEWTON_RELAXATION = 0.5
 
 PLOT_RESULTS = False
 SAVE_RESULTS = True
+
+
 
 # Solver-facing dictionaries used by the steady simulation script.
 mesh_files = {
@@ -230,10 +236,13 @@ steady_sa_solver_parameters = {
     "FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER": FLOW_IPCS_CORRECTION_LINEAR_PRECONDITIONER,
     "SA_TRANSPORT_LINEAR_SOLVER": SA_TRANSPORT_LINEAR_SOLVER,
     "SA_TRANSPORT_LINEAR_PRECONDITIONER": SA_TRANSPORT_LINEAR_PRECONDITIONER,
+    "SA_TRANSPORT_SUPG_FACTOR": SA_TRANSPORT_SUPG_FACTOR,
+    "SA_TRANSPORT_PSEUDO_TIME_STEP": SA_TRANSPORT_PSEUDO_TIME_STEP,
     "RESTART_FROM_SAVED_STATE": RESTART_FROM_SAVED_STATE,
     "RESTART_REQUIRE_FILES": RESTART_REQUIRE_FILES,
     "RESTART_H5_DIRECTORY": RESTART_H5_DIRECTORY,
     "RESTART_PREFER_LATEST_CHECKPOINT": RESTART_PREFER_LATEST_CHECKPOINT,
+    "RESTART_CHECKPOINT_DIRECTORY": RESTART_CHECKPOINT_DIRECTORY,
 }
 
 saving_directory = {

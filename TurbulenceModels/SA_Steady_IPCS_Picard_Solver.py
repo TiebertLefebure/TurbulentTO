@@ -46,6 +46,38 @@ def relative_vector_diff(f1, f0):
     return np.sqrt(diff_sq) / max(np.sqrt(norm_sq), 1.0e-12)
 
 
+def global_vector_min_max(field):
+    local_values = field.vector().get_local()
+    if local_values.size:
+        local_min = float(np.min(local_values))
+        local_max = float(np.max(local_values))
+    else:
+        local_min = np.inf
+        local_max = -np.inf
+    global_min = MPI4PY.COMM_WORLD.allreduce(local_min, op=MPI4PY.MIN)
+    global_max = MPI4PY.COMM_WORLD.allreduce(local_max, op=MPI4PY.MAX)
+    return float(global_min), float(global_max)
+
+
+def global_velocity_magnitude_min_max(velocity):
+    mesh = velocity.function_space().mesh()
+    value_size = int(np.prod(velocity.ufl_shape)) if velocity.ufl_shape else 1
+    local_values = velocity.compute_vertex_values(mesh)
+
+    if value_size > 0 and local_values.size >= value_size and local_values.size % value_size == 0:
+        component_values = local_values.reshape((value_size, -1))
+        magnitude_values = np.sqrt(np.sum(component_values**2, axis=0))
+        local_min = float(np.min(magnitude_values))
+        local_max = float(np.max(magnitude_values))
+    else:
+        local_min = np.inf
+        local_max = -np.inf
+
+    global_min = MPI4PY.COMM_WORLD.allreduce(local_min, op=MPI4PY.MIN)
+    global_max = MPI4PY.COMM_WORLD.allreduce(local_max, op=MPI4PY.MAX)
+    return float(global_min), float(global_max)
+
+
 def as_list(value):
     if value is None:
         return []
@@ -418,6 +450,9 @@ def run_steady_sa_ipcs_picard(
             return False
 
         restart_dir = simulation_prm.get("RESTART_H5_DIRECTORY", saving_directory.get("H5_FILES"))
+        explicit_restart_dir = simulation_prm.get("RESTART_CHECKPOINT_DIRECTORY", None)
+        if explicit_restart_dir not in (None, ""):
+            restart_dir = explicit_restart_dir
         if restart_dir in (None, ""):
             message = "Restart skipped: no HDF5 restart directory configured."
             if bool(simulation_prm.get("RESTART_REQUIRE_FILES", False)):
@@ -432,7 +467,7 @@ def run_steady_sa_ipcs_picard(
                 "nu_tilde": os.path.join(directory, "nu_tilde.h5"),
             }
 
-        if bool(simulation_prm.get("RESTART_PREFER_LATEST_CHECKPOINT", True)):
+        if explicit_restart_dir in (None, "") and bool(simulation_prm.get("RESTART_PREFER_LATEST_CHECKPOINT", True)):
             latest_restart_dir = os.path.join(restart_dir, checkpoint_latest_dir_name)
             latest_restart_files = restart_files_for(latest_restart_dir)
             if all(os.path.exists(path) for path in latest_restart_files.values()):
@@ -754,6 +789,8 @@ def run_steady_sa_ipcs_picard(
         residuals["nu_tilde"].append(float(picard_errors[2]))
         residuals["flow_u"].append(float(flow_du))
         residuals["flow_p"].append(float(flow_dp))
+        nu_tilde_min, nu_tilde_max = global_vector_min_max(turbulence_model.nu_tilde0)
+        u_min, u_max = global_velocity_magnitude_min_max(u0)
         pressure_drop = None
         if pressure_drop_evaluator is not None:
             pressure_drop = pressure_drop_evaluator(p0)
@@ -813,6 +850,14 @@ def run_steady_sa_ipcs_picard(
                     flow_du,
                     flow_dp,
                 )
+            )
+            picard_message += "; nu_tilde_min={:.3e}, nu_tilde_max={:.3e}".format(
+                nu_tilde_min,
+                nu_tilde_max,
+            )
+            picard_message += "; u_min={:.3e}, u_max={:.3e}".format(
+                u_min,
+                u_max,
             )
             if pressure_drop is not None:
                 picard_message += "; {}={:.6e} {}".format(

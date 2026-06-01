@@ -15,6 +15,8 @@ To verify the fundamental correctness of the custom fluid and turbulence solvers
 
 The velocity field ($\mathbf{u}$) and Spalart-Allmaras working variable ($\tilde{\nu}$) were constrained periodically between the streamwise boundaries, while the top and bottom boundaries were treated as standard no-slip walls ($\mathbf{u} = 0, \tilde{\nu} = 0$). Flow was driven entirely by a fixed pressure drop from the upstream plane ($p=2$ Pa) to the downstream plane ($p=0$ Pa). Based on a reference bulk velocity of $U_{\mathrm{ref}}=18.5$ m/s and using the full channel height ($H=2.0$ m) as the characteristic length scale, the solver was targeted to resolve a fully turbulent flow regime at a channel Reynolds number of $Re_H \approx 20{,}300$. The complete definition of the geometric, physical, and boundary-condition parameters is provided in Table~\ref{tab:app_A_channel_physical} of Section~\ref{subsec:app_A_channel_physical} in Appendix~\ref{app:A_baseline_configurations}.
 
+The same finite-element implementation choices are used for both verification benchmarks: the momentum equation is assembled with the symmetric effective-viscosity stress form, while SUPG stabilization is restricted to the SA working-variable transport equation.
+
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.88\textwidth]{Channel-Geometry-BCs}
@@ -139,10 +141,12 @@ The verification used a 2D geometry corresponding to the symmetry mid-plane of t
 
 To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the domain is 2D, the 3D physical pipe diameter ($D = 0.028$ m) and radius of curvature ($R_c = 0.125$ m) were retained as the characteristic length scales. This preserves the target Reynolds number ($Re_D \approx 44{,}700$) and Dean number ($De \approx 15{,}000$) of the 3D Ansys reference case. The physical setup and boundary conditions are listed in Table~\ref{tab:app_A_ubend_physical} of Section~\ref{subsec:app_A_ubend_physical} in Appendix~\ref{app:A_baseline_configurations}.
 
+The U-bend is significantly more convection dominated than the periodic channel benchmark, but it uses the same SA-transport SUPG stabilization described in Chapter~\ref{ch:fenics_implementation}. This stabilization is applied only to the transported working variable $\tilde{\nu}$; no additional SUPG term is introduced in the momentum equation.
+
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.86\textwidth]{UBend-Geometry-BCs}
-	\caption{Schematic of the shortened 2D U-bend verification setup based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}. The U-bend is shown vertically: the flow enters at the top left, moves down the first straight section, turns through the lower bend, and leaves upward through the outlet leg at the top right. The profile line $\Gamma_D$ is used for the bend-exit velocity comparison.}
+	\caption{Schematic of the shortened 2D U-bend verification setup based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}. The profile line $\Gamma_D$ is used for the bend-exit velocity comparison.}
 	\label{fig:ubend_geometry_bcs}
 \end{figure}
 
@@ -166,14 +170,14 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{example-image}
-		\caption{FEniCS SA contour for $u$.}
+		\caption{FEniCS SA contour for $u$}
 		\label{fig:ubend_fenics}
 	\end{subfigure}
 	\vspace{0.5cm}
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{example-image}
-		\caption{Velocity profiles extracted at the bend exit.}
+		\caption{Velocity profiles extracted at the bend exit}
 		\label{fig:ubend_profiles}
 	\end{subfigure}
 	\caption{Verification of the 2D U-bend flow ($Re_D \approx 44{,}700$, $De \approx 15{,}000$). The comparison includes qualitative velocity contours from Ansys Fluent and FEniCS, showing separation characteristics, plus quantitative velocity profiles extracted at the bend exit across the pipe diameter $D=0.028$ m.}

@@ -414,11 +414,13 @@ filter_work = Function(DensitySpace)
 active_design_indicator = Function(DensitySpace)
 filter_denominator = Function(DensitySpace)
 n = FacetNormal(mesh)
+cell_measure_values = np.maximum(assemble(cell_integral_test * dx).get_local(), 1.0e-300)
 
 
-def assemble_cell_integral_field(integrand, target, name):
-    """Store one DG0 value per cell equal to the integral over that cell."""
-    target.vector().set_local(assemble(integrand * cell_integral_test * dx).get_local())
+def assemble_cell_average_field(integrand, target, name):
+    """Store one DG0 value per cell equal to the cell-average integrand."""
+    cell_integrals = assemble(integrand * cell_integral_test * dx).get_local()
+    target.vector().set_local(cell_integrals / cell_measure_values)
     target.vector().apply("insert")
     target.rename(name, name)
     return target
@@ -572,6 +574,17 @@ lagrangian_form = ObjFunctional + state_form
 
 forward_form = derivative(state_form, w_adj, TestFunction(FlowSpace))
 adjoint_form = derivative(lagrangian_form, w_fwd, TestFunction(FlowSpaceAdj))
+_w_adj_trial = TrialFunction(FlowSpaceAdj)
+(_v_adj_trial, _q_adj_trial) = split(_w_adj_trial)
+_adjoint_linear_lagrangian = (
+    ObjFunctional
+    + build_state_form(u, p, _v_adj_trial, _q_adj_trial, rho_effective, dx)
+)
+adjoint_linear_form = derivative(
+    _adjoint_linear_lagrangian,
+    w_fwd,
+    TestFunction(FlowSpaceAdj),
+)
 
 ddx = derivative(lagrangian_form, rho_f)
 vol_constraint = VolumeRegion * rho_effective * dx - VolumeRegion * VOL_FRAC * dx
@@ -976,18 +989,41 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         # Adjoint solve
         root_print("  [Adjoint solve]")
-        jac_adj = derivative(adjoint_form, w_adj)
-        problem_adj = NonlinearVariationalProblem(adjoint_form, w_adj, bc_NS_adj, jac_adj)
-        solver_adj = NonlinearVariationalSolver(problem_adj)
-        solver_adj.parameters["nonlinear_solver"] = "snes"
-        solver_adj.parameters["snes_solver"]["linear_solver"] = SNES_LINEAR_SOLVER
-        solver_adj.parameters["snes_solver"]["method"] = "newtonls"
-        solver_adj.parameters["snes_solver"]["line_search"] = "bt"
-        solver_adj.parameters["snes_solver"]["relative_tolerance"] = ADJOINT_SNES_RTOL
-        solver_adj.parameters["snes_solver"]["absolute_tolerance"] = ADJOINT_SNES_ATOL
-        solver_adj.parameters["snes_solver"]["maximum_iterations"] = SNES_MAX_ITERS
-        solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = False
-        solver_adj.solve()
+        adjoint_solver_type = str(globals().get("ADJOINT_SOLVER", "linear")).strip().lower()
+        if adjoint_solver_type == "linear":
+            solve(
+                lhs(adjoint_linear_form) == rhs(adjoint_linear_form),
+                w_adj,
+                bc_NS_adj,
+                solver_parameters={
+                    "linear_solver": globals().get(
+                        "ADJOINT_LINEAR_SOLVER", SNES_LINEAR_SOLVER
+                    )
+                },
+            )
+        elif adjoint_solver_type == "snes":
+            jac_adj = derivative(adjoint_form, w_adj)
+            problem_adj = NonlinearVariationalProblem(adjoint_form, w_adj, bc_NS_adj, jac_adj)
+            solver_adj = NonlinearVariationalSolver(problem_adj)
+            solver_adj.parameters["nonlinear_solver"] = "snes"
+            solver_adj.parameters["snes_solver"]["linear_solver"] = globals().get(
+                "ADJOINT_SNES_LINEAR_SOLVER", SNES_LINEAR_SOLVER
+            )
+            adjoint_method = globals().get("ADJOINT_SNES_METHOD", "newtonls")
+            solver_adj.parameters["snes_solver"]["method"] = adjoint_method
+            if adjoint_method == "newtonls":
+                solver_adj.parameters["snes_solver"]["line_search"] = globals().get(
+                    "ADJOINT_SNES_LINE_SEARCH", "bt"
+                )
+            solver_adj.parameters["snes_solver"]["relative_tolerance"] = ADJOINT_SNES_RTOL
+            solver_adj.parameters["snes_solver"]["absolute_tolerance"] = ADJOINT_SNES_ATOL
+            solver_adj.parameters["snes_solver"]["maximum_iterations"] = int(
+                globals().get("ADJOINT_SNES_MAX_ITERS", globals().get("SNES_MAX_ITERS", SNES_MAX_ITERS))
+            )
+            solver_adj.parameters["snes_solver"]["error_on_nonconvergence"] = False
+            solver_adj.solve()
+        else:
+            raise ValueError("ADJOINT_SOLVER must be either 'linear' or 'snes'.")
 
         if u_out is not None:
             u_out << w_fwd.sub(0)
@@ -1009,12 +1045,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         if save_cellwise_dissipation_fields:
-            j_d_out << assemble_cell_integral_field(
+            j_d_out << assemble_cell_average_field(
                 J_D_integrand,
                 j_d_per_cell_plot,
                 "J_D",
             )
-            viscous_dissipation_out << assemble_cell_integral_field(
+            viscous_dissipation_out << assemble_cell_average_field(
                 viscous_dissipation_integrand,
                 viscous_dissipation_per_cell_plot,
                 "viscous_dissipation",

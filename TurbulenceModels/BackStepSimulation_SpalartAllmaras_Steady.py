@@ -520,6 +520,7 @@ y = calculate_Distance_field(
     newton_atol=WALL_DISTANCE_YOON_NEWTON_ATOL,
     newton_max_iters=WALL_DISTANCE_YOON_NEWTON_MAX_ITERATIONS,
     newton_relax=WALL_DISTANCE_YOON_NEWTON_RELAXATION,
+    newton_report=WALL_DISTANCE_YOON_NEWTON_REPORT,
     custom_dx=dx,
 )
 
@@ -531,6 +532,8 @@ p, q, p1, p0 = initialize_functions(Q, Constant(initial_conditions["P"]))
 sa_options = {
     "LINEAR_SOLVER": simulation_prm.get("SA_TRANSPORT_LINEAR_SOLVER", "default"),
     "LINEAR_PRECONDITIONER": simulation_prm.get("SA_TRANSPORT_LINEAR_PRECONDITIONER", "default"),
+    "SUPG_FACTOR": simulation_prm.get("SA_TRANSPORT_SUPG_FACTOR", 0.0),
+    "PSEUDO_TIME_STEP": simulation_prm.get("SA_TRANSPORT_PSEUDO_TIME_STEP", None),
 }
 turbulence_model = SpalartAllmaras(
     K,
@@ -568,6 +571,8 @@ if IS_ROOT:
     print("  Target first-layer height for y+ ~= 1: {:.6e} m".format(TARGET_FIRST_LAYER_HEIGHT))
     print("  Inlet nu_tilde: {:.6e}".format(INLET_NU_TILDE))
     print("  Inlet eddy-viscosity ratio estimate: {:.6e}".format(INLET_EDDY_VISCOSITY_RATIO))
+    print("  SA transport SUPG factor: {}".format(sa_options["SUPG_FACTOR"]))
+    print("  SA transport pseudo-time step: {}".format(sa_options["PSEUDO_TIME_STEP"]))
     print("  Wall-distance method: {}".format(WALL_DISTANCE_METHOD))
     print("  Symmetry/slip boundary: normal velocity fixed, nu_tilde natural")
 

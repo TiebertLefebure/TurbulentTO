@@ -124,6 +124,8 @@ In the Picard-linearized finite-element solve, the topology penalty enters as an
 \end{equation}
 This weak form makes the artificial solid damping explicit: as $\bar{\gamma}$ approaches zero, the reaction term forces the SA working variable toward zero in the same cells where the Brinkman term suppresses velocity.
 
+Because the evolving topology can create sharp local changes in velocity, wall distance, and turbulence damping, the topology-optimization implementation keeps SUPG stabilization enabled for the SA working-variable transport equation. As in the verification solver, this stabilization is restricted to the $\tilde{\nu}$ transport solve and is not added to the momentum equation. Its role is numerical: it suppresses element-scale oscillations and overshoots in the convected SA working variable during Picard updates, while leaving the Spalart-Allmaras closure terms and the frozen-turbulence adjoint residual unchanged.
+
 \subsection{Reciprocal Penalized Wall-Distance Equation}
 The Spalart-Allmaras model is highly sensitive to the wall distance, $y$. While differential equations for wall distance computation are well-established \cite{Tucker2003}, topology optimization introduces a unique challenge. The location of the wall is not only a static mesh boundary, but also the dynamically evolving $\bar{\gamma} = 0$ contour. Therefore, the relaxed Eikonal equation must be penalized to dynamically recognize fictitious solid as a physical boundary \cite{Yoon2016}:
 \begin{equation}

@@ -456,11 +456,16 @@ rho_f.rename("rho_filtered", "rho_filtered")
 rho_proj_plot.rename("rho_projected", "rho_projected")
 j_d_per_cell_plot.rename("J_D", "J_D")
 viscous_dissipation_per_cell_plot.rename("viscous_dissipation", "viscous_dissipation")
+cell_measure_values = None
 
 
-def assemble_cell_integral_field(integrand, target, name):
-    """Store one DG0 value per cell equal to the integral over that cell."""
-    target.vector().set_local(assemble(integrand * cell_integral_test * dx).get_local())
+def assemble_cell_average_field(integrand, target, name):
+    """Store one DG0 value per cell equal to the cell-average integrand."""
+    global cell_measure_values
+    if cell_measure_values is None:
+        cell_measure_values = np.maximum(assemble(cell_integral_test * dx).get_local(), 1.0e-300)
+    cell_integrals = assemble(integrand * cell_integral_test * dx).get_local()
+    target.vector().set_local(cell_integrals / cell_measure_values)
     target.vector().apply("insert")
     target.rename(name, name)
     return target
@@ -3818,12 +3823,12 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         viscous_dissipation_nondesign_now = assemble(ViscousDissipationNondesignFunctional)
         viscous_dissipation_design_now = assemble(ViscousDissipationFunctional)
         if save_cellwise_dissipation_fields:
-            j_d_out << assemble_cell_integral_field(
+            j_d_out << assemble_cell_average_field(
                 J_D_integrand,
                 j_d_per_cell_plot,
                 "J_D",
             )
-            viscous_dissipation_out << assemble_cell_integral_field(
+            viscous_dissipation_out << assemble_cell_average_field(
                 viscous_dissipation_integrand,
                 viscous_dissipation_per_cell_plot,
                 "viscous_dissipation",

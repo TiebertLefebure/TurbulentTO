@@ -109,19 +109,19 @@ REPORT_FINAL_METRIC_TARGETS = True
 # into progressively stronger Brinkman/projection continuation.
 Q_PENAL_SCHEDULE = [
     0.01, 0.02, 0.04, 0.08,
-    0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00,
-]
+    0.08, 0.12, 0.20, 0.35,
+    ]
 BETA_PROJ_SCHEDULE = [
     1.0, 2.0, 4.0, 8.0,
-    8.0, 12.0, 16.0, 32.0, 64.0, 96.0, 128.0, 128.0,
+    8.0, 12.0, 16.0, 32.0,
 ]
 MOVE_LIMIT_SCHEDULE = [
     0.05, 0.04, 0.03, 0.02,
-    0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010,
+    0.012, 0.010, 0.0075, 0.005,
 ]
 MAX_INNER_ITERATIONS_SCHEDULE = [
     50, 60, 80, 100,
-    200, 180, 220, 260, 260, 220, 260, 360,
+    200, 180, 220, 260,
 ]
 
 # Thesis-standard solver path: use the same projection/filter continuation as

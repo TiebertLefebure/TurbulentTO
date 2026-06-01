@@ -166,11 +166,11 @@ This distinction is important for topology optimization: a design with local sep
 		\caption{SST $k-\omega$ velocity profiles.}
 		\label{fig:backstep_sst_u_tmr}
 	\end{subfigure}
-	\caption{NASA Turbulence Modeling Resource comparison of SA and SST $k-\omega$ predictions with the Driver-Seegmiller backward-facing-step experiment at $Re_H \approx 36{,}000$ \cite{DriverSeegmiller1985,NasaBackstepTMR}. The skin-friction plots give the reattachment behavior, while the velocity profiles show the separated-flow recovery downstream of the step.}
+	\caption{NASA Turbulence Modeling Resource comparison of SA and SST $k-\omega$ predictions with the Driver-Seegmiller backward-facing-step experiment at $Re_H \approx 36{,}000$ \cite{DriverSeegmiller1985,NasaBackstepTMR}. The skin-friction plots give the reattachment behavior, while the velocity profiles show the separated-flow recovery downstream of the step. The velocity-profile comparison indicates better agreement for SST $k-\omega$ than for SA.}
 	\label{fig:backstep_sa_sst_tmr}
 \end{figure}
 
-The Driver and Seegmiller backward-facing-step experiment is a canonical validation case for this type of separated internal flow \cite{DriverSeegmiller1985}. The NASA Turbulence Modeling Resource comparison in Figure~\ref{fig:backstep_sa_sst_tmr} reports an experimental reattachment length of $x_r/h = 6.26 \pm 0.10$. Representative SA computations predict reattachment near $x_r/h \approx 6.1$, while the SST $k-\omega$ results reported by NASA as SSTm predict reattachment near $x_r/h \approx 6.5$ \cite{NasaBackstepTMR}. This means that SA does not simply fail for the global reattachment metric; it is comparable to SST $k-\omega$ for this integral quantity. The distinction is more subtle: both closures show visible differences from the measured skin-friction and velocity recovery, and the NASA SST case is reported as quasi-steady rather than cleanly steady on the refined grid. The backward-facing step is therefore best interpreted as a separated-flow validity check rather than proof that either SA or SST $k-\omega$ is generally reliable for all separated internal flows.
+The Driver and Seegmiller backward-facing-step experiment is a canonical validation case for this type of separated internal flow \cite{DriverSeegmiller1985}. The NASA Turbulence Modeling Resource comparison in Figure~\ref{fig:backstep_sa_sst_tmr} reports an experimental reattachment length of $x_r/h = 6.26 \pm 0.10$. Representative SA computations predict reattachment near $x_r/h \approx 6.1$, while the SST $k-\omega$ results reported by NASA as SSTm predict reattachment near $x_r/h \approx 6.5$ \cite{NasaBackstepTMR}. Judged only by this single integral metric, SA does not simply fail: it predicts a comparable reattachment length. However, panels~(c) and~(d) show that this agreement is not enough. The streamwise velocity profiles reveal a stronger model-form error for SA in the separated-flow recovery, while SST $k-\omega$ follows the measured profiles more closely. This is the more relevant evidence for the present thesis, because topology optimization is sensitive to local velocity recovery, wall shear, and loss generation, not only to the approximate reattachment point. The backward-facing-step validation therefore supports a deliberately cautious conclusion: separated internal flows are strongly turbulence-model dependent, and SA is less reliable than SST $k-\omega$ for the local separated-flow structure even when the global reattachment length appears reasonable.
 
 \section{Benchmark Studies in Ansys Fluent}
 \label{sec:ansys_benchmarks}
@@ -359,11 +359,84 @@ because backward-facing-step results are conventionally compared using the step 
 
 The Fluent setup mirrors the wall-resolved SA assumptions used throughout this thesis. The inlet velocity is prescribed as $\mathbf{u}=(25,0)$ m/s, the outlet pressure is fixed at $p=0$ Pa, and the no-slip walls enforce $\tilde{\nu}=0$. The inlet modified turbulent viscosity is set to $\tilde{\nu}=0.18449$ m$^2$/s, corresponding to the eddy-viscosity level used in the FEniCS backstep configuration. The important comparison quantity is the reattachment length $x_r/h$, obtained from the downstream lower-wall shear stress changing sign from negative to positive. Secondary diagnostics are the size of the recirculation zone, the pressure recovery, and the near-wall skin-friction distribution.
 
-This case is interpreted differently from the bend benchmarks. Without a direct comparison to the Driver-Seegmiller experimental data for the exact mesh, inlet condition, and domain definition used here, the Fluent results cannot prove that either turbulence model is correct. Their purpose is narrower: SA and SST $k-\omega$ are run on the same wall-resolved sudden-expansion geometry to quantify model-form sensitivity in the predicted reattachment length, recirculation zone, velocity recovery, and pressure recovery. The grid-sensitivity study in Appendix~\ref{subsec:app_A_backstep_mesh_ansys} shows that the SA reattachment length remains sensitive to grid refinement, so the final SA--SST comparison is made using the finest converged mesh available for each closure rather than being presented as a strict mesh-independent validation. Agreement between the two closures would indicate that the selected global quantities are not strongly closure-dependent for this configuration. A clear mismatch would not invalidate the FEniCS implementation by itself; it would show that the separated-flow prediction is turbulence-model sensitive and that SA results for topology-optimized geometries containing local separation must be interpreted with caution.
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Velocity-Magnitude-SSTkomega
+		\caption{SST $k-\omega$ contour for $u$}
+		\label{fig:backstep_velocity_komega}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Velocity-Magnitude-SA
+		\caption{SA contour for $u$}
+		\label{fig:backstep_velocity_sa}
+	\end{subfigure}
+	\caption{Velocity-magnitude contours for the backward-facing-step benchmark. The contours compare the same sudden-expansion domain for SST $k-\omega$ and SA using matched contour limits, so the recirculation zone and downstream recovery can be compared directly.}
+	\label{fig:ansys_backstep_velocity_contours}
+\end{figure}
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Turbulent-Viscosity-Ratio-SSTkomega
+		\caption{SST $k-\omega$ contour for $\mu_t/\mu$}
+		\label{fig:backstep_mut_mu_komega}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{example-image} % Replace with BackStep-Turbulent-Viscosity-Ratio-SA
+		\caption{SA contour for $\mu_t/\mu$}
+		\label{fig:backstep_mut_mu_sa}
+	\end{subfigure}
+	\caption{Turbulent-viscosity ratio contours for the backward-facing-step benchmark. Matched contour limits show how the two closures distribute modeled eddy viscosity in the separated shear layer, recirculation region, and redeveloping downstream boundary layer.}
+	\label{fig:ansys_backstep_mut_mu}
+\end{figure}
+
+\begin{figure}[htpb]
+	\centering
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Backstep-Velocity-xh1}
+		\caption{$x/h=1$}
+		\label{fig:backstep_velocity_xh1}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Backstep-Velocity-xh4}
+		\caption{$x/h=4$}
+		\label{fig:backstep_velocity_xh4}
+	\end{subfigure}
+	\vspace{0.25cm}
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Backstep-Velocity-xh6}
+		\caption{$x/h=6$}
+		\label{fig:backstep_velocity_xh6}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.49\textwidth}
+		\centering
+		\includegraphics[width=\textwidth]{Backstep-Velocity-xh10}
+		\caption{$x/h=10$}
+		\label{fig:backstep_velocity_xh10}
+	\end{subfigure}
+	\caption{Normalized streamwise velocity profiles for the backward-facing-step benchmark at four downstream stations. The comparison isolates model-form sensitivity by running SA and SST $k-\omega$ on the same sudden-expansion geometry and boundary conditions.}
+	\label{fig:backstep_velocity_profiles}
+\end{figure}
+
+Figures~\ref{fig:ansys_backstep_velocity_contours} and~\ref{fig:ansys_backstep_mut_mu} provide the full-field contour comparison, while Figure~\ref{fig:backstep_velocity_profiles} shows why this benchmark was included even though it is not a direct experimental validation. The purpose is to compare SA and SST $k-\omega$ on the same separated-flow geometry and determine how strongly the modeled mean recirculation and recovery depend on the selected RANS closure. Near the step, at $x/h=1$ and $x/h=4$, both models produce a low-speed or reversed-flow region close to the lower wall, which is consistent with a modeled recirculation bubble generated by the sudden expansion. However, the velocity profiles in this separated region are visibly model dependent, especially near the lower wall and in the developing shear layer. Farther downstream, at $x/h=6$ and especially $x/h=10$, the near-wall streamwise velocity becomes positive and the two profiles move closer together, consistent with modeled reattachment and redevelopment of the boundary layer.
+
+This case is therefore interpreted as a model-sensitivity study rather than as a validation case. Without a direct comparison to the Driver-Seegmiller experimental data for the exact mesh, inlet condition, and domain definition used here, the Fluent results cannot determine which of the two closures is more accurate for this specific setup. The experimental comparison in Figure~\ref{fig:backstep_sa_sst_tmr} already shows the broader trend: in separated backward-facing-step flow, SST $k-\omega$ gives better local velocity-profile agreement than SA, even though both models may predict a reasonable reattachment length. The present Fluent comparison extends that lesson to the geometry used later in the thesis. It shows that the separated region and recovery are sensitive to the turbulence model, so an SA-based optimization result containing separation cannot be interpreted as quantitatively reliable on its own. This limitation is fundamental to linear eddy-viscosity RANS closures: the Boussinesq approximation represents turbulent stresses through a scalar eddy viscosity and cannot fully represent stress anisotropy, non-local turbulence transport, or unsteady coherent structures in separated shear layers. The conclusion is therefore deliberately limited and more conservative than ``SA captures separation'': SA can generate a plausible RANS mean recirculation pattern, but the separated-flow prediction is model dependent and must be checked with an independent closure such as SST $k-\omega$, and ideally with experimental or higher-fidelity validation.
 
 \section{Conclusion}
 This chapter answers the first research question regarding the predictive capabilities and physical limitations of the Spalart-Allmaras model for internal turbulent flows relevant to topology optimization. The SA model is attractive because it is a one-equation, wall-resolved closure that avoids empirical wall functions and remains substantially easier to stabilize than two-equation alternatives. The channel-like and mildly curved evidence supports its use as a practical forward model for wall-resolved internal-flow topology optimization.
 
-The limitation is not simply high Reynolds number. The main issue is curvature- and separation-driven Reynolds-stress anisotropy under a scalar eddy-viscosity closure. Literature cases at $De \approx 9,000$ and $De \approx 30,000$ provide useful supporting evidence, while the thesis-specific Ansys comparisons bracket the present operating range: the U-bend case at $De \approx 15,000$ remains credible, whereas the tighter $90^\circ$ bend at $De \approx 18,000$ already shows clear SA deterioration for the selected profile comparison. The backward-facing step complements these curved benchmarks by testing separated-flow model sensitivity through $x_r/h$ rather than Dean number. These values and diagnostics are treated as case-specific guidance, not universal thresholds.
+The limitation is not simply high Reynolds number. The main issue is curvature- and separation-driven Reynolds-stress anisotropy under a scalar eddy-viscosity closure. Literature cases at $De \approx 9,000$ and $De \approx 30,000$ provide useful supporting evidence, while the thesis-specific Ansys comparisons bracket the present operating range: the U-bend case at $De \approx 15,000$ remains credible, whereas the tighter $90^\circ$ bend at $De \approx 18,000$ already shows clear SA deterioration for the selected profile comparison. The separated-flow evidence points in the same direction. In the Driver-Seegmiller validation data, SST $k-\omega$ follows the measured backward-facing-step velocity profiles more closely than SA, and the thesis-specific backward-facing-step case confirms that the predicted recirculation and recovery are visibly model dependent. These diagnostics are therefore treated as case-specific evidence of model sensitivity, not as universal thresholds.
 
-Consequently, the SA model is suitable as the baseline turbulence model for the FEniCS topology optimization framework, but final topologies cannot be accepted on the SA result alone. Any complex manifold generated by the SA optimizer must be re-analyzed with an independent turbulence closure, such as SST $k-\omega$, to assess whether the optimized low-loss behavior survives a change in turbulence model.
+Consequently, using SA as the turbulence model inside the FEniCS topology optimization loop is defensible for this thesis because of its numerical simplicity and compatibility with wall-resolved optimization. The resulting layouts should be interpreted as SA-optimized design candidates, not as closure-independent predictions by themselves. For attached or mildly curved cases, independent sharp-geometry re-analysis can show whether the SA-optimized layout remains robust. For designs containing strong curvature or local separation, quantitative performance claims must be conditioned on an independent closure check, such as SST $k-\omega$, because the separated-flow losses may be strongly model dependent.

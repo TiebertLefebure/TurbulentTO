@@ -77,7 +77,31 @@ RHO_FLUID_VALUE = 1.0
 U_MAX_INLET = 1.0
 MU_FLUID_VALUE = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 ALPHA_FLUID = 0.0
-ALPHA_SOLID = 1.0e5
+
+# Switch this between "dissipation" (J_D) and "average_inlet_pressure" (J_p).
+# Objective-specific settings below keep both continuation paths in one config.
+OBJECTIVE_TYPE = "average_inlet_pressure"
+_OBJECTIVE_TYPE_NORMALIZED = OBJECTIVE_TYPE.strip().lower()
+_USE_PRESSURE_OBJECTIVE = _OBJECTIVE_TYPE_NORMALIZED in (
+    "average_inlet_pressure",
+    "inlet_pressure",
+    "mean_inlet_pressure",
+)
+_USE_DISSIPATION_OBJECTIVE = _OBJECTIVE_TYPE_NORMALIZED in (
+    "dissipation",
+    "power_dissipation",
+    "volume_dissipation",
+)
+if not (_USE_PRESSURE_OBJECTIVE or _USE_DISSIPATION_OBJECTIVE):
+    raise ValueError(
+        "OBJECTIVE_TYPE must be 'dissipation' or 'average_inlet_pressure', got {!r}.".format(
+            OBJECTIVE_TYPE
+        )
+    )
+
+ALPHA_SOLID_JD = 1.0e5
+ALPHA_SOLID_JP = 1.0e3
+ALPHA_SOLID = ALPHA_SOLID_JP if _USE_PRESSURE_OBJECTIVE else ALPHA_SOLID_JD
 
 # ==============================================================================================
 # Reynolds number: Re = U_MAX_INLET * PORT_HEIGHT * RHO_FLUID_VALUE / MU_FLUID_VALUE = 5,000
@@ -105,7 +129,20 @@ SA_NU_TILDE_INITIAL = nu_tilde_from_viscosity_ratio(
 SA_NU_TILDE_CEILING = None
 SA_EDDY_VISCOSITY_RATIO_CEILING = 50.0
 
-SAVE_SA_CLIPPING_DIAGNOSTICS = False
+# Stabilize the advection-dominated SA working-variable transport in bend TO
+# cases. Keep pseudo-time damping disabled unless nu_tilde still spikes.
+SA_SUPG_STABILIZATION = True
+SA_SUPG_TAU_SCALE = 1.0
+SA_PSEUDO_TIME_STABILIZATION = False
+SA_PSEUDO_DT = 5.0e-2
+SA_PSEUDO_TIME_STEPS = 2
+
+SAVE_SA_CLIPPING_DIAGNOSTICS_JD = False
+SAVE_SA_CLIPPING_DIAGNOSTICS_JP = True
+SAVE_SA_CLIPPING_DIAGNOSTICS = (
+    SAVE_SA_CLIPPING_DIAGNOSTICS_JP
+    if _USE_PRESSURE_OBJECTIVE else SAVE_SA_CLIPPING_DIAGNOSTICS_JD
+)
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
 # The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
@@ -133,9 +170,19 @@ SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 # =================================================
 
 VOL_FRAC = 0.27
-OBJECTIVE_TYPE = "dissipation"
-OBJECTIVE_CONVERGENCE_TOL = 1.0e-6
-OBJECTIVE_STREAK_TO_STOP = 10
+
+OBJECTIVE_CONVERGENCE_TOL_JD = 1.0e-6
+OBJECTIVE_CONVERGENCE_TOL_JP = 1.0e-5
+OBJECTIVE_STREAK_TO_STOP_JD = 10
+OBJECTIVE_STREAK_TO_STOP_JP = 10
+OBJECTIVE_CONVERGENCE_TOL = (
+    OBJECTIVE_CONVERGENCE_TOL_JP
+    if _USE_PRESSURE_OBJECTIVE else OBJECTIVE_CONVERGENCE_TOL_JD
+)
+OBJECTIVE_STREAK_TO_STOP = (
+    OBJECTIVE_STREAK_TO_STOP_JP
+    if _USE_PRESSURE_OBJECTIVE else OBJECTIVE_STREAK_TO_STOP_JD
+)
 INITIAL_DENSITY_VALUE = VOL_FRAC
 INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
@@ -143,24 +190,32 @@ RUN_FINITE_DIFFERENCE_CHECKS = False
 STOP_AFTER_FINITE_DIFFERENCE_CHECKS = False
 FINITE_DIFFERENCE_CHECK_UPDATED_TURBULENCE = False
 
-
-# Paper: alpha(phi) = alpha_max * (1 - phi) / (1 + q_a * phi).
-# Code:  alpha(rho) = alpha_solid * (1 - rho) / (1 + rho / q_penal)
-# when ALPHA_FLUID = 0, so q_penal = 1 / q_a.
-
-#PAPER_Q_ALPHA_SCHEDULE = [150.0, 75.0, 35.0, 12.0]
-#Q_PENAL_SCHEDULE = [1.0 / q_alpha for q_alpha in PAPER_Q_ALPHA_SCHEDULE]
-#BETA_PROJ_SCHEDULE = [8.0, 10.0, 18.0, 18.0]
-#MOVE_LIMIT_SCHEDULE = [0.05, 0.04, 0.03, 0.02]
-#MAX_INNER_ITERATIONS_SCHEDULE = [25, 25, 25, 25]
-
 # Stabilized continuation for frozen-SA bend optimization.
-# Keep the early low-penalty stages long enough to settle the flow/topology
-# before increasing projection and Brinkman stiffness.
-Q_PENAL_SCHEDULE = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
-BETA_PROJ_SCHEDULE = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
-MOVE_LIMIT_SCHEDULE = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015]
-MAX_INNER_ITERATIONS_SCHEDULE = [60, 80, 100, 120, 160, 180, 220]
+# J_D keeps the current robust path. J_p uses a slightly less locked path so
+# pressure recovery can shape the turn before the design is strongly projected.
+Q_PENAL_SCHEDULE_JD = [0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20]
+BETA_PROJ_SCHEDULE_JD = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
+MOVE_LIMIT_SCHEDULE_JD = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015]
+MAX_INNER_ITERATIONS_SCHEDULE_JD = [60, 80, 100, 120, 160, 180, 220]
+
+Q_PENAL_SCHEDULE_JP = [0.02, 0.04, 0.08, 0.12, 0.18]
+BETA_PROJ_SCHEDULE_JP = [1.5, 3.0, 5.0, 8.0, 12.0]
+MOVE_LIMIT_SCHEDULE_JP = [0.012, 0.010, 0.007, 0.005, 0.003]
+MAX_INNER_ITERATIONS_SCHEDULE_JP = [60, 70, 90, 110, 140]
+
+Q_PENAL_SCHEDULE = (
+    Q_PENAL_SCHEDULE_JP if _USE_PRESSURE_OBJECTIVE else Q_PENAL_SCHEDULE_JD
+)
+BETA_PROJ_SCHEDULE = (
+    BETA_PROJ_SCHEDULE_JP if _USE_PRESSURE_OBJECTIVE else BETA_PROJ_SCHEDULE_JD
+)
+MOVE_LIMIT_SCHEDULE = (
+    MOVE_LIMIT_SCHEDULE_JP if _USE_PRESSURE_OBJECTIVE else MOVE_LIMIT_SCHEDULE_JD
+)
+MAX_INNER_ITERATIONS_SCHEDULE = (
+    MAX_INNER_ITERATIONS_SCHEDULE_JP
+    if _USE_PRESSURE_OBJECTIVE else MAX_INNER_ITERATIONS_SCHEDULE_JD
+)
 
 LINEAR_SOLVER = "mumps"
 
@@ -250,8 +305,15 @@ FORWARD_SNES_RECOVERY_ATTEMPTS = [
 ]
 # ============================================================================ #
 
-PICARD_STEPS = 5
-TURBULENCE_RELAXATION = 0.05
+PICARD_STEPS_JD = 5
+PICARD_STEPS_JP = 5
+TURBULENCE_RELAXATION_JD = 0.05
+TURBULENCE_RELAXATION_JP = 0.04
+PICARD_STEPS = PICARD_STEPS_JP if _USE_PRESSURE_OBJECTIVE else PICARD_STEPS_JD
+TURBULENCE_RELAXATION = (
+    TURBULENCE_RELAXATION_JP
+    if _USE_PRESSURE_OBJECTIVE else TURBULENCE_RELAXATION_JD
+)
 
 # =========================================================================== #
 # IPCS forward solver parameters, used when FORWARD_FLOW_SOLVER = "ipcs".
@@ -291,9 +353,9 @@ PRESSURE_OUTLET_COMPONENT_BCS = [
 ENABLE_PRESSURE_PIN = False
 
 RESULTS_ROOT_BASE_NAME = "Results_Frozen/Results_UBendAlexandersen_Frozen"
-if OBJECTIVE_TYPE == "dissipation":
+if _USE_DISSIPATION_OBJECTIVE:
     RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_JD"
-elif OBJECTIVE_TYPE == "average_inlet_pressure":
+elif _USE_PRESSURE_OBJECTIVE:
     RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + "_Jp"
 else:
     RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME
