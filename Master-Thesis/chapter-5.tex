@@ -206,7 +206,7 @@ A fully coupled turbulent adjoint would require adjoint equations for the SA wor
 
 The primary advantage of the frozen turbulence approach is therefore practical robustness. It reduces implementation complexity, lowers the cost per design iteration, and avoids differentiating the most nonlinear turbulence and wall-distance source terms. This is why frozen turbulence, or Constant Eddy Viscosity (CEV), remains common in industrial adjoint workflows \cite{Othmer2014,Schramm2018}. Wu et al.~\cite{Wu2023} show that the CEV assumption can still achieve useful optimization goals in benign flows, while also documenting that sensitivity accuracy and adjoint convergence can deteriorate in more challenging regimes.
 
-The price of this robustness is that the gradients are approximate reduced derivatives. The finite-difference verification in Chapter~\ref{ch:benchmark_results} therefore validates only the implemented frozen derivative: the perturbed checks hold $\tilde{\nu}$ and $G$ fixed in the same way as the adjoint. It should not be interpreted as validation of a fully coupled turbulence sensitivity.
+The price of this robustness is that the gradients are approximate reduced derivatives. The finite-difference verification reported in Appendix~\ref{app:C_topology_optimization_benchmarks} therefore validates only the implemented frozen derivative: the perturbed checks hold $\tilde{\nu}$ and $G$ fixed in the same way as the adjoint. It should not be interpreted as validation of a fully coupled turbulence sensitivity.
 
 \section{Optimization Problem Formulation}
 \label{sec:optimization_problem}

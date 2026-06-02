@@ -1,131 +1,91 @@
-\chapter{Configuration and Grid Independence of the Topology Optimization Benchmarks}
-\label{app:B_validation_configurations}
+\chapter{Chapter 4 Spalart-Allmaras Solver Verification Details}
+\label{app:B_sa_solver_verification}
 
-\providecommand{\meshplaceholder}[1]{%
-	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
-}
+This appendix supports Chapter~\ref{ch:sa_verification}. It contains the full FEniCS configuration tables and the FEniCS/Ansys mesh-independence studies for the channel and U-bend verification cases. The backward-facing-step material is placed in Appendix~\ref{app:A_backstep_benchmark}, because it supports the Chapter~\ref{ch:turbulence_modeling} turbulence-model discussion rather than the Chapter~\ref{ch:sa_verification} forward-solver verification.
 
-This appendix collects the detailed setup information for the topology optimization benchmarks used in Chapter~\ref{ch:benchmark_results}. The pipe-bend benchmark, U-bend benchmark, and diffuser benchmark are included. For each case, the appendix records the geometry and physical parameters, the FEniCS simulation and optimization parameters, and the Ansys Fluent mesh-independence tables used for sharp-geometry CFD validation.
+Unless stated otherwise, all grid-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
 
-\section{Validation and Meshing Strategy}
-\label{sec:app_B_mesh_strategy}
-The FEniCS meshes used during topology optimization are treated as fixed optimization discretizations rather than as a separate mesh-convergence hierarchy. This distinction is important because refining the FEniCS mesh would also change the $DG_0$ design space, the filter stencil, the number of MMA design variables, and the diffuse Brinkman interface location. The pipe-bend optimization uses a rectangular-coordinate triangular mesh with near-wall clustering based on a smooth-wall $y^+\approx1$ estimate at the prescribed inlet Reynolds number. The U-bend optimization uses the corresponding wall-resolved triangular Gmsh mesh, with a near-wall size field based on the same $y^+\approx1$ estimate and a far-field target size of $h_{\max}=0.007L$ used to set the density-filter scale. The diffuser benchmark from Yoon~\cite{Yoon2016} uses a wall-resolved rectangular-coordinate triangular mesh over the square diffuser domain, refined around the full-height inlet, the center-third outlet, and the no-slip walls. In all cases, the mesh is chosen to provide sufficient wall-resolved SA and design resolution for the optimization problem; quantitative grid-convergence evidence is instead reported for the extracted sharp geometries in Ansys Fluent.
+\section{Verification Benchmark 1: Channel Flow}
+\label{sec:app_A_channel}
 
-For each extracted turbulent topology optimization design, the Ansys validation mesh is refined through coarse, medium, and fine resolutions. Both SA and SST $k-\omega$ validation runs use the same extracted geometry, inlet condition, outlet condition, and fluid properties. The mesh-independence comparison is reported for both turbulence models because near-wall behavior and separated-flow predictions may respond differently to grid refinement.
-
-All Fluent mesh-independence runs in this appendix use the same convergence and acceptance criteria. The static pressure drop must change by less than $5\times10^{-4}$ over the final $100$ iterations, while the viscous dissipation must change by less than $10^{-3}$ over the final $100$ iterations. The fine mesh is accepted only when the medium--fine relative difference is below $1\%$ for static pressure drop and below $2\%$ for viscous dissipation for both SA and SST $k-\omega$. The reported refinement differences are computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|$ and $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|$ for each validation metric.
-
-\section{Shared Turbulence-Topology Coupling Conventions}
-\label{sec:app_B_shared_coupling_conventions}
-All three turbulent topology optimization benchmarks use the same basic coupling idea between the density field, the SA working variable, and the reciprocal wall-distance equation. Topology-created solids act as walls for the SA working-variable penalty and the reciprocal wall-distance solve. The wall-density source is therefore \texttt{design}, the wall-distance mode is \texttt{reciprocal\_penalized}, and both the SA and wall-distance penalties use the power-law solid indicator defined in Chapter~\ref{ch:topology_optimization_methodology}. The same frozen-turbulence adjoint convention is also used: the forward loop updates $\tilde{\nu}$, $\nu_t$, and $G$, while the derivative freezes $\tilde{\nu}$ and $G$ during gradient assembly.
-
-The pipe-bend and U-bend benchmarks then share a Bayat-style pressure-loss setup, while the diffuser follows the Yoon dissipation benchmark. The common mechanisms and the benchmark-specific parameter values are summarized in Table~\ref{tab:app_B_shared_coupling_conventions}.
-
-The pipe-bend finite-difference sensitivity verification in Chapter~\ref{ch:benchmark_results} is not assigned a separate configuration table. It uses the same geometry, physical parameters, wall-distance convention, penalty settings, objective, filter, and solver setup as the pipe-bend topology optimization run. The only additional settings are the finite-difference sampling parameters listed in Table~\ref{tab:app_B_alexandersen_pipebend_numerical}.
+\subsection{Physical and Geometric Parameters}
+\label{subsec:app_A_channel_physical}
+The first verification benchmark consists of a pressure-driven periodic 2D channel. To align with fundamental turbulence research conventions, the characteristic length is defined as the full channel height ($H$), and the Reynolds number ($Re_H$) is computed strictly based on this geometric parameter rather than the hydraulic diameter. The complete physical setup is detailed in Table~\ref{tab:app_A_channel_physical}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Shared turbulence-topology coupling conventions and benchmark-specific parameter values.}
-	\label{tab:app_B_shared_coupling_conventions}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X X}
-		\hline
-		\textbf{Parameter} & \textbf{Pipe bend and U-bend} & \textbf{Diffuser} \\
-		\hline
-		SA wall-distance mode & \texttt{reciprocal\_penalized} & \texttt{reciprocal\_penalized} \\
-		SA wall-density source & \texttt{design} & \texttt{design} \\
-		SA penalty interpolation & Power-law solid indicator & Power-law solid indicator \\
-		Wall-distance penalty interpolation & Power-law solid indicator & Power-law solid indicator \\
-		Wall-distance recovery & Reciprocal recovery from the relaxed Eikonal variable $G$ & Reciprocal recovery from the relaxed Eikonal variable $G$ \\
-		Adjoint treatment & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly \\
-		Solid threshold for wall source & $\bar{\gamma}=0.50$ & No separate threshold parameter in the diffuser configuration \\
-		SA working-variable penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
-		Wall-distance penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
-		Wall-distance parameters & $\sigma_w=0.01$, $G_0=20$ & $\sigma_w=0.1$, $G_0=20$ \\
-		SA inlet treatment & Turbulence-intensity estimate: $I=7.5\%$, $\ell/H=0.05$, eddy-viscosity ratio capped at $50$ & Prescribed $\tilde{\nu}=1$ at inlet and outlet \\
-		Optimization objective & Average inlet pressure with fixed outlet pressure $p=0$ & Dissipation objective $J_D$ with prescribed inlet and outlet velocity profiles \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\FloatBarrier
-
-\section{Pipe Bend Benchmark}
-\label{sec:app_B_config_alexandersen_pipebend}
-
-The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The reference paper uses a standard $k$-$\varepsilon$ model with wall functions; the present thesis uses the wall-resolved SA implementation and evaluates the $V_f=0.25$ design.
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the pipe-bend benchmark.}
-	\label{tab:app_B_alexandersen_pipebend_physical}
+	\caption{Geometric, physical, and boundary-condition parameters for the periodic channel flow benchmark.}
+	\label{tab:app_A_channel_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
 		\hline
-		\textbf{Parameter} & \textbf{Setting} \\
+		\textbf{Parameter} & \textbf{Channel flow setting} \\
 		\hline
-		Reference case & Pipe-bend benchmark from Bayat et al.~\cite{Bayat2026} \\
-		Reference figure for setup & Bayat et al. Fig.~10 \\
-		Reference velocity figure & Bayat et al. Fig.~15 \\
-		Reference turbulence model & Standard $k$-$\varepsilon$ with wall functions \\
-		Turbulence model in this thesis & Spalart-Allmaras \\
-		Design-domain dimensions & Square design region $L\times L$ with $L=1$ \\
-		Full computational domain & $x/L\in[-0.2,1]$, $y/L\in[-0.2,1]$ \\
-		Non-design inlet duct & Length $0.2L$, height $0.2L$, inlet over $y/L\in[0.7,0.9]$ \\
-		Non-design outlet duct & Width $0.2L$, length $0.2L$, outlet over $x/L\in[0.7,0.9]$ on the lower boundary \\
-		Volume fraction & $V_f=0.25$ \\
-		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ with $H_{\mathrm{in}}=0.2L$ \\
-		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
-		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
-		Outlet condition & Pressure outlet $p=0$ on the lower outlet, with the normal/tangential component constraint used by the FEniCS configuration \\
-		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls; topology-created solids enter through the design-density penalties \\
-		Validation metrics & Average inlet pressure, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Benchmark type & Pressure-driven, streamwise-periodic 2D channel \\
+		Domain dimensions & Length $L=2.0$ m; full channel height $H=2.0$ m \\
+		Characteristic length & Full channel height $H=2.0$ m \\
+		Reference velocity & $U_{\mathrm{ref}}=18.5$ m/s, utilized to define the target Reynolds number \\
+		Kinematic viscosity & $\nu = 1.81818 \times 10^{-3}$ m$^2$/s \\
+		Reynolds number & $Re_H \approx 2.03 \times 10^4$ \\
+		Body force & $\mathbf{f}=(0,0)$ m/s$^2$ \\
+		Driving condition & Fixed static pressure drop from $p=2$ Pa to $p=0$ Pa across the periodic streamwise direction \\
+		Velocity boundary conditions & Periodic velocity between inlet/outlet planes; no-slip on top and bottom walls \\
+		Pressure boundary conditions & $p=2$ Pa at the upstream pressure plane; $p=0$ Pa at the downstream pressure plane \\
+		SA boundary conditions & Periodic $\tilde{\nu}$ between inlet/outlet planes; $\tilde{\nu}=0$ at walls \\
+		Initial fields & $\mathbf{u}_0=(18.5,0)$ m/s, $p_0=2$ Pa, $\tilde{\nu}_0=5.0 \times 10^{-3}$ m$^2$/s \\
+		Verification mesh & \texttt{Fine\_FEniCS}; first layer $\Delta y_1 = 1.709 \times 10^{-3}$ m \\
 		\hline
 	\end{tabularx}
 \end{table}
 
+\subsection{Numerical Simulation Parameters}
+\label{subsec:app_A_channel_numerical}
+The channel flow was resolved using an Incremental Pressure Correction Scheme (IPCS) embedded within a Picard fixed-point iteration loop. The exact numerical solver configurations, convergence tolerances, and relaxation factors utilized in FEniCS are summarized in Table~\ref{tab:app_A_channel_numerical}.
+
 \begin{table}[htbp]
 	\centering
-	\footnotesize
-	\caption{Numerical FEniCS solver, topology-optimization, and sensitivity-verification parameters for the pipe-bend benchmark.}
-	\label{tab:app_B_alexandersen_pipebend_numerical}
+	\scriptsize
+	\caption{Numerical simulation parameters for the FEniCS steady Spalart-Allmaras channel benchmark.}
+	\label{tab:app_A_channel_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
 		\hline
-		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
+		\textbf{Parameter} & \textbf{Symbol} & \textbf{Setting} \\
 		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
-		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
-		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
-		hh & -- & \texttt{mesh\_yplus1.xdmf}; $39{,}128$ vertices, $77{,}334$ triangles, $h_{\max}=0.007L$ \\
-		Objective & $J_p$ & Average inlet pressure \\
-		Initial design density & $\gamma_0$ & $V_f=0.25$, matched to the filtered volume \\
-		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
-		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/30,\ 1/15]$ \\
-		Projection continuation & $\beta$ & $[4,\ 6,\ 9,\ 13]$ with threshold $\eta=0.50$ \\
-		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
-		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
-		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
-		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
-		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
-		Sensitivity verification samples & -- & Five active DG0 cells, seed $13$ \\
-		Sensitivity verification step & $\Delta h$ & $10^{-6}$, central finite difference \\
-		Sensitivity verification fields held fixed & -- & SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ \\
+		Velocity space & $\mathbf{u}$ & Vector CG2, periodic in streamwise direction \\
+		Pressure space & $p$ & Scalar CG1 \\
+		SA working-variable space & $\tilde{\nu}$ & Scalar CG1, periodic in streamwise direction \\
+		Quadrature degree & -- & $2$ \\
+		Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $200$ \\
+		SA solves per Picard step & -- & $1$ \\
+		Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-6}$ \\
+		Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-6}$ \\
+		Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
+		IPCS pseudo-time step & $\Delta t$ & $5.0 \times 10^{-3}$ s \\
+		Maximum IPCS steps per Picard step & -- & $500$ \\
+		IPCS velocity tolerance & -- & $1.0 \times 10^{-6}$ \\
+		IPCS pressure tolerance & -- & $1.0 \times 10^{-6}$ \\
+		Velocity relaxation factor & $\alpha_u$ & $0.3$ \\
+		Pressure relaxation factor & $\alpha_p$ & $0.3$ \\
+		SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.3$ \\
+		SA lower bound & $\tilde{\nu}_{\min}$ & $1.0 \times 10^{-12}$ \\
+		Wall-distance equation & -- & Relaxed Eikonal, $\sigma_w=0.1$, $G_0=20$ \\
+		Wall-distance Newton settings & -- & Relative tolerance $1.0 \times 10^{-8}$; absolute tolerance $1.0 \times 10^{-10}$; maximum $80$ iterations; relaxation $0.5$ \\
+		Linear solver strategy & -- & IPCS blocks: direct MUMPS; SA transport: default solver \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patch-conforming triangular bulk mesh and wall-resolved inflation on all no-slip walls. The first-layer height is kept fixed from the smooth-wall $y^+\approx1$ estimate, while the mesh hierarchy refines the bulk face size, curvature angle, and inflation distribution.
+\subsection{Spatial Verification and Grid Independence}
+\label{subsec:app_A_channel_mesh}
+To guarantee that the numerical results were independent of the spatial discretization, a formal grid independence study was conducted. Three distinct boundary-layer inflated meshes (Coarse, Medium, and Fine) were evaluated. The geometric properties, node counts, and resolution parameters of this mesh hierarchy are explicitly detailed in Table~\ref{tab:app_A_channel_meshes}. Crucially, the first-layer height was kept constant across all grids to strictly enforce the $y^+ \approx 1$ requirement, while the bulk and inflation-layer resolutions were systematically refined. 
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent pipe-bend benchmark geometry.}
-	\label{tab:app_B_alexandersen_pipebend_mesh}
+	\caption{Wall-resolved channel mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the streamwise resolution, wall-normal resolution, and inflation-layer resolution are refined.}
+	\label{tab:app_A_channel_meshes}
 	\renewcommand{\arraystretch}{1.2}
 	\setlength{\tabcolsep}{5pt}
 	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
@@ -133,254 +93,251 @@ The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patc
 		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
-		Mesh type & Tri. & Tri. & Tri. \\
-		$h_{\mathrm{bulk}}$ [m] & $1.10 \times 10^{-2}$ & $5.00 \times 10^{-3}$ & $3.25 \times 10^{-3}$ \\
-		Curvature angle & $15^\circ$ & $7^\circ$ & $4.5^\circ$ \\
-		Near-wall & WR infl. & WR infl. & WR infl. \\
-		$\Delta y_1$ [m] & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ & $6.00 \times 10^{-4}$ \\
-		Inflation layers & $8$ & $14$ & $18$ \\
-		Growth rate & $1.15$ & $1.10$ & $1.08$ \\
-		$t_{\mathrm{infl}}$ [m] & $8.24 \times 10^{-3}$ & $1.68 \times 10^{-2}$ & $2.25 \times 10^{-2}$ \\
-		Nodes & $5{,}147$ & $21{,}343$ & $44{,}042$ \\
-		Elements & $7{,}551$ & $32{,}780$ & $68{,}743$ \\
+		Streamwise cells & $10$ & $20$ & $40$ \\
+		Wall-normal cells & $42$ & $51$ & $68$ \\
+		$\Delta y_1$ [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
+		$\Delta y_{\min}$ [m] & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ & $1.709 \times 10^{-3}$ \\
+		$\Delta y_{\max}$ [m] & $7.707 \times 10^{-2}$ & $8.454 \times 10^{-2}$ & $7.589 \times 10^{-2}$ \\
+		Inflation layers per wall & $10$ & $14$ & $18$ \\
+		Growth ratio & $1.45$ & $1.35$ & $1.25$ \\
+		Vertices & $473$ & $1{,}092$ & $2{,}829$ \\
+		Elements & $840$ & $2{,}040$ & $5{,}440$ \\
 		\hline
-		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & $0.0143$ & $0.0151$ & $0.0153$ \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $5.38$ & $1.32$ \\
-		$\Phi_D^{\mathrm{SST}}$ [W/m] & $0.0150$ & $0.0164$ & $0.0166$ \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $9.04$ & $1.22$ \\
-		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & $0.1423$ & $0.1449$ & $0.1457$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & $1.84$ & $0.55$ \\
-		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $0.1481$ & $0.1516$ & $0.1522$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $2.36$ & $0.40$ \\
-		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
+		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $16.923$ & $18.489$ & $18.472$ \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $9.25$ & $0.09$ \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} WR = wall-resolved; $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
 	\end{minipage}
 \end{table}
 
+Visual confirmation of this spatial convergence is provided by the wall-normal velocity profiles plotted in Figure~\ref{fig:app_A_channel_mesh_independence}. In each case, the profile is extracted at the streamwise mid-plane, $x=0.5L$, with the wall-normal coordinate $y$ varied across the full channel height. The \texttt{Fine\_FEniCS} grid was consequently selected for the final verification against the Ansys Fluent baseline, while the coarser grids demonstrate that the wall-normal velocity profile is already asymptotically converged.
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=\textwidth]{Channel-FEniCS-Mesh-Independence} % Replace with your channel mesh independence velocity profile plot
+	\caption{FEniCS wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
+	\label{fig:app_A_channel_mesh_independence}
+\end{figure}
+
+Furthermore, to ensure a rigorous cross-code validation, an equivalent grid independence study was performed for the commercial Ansys Fluent baseline. The Ansys domain was discretized using a comparable mapped mesh hierarchy, maintaining a strict $y^+ \approx 1$ resolution at the walls. In addition to the residual monitors, the bulk velocity was monitored and required to change by less than $1.0 \times 10^{-3}$ over $250$ iterations before accepting a converged solution. The continuity residual criterion was set to $1.0 \times 10^{-5}$, while the momentum and SA working-variable residual criteria were set to $1.0 \times 10^{-6}$. Mass conservation was also checked from the inlet and outlet mass-flow reports. The properties of these meshes are documented in Table~\ref{tab:app_A_channel_meshes_ansys}. The wall-normal velocity profiles extracted from the Ansys solver at the same mid-channel location, illustrated in Figure~\ref{fig:app_A_channel_mesh_indep_ansys}, exhibited identical asymptotic convergence, confirming that the baseline reference data is mathematically robust and completely independent of spatial discretization errors.
+
+\begin{table}[htbp]
+	\centering
+	\footnotesize
+	\caption{Wall-resolved channel mesh hierarchy used for the Ansys grid-independence study.}
+	\label{tab:app_A_channel_meshes_ansys}
+	\renewcommand{\arraystretch}{1.2}
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
+		\hline
+		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+		Mesh type & MultiZone & MultiZone & MultiZone \\
+		Face type & All quad & All quad & All quad \\
+		$N_x$ & $64$ & $160$ & $220$ \\
+		$N_y$ & $80$ & $144$ & $180$ \\
+		Bias type & Two-sided & Two-sided & Two-sided \\
+		Bias factor & $59$ & $28$ & $21$ \\
+		Approx. $\Delta y_1$ [m] & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ & $1.700 \times 10^{-3}$ \\
+		Nodes & $7{,}740$ & $26{,}448$ & $43{,}010$ \\
+		Elements & $7{,}565$ & $26{,}123$ & $42{,}594$ \\
+		\hline
+		\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+		$U_{\mathrm{bulk}}$ [m/s] & $18.305$ & $18.114$ & $17.977$ \\
+		$\epsilon_{\mathrm{rel}}(U_{\mathrm{bulk}})$ [\%] & -- & $1.04$ & $0.76$ \\
+		\hline
+	\end{tabular*}
+	\vspace{2pt}
+	\begin{minipage}{0.98\textwidth}
+		\scriptsize \textit{Note.} $N_x$ and $N_y$ are the streamwise and wall-normal edge divisions. For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+	\end{minipage}
+\end{table}
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=\textwidth]{Channel-Ansys-Mesh-Independence} % Replace with your Ansys channel mesh independence plot
+	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
+	\label{fig:app_A_channel_mesh_indep_ansys}
+\end{figure}
+
 \FloatBarrier
 
-\section{U-Bend Benchmark}
-\label{sec:app_B_config_alexandersen_ubend}
+\section{Verification Benchmark 2: U-Bend Geometry}
+\label{sec:app_A_ubend}
 
-The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It uses the same turbulent topology optimization framework as the pipe bend, but forces a $180^\circ$ return path around a fixed internal separator.
+\subsection{Physical and Geometric Parameters}
+\label{subsec:app_A_ubend_physical}
+The second verification benchmark evaluates a highly convective U-bend. Because this FEniCS domain is a 2D planar approximation of the symmetry mid-plane of the 3D Ansys VMFL048 case, the 3D physical pipe diameter ($D$) is explicitly retained as the characteristic length scale. This ensures the Reynolds ($Re_D$) and Dean ($De$) numbers remain non-dimensionally consistent with the commercial baseline. The straight inlet and outlet legs are shorter than in the original VMFL048 Ansys mesh to reduce meshing and computational effort; both the FEniCS and Ansys runs use this same short-leg U-bend geometry. The configuration is detailed in Table~\ref{tab:app_A_ubend_physical}.
 
 \begin{table}[htbp]
 	\centering
 	\footnotesize
 	\caption{Geometric, physical, and boundary-condition parameters for the U-bend benchmark.}
-	\label{tab:app_B_alexandersen_ubend_physical}
+	\label{tab:app_A_ubend_physical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l X}
 		\hline
-		\textbf{Parameter} & \textbf{Setting} \\
+		\textbf{Parameter} & \textbf{U-bend setting} \\
 		\hline
-		Reference case & U-bend benchmark from Bayat et al.~\cite{Bayat2026} \\
-		Reference figure/table for setup & Bayat et al. Fig.~11 and Table~4 \\
-		Reference turbulence model & Standard $k$-$\varepsilon$ with wall functions \\
-		Turbulence model in this thesis & Spalart-Allmaras \\
-		Design-domain dimensions & Square design region $L\times L$ with $L=1$ \\
-		Full computational domain & $x/L\in[-0.2,1]$, $y/L\in[0,1]$ \\
-		Port geometry & Two left-side ports of height $0.2L$; inlet over $y/L\in[0.55,0.75]$, outlet over $y/L\in[0.25,0.45]$ \\
-		Fixed separator & Bar thickness $0.10L$, rounded-tip radius $0.05L$, extending from $x/L=-0.2$ to tip at $x/L=0.5$ \\
-		Volume fraction & $V_f=0.27$ \\
-		Reynolds number & $Re=5{,}000$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ with $H_{\mathrm{port}}=0.2L$ \\
-		Density and viscosity & $\rho=1.0$, $\mu=4.0\times10^{-5}$ \\
-		Inlet condition & Uniform inlet velocity $\mathbf{u}=(1,0)$; SA inlet estimated from the shared turbulence-intensity settings in Table~\ref{tab:app_B_shared_coupling_conventions} \\
-		Outlet condition & Pressure outlet $p=0$ on the lower left port, with the component constraint used by the FEniCS configuration \\
-		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on external walls and the fixed separator; topology-created solids enter through the design-density penalties \\
-		Validation metrics & Average inlet pressure, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Benchmark type & Short-leg 2D symmetry-plane U-bend based on Ansys VMFL048 \\
+		Domain dimensions & Pipe diameter $D=0.028$ m; centreline bend radius $R_c=0.125$ m; straight-leg length $30D=0.840$ m \\
+		Characteristic length & Physical pipe diameter $D=0.028$ m \\
+		Reference / inlet velocity & Uniform prescribed inlet velocity $\mathbf{u}_{in}=(0,-1.42)$ m/s \\
+		Kinematic viscosity & $\nu = 8.9 \times 10^{-7}$ m$^2$/s \\
+		Reynolds number & $Re_D \approx 4.47 \times 10^4$ \\
+		Dean number & $De \approx 1.50 \times 10^4$ \\
+		Body force & $\mathbf{f}=(0,0)$ m/s$^2$ \\
+		Driving condition & Prescribed inlet velocity and zero relative static pressure at the outlet \\
+		Velocity boundary conditions & No-slip on all curved and straight pipe walls; natural velocity condition at pressure outlet \\
+		Pressure boundary conditions & $p=0$ Pa at outlet; pressure left free at inlet and walls \\
+		SA boundary conditions & $\tilde{\nu}_{in}=9.34 \times 10^{-5}$ m$^2$/s at inlet; $\tilde{\nu}=0$ at walls; natural condition at outlet \\
+		Initial fields & $\mathbf{u}_0=(0,0)$ m/s, $p_0=0$ Pa, $\tilde{\nu}_0=\tilde{\nu}_{in}$ \\
+		Verification mesh & \texttt{Medium\_FEniCS}; first layer $\Delta y_1 = 1.20 \times 10^{-5}$ m \\
 		\hline
 	\end{tabularx}
 \end{table}
 
+\subsection{Numerical Simulation Parameters}
+\label{subsec:app_A_ubend_numerical}
+Due to the adverse pressure gradients and secondary flow separation induced by the streamline curvature, the U-bend represents a significantly more demanding numerical challenge than the channel. Consequently, the FEniCS solver required a smaller pseudo-time step, tighter under-relaxation, and advanced iterative preconditioners to maintain stability, as detailed in Table~\ref{tab:app_A_ubend_numerical}.
+
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the U-bend benchmark.}
-	\label{tab:app_B_alexandersen_ubend_numerical}
+	\caption{Numerical simulation parameters for the highly convective FEniCS U-bend benchmark.}
+	\label{tab:app_A_ubend_numerical}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{l c X}
 		\hline
-		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
+		\textbf{Parameter} & \textbf{Symbol} & \textbf{Setting} \\
 		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
-		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
-		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
-		Reference FEniCS mesh & -- & \texttt{mesh\_yplus1.xdmf}; wall-resolved triangular Gmsh mesh with $45{,}280$ vertices, $85{,}780$ triangles, near-wall refinement based on $y^+\approx1$, and far-field $h_{\max}=0.007L$ \\
-		Objective & $J_p$ & Average inlet pressure \\
-		Initial design density & $\gamma_0$ & $V_f=0.27$, matched to the filtered volume \\
-		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
-		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/35,\ 1/12]$ \\
-		Projection continuation & $\beta$ & $[8,\ 10,\ 18,\ 18]$ with threshold $\eta=0.50$ \\
-		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
-		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
-		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
-		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
-		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
-		\hline
-	\end{tabularx}
-\end{table}
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent U-bend benchmark geometry.}
-	\label{tab:app_B_alexandersen_ubend_mesh}
-	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{5pt}
-	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
-		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
-		\hline
-		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
-		Mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall & [TBD] & [TBD] & [TBD] \\
-		$\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		$y^+_{\max}$, SA & [TBD] & [TBD] & [TBD] \\
-		$y^+_{\max}$, SST & [TBD] & [TBD] & [TBD] \\
-		\hline
-		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
-		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
-		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
-		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
-		\hline
-	\end{tabular*}
-	\vspace{2pt}
-	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
-	\end{minipage}
-\end{table}
-
-\FloatBarrier
-
-\section{Diffuser Benchmark}
-\label{sec:app_B_config_yoon_diffuser}
-
-The diffuser case follows Fig.~20--22 of Yoon~\cite{Yoon2016}. Unlike the pipe-bend and U-bend benchmarks, the diffuser prescribes parabolic velocity profiles at both the inlet and the outlet and uses the dissipation objective $J_D$. Its turbulence-density coupling still uses the shared \texttt{design}, \texttt{reciprocal\_penalized}, power-law, and frozen-adjoint conventions summarized in Table~\ref{tab:app_B_shared_coupling_conventions}.
-
-\begin{table}[htbp]
-	\centering
-	\footnotesize
-	\caption{Geometric, physical, and boundary-condition parameters for the diffuser benchmark.}
-	\label{tab:app_B_yoon_diffuser_physical}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l X}
-		\hline
-		\textbf{Parameter} & \textbf{Setting} \\
-		\hline
-		Reference case & Diffuser benchmark from Yoon~\cite{Yoon2016} \\
-		Reference figures for setup and topology & Yoon Fig.~20--22 \\
-		Reference turbulence model & Spalart-Allmaras \\
-		Turbulence model in this thesis & Spalart-Allmaras with frozen-turbulence adjoint \\
-		Design-domain dimensions & Square design region $L\times L$ with $L=1~\mathrm{m}$ \\
-		Full computational domain & $x/L\in[0,1]$, $y/L\in[0,1]$ \\
-		Inlet geometry & Exported Fluent inlet segment from $(1.16\times10^{-3},1.38\times10^{-2})$ to $(1.16\times10^{-3},0.979)$, with $H_{\mathrm{in}}=0.96558~\mathrm{m}$ \\
-		Outlet geometry & Exported Fluent outlet segment from $(0.999,0.336)$ to $(0.999,0.670)$, with $H_{\mathrm{out}}=0.33333~\mathrm{m}$ \\
-		Volume fraction & $V_f=0.30$ fluid, corresponding to Yoon's $70\%$ solid mass usage \\
-		Reynolds number & $Re=3{,}000$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ \\
-		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$, $\mu=1.0~\mathrm{Pa\,s}$ \\
-		Inlet condition & Shifted parabolic velocity profile with $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$; $\tilde{\nu}=1$ for the FEniCS-SA solve \\
-		Outlet condition & Shifted parabolic outflow profile with the maximum velocity set by incompressible flow-rate conservation; $\tilde{\nu}=1$ for the FEniCS-SA solve; pressure pinned at $(0,0)$ for gauge fixing \\
-		Wall conditions & No-slip velocity and $\tilde{\nu}=0$ on the top and bottom walls and on the right boundary outside the outlet \\
-		Brinkman solid resistance & $\alpha_{\mathrm{solid}}=10^9$, $\alpha_{\mathrm{fluid}}=0$ \\
-		Optimization objective & Dissipation objective $J_D$, including physical viscous dissipation and Brinkman drag over the design domain \\
-		Validation metrics & $J_D$, static pressure drop, $\Phi_D$, and relative changes between FEniCS-SA, Ansys-SA, and Ansys-SST $k-\omega$ \\
+		Velocity space & $\mathbf{u}$ & Vector CG2 \\
+		Pressure space & $p$ & Scalar CG1 \\
+		SA working-variable space & $\tilde{\nu}$ & Scalar CG1 \\
+		Quadrature degree & -- & $4$ \\
+		Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $180$ \\
+		SA solves per Picard step & -- & $1$ \\
+		Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-4}$ \\
+		Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-4}$ \\
+		Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
+		IPCS pseudo-time step & $\Delta t$ & $1.0 \times 10^{-4}$ s \\
+		Maximum IPCS steps per Picard step & -- & $180$ \\
+		IPCS velocity tolerance & -- & $1.0 \times 10^{-4}$ \\
+		IPCS pressure tolerance & -- & $2.0 \times 10^{-3}$ \\
+		Velocity relaxation factor & $\alpha_u$ & $0.3$ \\
+		Pressure relaxation factor & $\alpha_p$ & $0.1$ \\
+		SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.01$ \\
+		SA lower bound & $\tilde{\nu}_{\min}$ & $1.0 \times 10^{-12}$ \\
+		Wall-distance equation & -- & Relaxed Eikonal, $\sigma_w=0.1$, $G_0=20$ \\
+		Wall-distance Newton settings & -- & Relative tolerance $1.0 \times 10^{-8}$; absolute tolerance $1.0 \times 10^{-10}$; maximum $80$ iterations; relaxation $0.5$ \\
+		Linear solver strategy & -- & IPCS blocks: GMRES with ILU velocity/correction preconditioning and Hypre-AMG pressure preconditioning; SA transport: default solver \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-For the body-fitted Fluent evaluations, the parabolic inlet and outlet velocity profiles are shifted to the extracted inlet and outlet segments. The listed heights are used as the profile heights, while the lower vertices define the local profile origins. The inlet maximum velocity is kept at $3~\mathrm{m/s}$ so that the nominal Reynolds number remains $Re=3{,}000$; the outlet maximum velocity is adjusted by incompressible flow-rate conservation.
+\subsection{Spatial Verification and Grid Independence}
+\label{subsec:app_A_ubend_mesh}
+Managing the highly stretched, non-orthogonal inflation layers around the curved arcs of the U-bend required custom mesh generation via Gmsh. A spatial grid independence study was conducted across three refined unstructured grids. The node counts, element densities, and inflation layer parameters for these generated meshes are explicitly documented in Table~\ref{tab:app_A_ubend_meshes}. Similar to the channel benchmark, the wall-adjacent element height was strictly maintained at $1.20 \times 10^{-5}$ m to satisfy the low-Reynolds SA wall constraints, while the internal element sizing was systematically refined.
+
+The reported FEniCS static pressure-drop metric is computed from boundary-measure-weighted mean pressures over the inlet and outlet sections, rather than from local point samples. Let $\Gamma_{\mathrm{in}}$ and $\Gamma_{\mathrm{out}}$ denote the inlet and outlet boundaries, and let $p_k$ be the kinematic pressure solved in FEniCS. The physical static pressure drop reported in pascals is
+\begin{equation}
+	\Delta p_s
+	= \rho\left(\overline{p}_{k,\mathrm{in}}-\overline{p}_{k,\mathrm{out}}\right)
+	= \rho\left[
+	\frac{1}{|\Gamma_{\mathrm{in}}|}\int_{\Gamma_{\mathrm{in}}} p_k \, \mathrm{d}\Gamma
+	-
+	\frac{1}{|\Gamma_{\mathrm{out}}|}\int_{\Gamma_{\mathrm{out}}} p_k \, \mathrm{d}\Gamma
+	\right],
+	\label{eq:app_A_ubend_fenics_delta_p}
+\end{equation}
+where $|\Gamma|=\int_{\Gamma}1\,\mathrm{d}\Gamma$ is the FEniCS boundary measure and $\rho=997$ kg/m$^3$. In the implementation this corresponds to integrating over the marked inlet and outlet facets with \texttt{ds(2)} and \texttt{ds(3)}, respectively. The density factor is required because the IPCS formulation stores pressure in kinematic form, while the benchmark table reports the static pressure drop in Pa. Although the outlet pressure is prescribed as zero relative pressure, the outlet term is still evaluated as a boundary average so that the diagnostic follows the same inlet-minus-outlet definition on every grid.
+
+	\begin{table}[htbp]
+		\centering
+		\footnotesize
+		\caption{Wall-resolved U-bend mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the bulk element size and inflation-layer resolution are refined.}
+		\label{tab:app_A_ubend_meshes}
+		\renewcommand{\arraystretch}{1.2}
+		\setlength{\tabcolsep}{5pt}
+		\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
+			\hline
+			\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+			\hline
+			\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+			$h_{\mathrm{bulk}}$ [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
+			$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
+			Inflation layers & $10$ & $14$ & $18$ \\
+			Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
+			$t_{\mathrm{infl}}$ [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
+			Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
+			Elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
+			\hline
+			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+			Static pressure drop $\Delta p_s$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+			$\epsilon_{\mathrm{rel}}(\Delta p_s)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+			\hline
+		\end{tabular*}
+		\vspace{2pt}
+		\begin{minipage}{0.98\textwidth}
+			\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\end{minipage}
+	\end{table}
+
+Convergence was visually verified by extracting the velocity profiles directly at the bend exit across the pipe diameter $D=0.028$ m, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
+
+\begin{figure}[htpb]
+	\centering
+	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your FEniCS U-bend mesh independence velocity profile plot
+	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine grids in FEniCS. The profiles demonstrate spatial convergence, justifying the selection of the Medium grid for the final verification.}
+	\label{fig:app_A_ubend_mesh_independence}
+\end{figure}
+
+Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were checked for spatial convergence. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is retained as the commercial verification baseline, while the deliberately coarser \texttt{Coarse\_Ansys} level is selected to bracket the mesh-convergence trend.
 
 \begin{table}[htbp]
 	\centering
-	\footnotesize
-	\caption{Numerical FEniCS solver and topology-optimization parameters for the diffuser benchmark.}
-	\label{tab:app_B_yoon_diffuser_numerical}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c X}
-		\hline
-		\textbf{Parameter} & \textbf{Symbol / option} & \textbf{Setting} \\
-		\hline
-		Flow finite elements & $(\mathbf{u},p)$ & Taylor--Hood $P_2/P_1$ continuous Galerkin elements \\
-		SA working-variable space & $\tilde{\nu}$ & $P_1$ continuous Galerkin \\
-		Design-density space & $\gamma$ & $DG_0$ cellwise constant density \\
-		Reference FEniCS mesh & -- & \texttt{mesh\_yoon\_yplus1.xdmf}; wall-resolved triangular mesh with $38{,}745$ vertices, $76{,}704$ triangles, far-field $h_{\max}=L/180=5.56\times10^{-3}L$, and first-cell width $1.82\times10^{-3}L$ \\
-		Objective & $J_D$ & Dissipation objective over the design domain \\
-		Initial design density & $\gamma_0$ & $V_f=0.30$, matched to the filtered volume \\
-		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^9$ \\
-		RAMP continuation & $q$ & 12-stage schedule: 0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00 \\
-		Projection continuation & $\beta$ & 12-stage schedule: 1, 2, 4, 8, 8, 12, 16, 32, 64, 96, 128, 128, with threshold $\eta=0.50$ \\
-		MMA move limits & -- & 12-stage schedule: 0.05, 0.04, 0.03, 0.02, 0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010 \\
-		Maximum optimization iterations & -- & 12-stage schedule: 50, 60, 80, 100, 200, 180, 220, 260, 260, 220, 260, 360 MMA iterations; stop if objective change is below $10^{-6}$ for ten iterations \\
-		Filter radius & $r_f$ & $4h_{\max}=2.22\times10^{-2}L$ \\
-		SA working-variable penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
-		Wall-distance penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
-		Wall-distance equation & -- & Reciprocal penalized relaxed Eikonal equation with $\sigma_w=0.1$ and $G_0=20$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
-		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.15$ \\
-		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
-		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
-		\hline
-	\end{tabularx}
-\end{table}
+		\footnotesize
+		\caption{Wall-resolved U-bend mesh hierarchy used for the Ansys grid-independence study.}
+		\label{tab:app_A_ubend_meshes_ansys}
+		\renewcommand{\arraystretch}{1.2}
+		\setlength{\tabcolsep}{5pt}
+		\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
+			\hline
+			\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+			\hline
+			\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
+			Mesh type & Quad-dom. & Quad-dom. & Quad-dom. \\
+			$h_{\mathrm{face}}$ [m] & $4.00 \times 10^{-3}$ & $2.00 \times 10^{-3}$ & $1.25 \times 10^{-3}$ \\
+			Curvature angle & $22^\circ$ & $12^\circ$ & $8^\circ$ \\
+			Inflation option & First layer & First layer & First layer \\
+			$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
+			Inflation layers & $10$ & $16$ & $22$ \\
+			Growth rate & $1.35$ & $1.22$ & $1.16$ \\
+			$t_{\mathrm{infl}}$ [m] & $6.55 \times 10^{-4}$ & $1.59 \times 10^{-3}$ & $2.17 \times 10^{-3}$ \\
+			Nodes & $14{,}525$ & $47{,}707$ & $106{,}460$ \\
+			Elements & $13{,}984$ & $46{,}640$ & $104{,}763$ \\
+			\hline
+			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
+			Static pressure drop $\Delta p_s$ [Pa] & $814.109$ & $796.804$ & $792.995$ \\
+			$\epsilon_{\mathrm{rel}}(\Delta p_s)$ [\%] & -- & $2.13$ & $0.48$ \\
+			\hline
+		\end{tabular*}
+		\vspace{2pt}
+		\begin{minipage}{0.98\textwidth}
+			\scriptsize \textit{Note.} Quad-dom. = quad-dominant. For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+		\end{minipage}
+	\end{table}
 
-The extracted turbulent diffuser geometry is meshed with the same wall-resolved triangular strategy as the laminar diffuser comparison in Table~\ref{tab:app_C_yoon_diffuser_lam_mesh}, but with a distinct coarse--medium--fine hierarchy. The first-layer height is kept fixed at $\Delta y_1=1.50\times10^{-3}~\mathrm{m}$ to match the laminar-design diffuser meshes, while the bulk size, curvature angle, and inflation-layer distribution are refined independently for the turbulent topology.
-
-\begin{table}[htbp]
+\begin{figure}[htpb]
 	\centering
-	\footnotesize
-	\caption{Ansys Fluent mesh-independence table for the extracted turbulent diffuser benchmark geometry.}
-	\label{tab:app_B_yoon_diffuser_mesh}
-	\renewcommand{\arraystretch}{1.2}
-	\setlength{\tabcolsep}{5pt}
-	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
-		\hline
-		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
-		\hline
-		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
-		Mesh type & Tri. & Tri. & Tri. \\
-		Near-wall & WR infl. & WR infl. & WR ST infl. \\
-		$h_{\mathrm{bulk}}$ [m] & $7.50 \times 10^{-3}$ & $5.00 \times 10^{-3}$ & $4.00 \times 10^{-3}$ \\
-		Curvature angle & $9^\circ$ & $6^\circ$ & $5^\circ$ \\
-		$\Delta y_1$ [m] & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ & $1.50 \times 10^{-3}$ \\
-		Inflation layers & $10$ & $14$ & $16$ \\
-		Growth rate & $1.11$ & $1.09$ & $1.08$ \\
-		$t_{\mathrm{infl}}$ [m] & $2.51 \times 10^{-2}$ & $3.90 \times 10^{-2}$ & $4.55 \times 10^{-2}$ \\
-		Nodes & $8{,}104$ & $16{,}166$ & $21{,}238$ \\
-		Elements & $12{,}330$ & $24{,}570$ & $40{,}268$ \\
-		\hline
-		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & $1.2921\times10^{5}$ & $1.2966\times10^{5}$ & $1.2995\times10^{5}$ \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & $0.35$ & $0.22$ \\
-		$\Phi_D^{\mathrm{SST}}$ [W/m] & $1.5296\times10^{4}$ & $1.5570\times10^{4}$ & $1.5725\times10^{4}$ \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & $1.79$ & $0.99$ \\
-		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & $1.2460\times10^{5}$ & $1.2449\times10^{5}$ & $1.2422\times10^{5}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & $0.09$ & $0.22$ \\
-		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & $4.2412\times10^{4}$ & $4.2034\times10^{4}$ & $4.1833\times10^{4}$ \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & $0.89$ & $0.48$ \\
-		Selected validation mesh & \multicolumn{3}{c}{Fine\_Ansys} \\
-		\hline
-	\end{tabular*}
-	\vspace{2pt}
-	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} WR = wall-resolved; ST = smooth-transition; $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
-	\end{minipage}
-\end{table}
+	\includegraphics[width=\textwidth]{UBend-Ansys-Mesh-Independence} % Replace with your Ansys U-bend mesh independence velocity profile plot
+	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
+	\label{fig:app_A_ubend_mesh_indep_ansys}
+\end{figure}
 
 \FloatBarrier

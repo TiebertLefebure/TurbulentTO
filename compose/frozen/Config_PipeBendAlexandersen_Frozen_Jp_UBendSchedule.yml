@@ -1,0 +1,18 @@
+name: ttofrozen-pipebend-alexandersen-jp-ubend-schedule
+services:
+  run:
+    container_name: turbulentto-frozen-pipebend-alexandersen-jp-ubend-schedule
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: turbulentto-frozen-fenics:local
+    platform: linux/amd64
+    working_dir: /home/fenics/shared
+    volumes:
+      - ../../:/home/fenics/shared
+    environment:
+      HDF5_USE_FILE_LOCKING: "FALSE"
+    command:
+      - FluidTO/TurbulentTO_Frozen.py
+      - --config
+      - FluidTO/Configs_Frozen/Config_PipeBendAlexandersen_Frozen_Jp_UBendSchedule.py

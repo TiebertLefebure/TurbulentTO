@@ -607,6 +607,18 @@ def run_steady_sa_ipcs_picard(
     residuals = {key: [] for key in residual_keys}
     start_time = time.time()
 
+    def save_residual_histories():
+        if not post_processing.get("SAVE", False):
+            return
+        residual_directory = saving_directory.get("RESIDUALS")
+        if residual_directory in (None, ""):
+            return
+        if MPI4PY.COMM_WORLD.Get_rank() == 0:
+            os.makedirs(residual_directory, exist_ok=True)
+            for key, values in residuals.items():
+                save_list(values, os.path.join(residual_directory, key + ".txt"))
+        MPI4PY.COMM_WORLD.Barrier()
+
     u_prev_picard = Function(velocity_space)
     p_prev_picard = Function(pressure_space)
     nu_tilde_prev_picard = Function(turbulence_space)
@@ -902,6 +914,7 @@ def run_steady_sa_ipcs_picard(
                 picard_message += "; checkpoint not saved because flow solve did not meet tolerances"
             print(picard_message)
 
+        save_residual_histories()
         last_completed_picard = picard_iter
 
         field_converged = False

@@ -84,7 +84,7 @@ Based on this methodology, this thesis seeks to answer the following research qu
 
 	\item \textbf{To what extent do SA-driven topology optimizations produce final designs whose predicted performance remains consistent under independent Ansys re-analysis with SA and SST $k-\omega$, and how do they compare with laminar-optimized designs under identical turbulent operating conditions?}
 
-	Chapter~\ref{ch:benchmark_results} answers this question through frozen-sensitivity verification, FEniCS optimization results, sharp-geometry Ansys-SA validation, SST $k-\omega$ re-analysis, and laminar-versus-turbulent design comparisons for the pipe-bend, U-bend, and diffuser benchmarks.
+	Chapter~\ref{ch:benchmark_results} answers this question using the pipe-bend, U-bend, and diffuser benchmarks. It reports the FEniCS optimizations, sharp-geometry Ansys-SA validation, SST $k-\omega$ re-analysis, and laminar-versus-turbulent design comparisons. Appendix~\ref{app:C_topology_optimization_benchmarks} contains the supporting frozen-sensitivity verification.
 \end{enumerate}
 
 \section{Outline of the Thesis}
@@ -94,6 +94,6 @@ The remainder of this thesis is structured into the following six chapters:
 	\item \textbf{Chapter~\ref{ch:fenics_implementation} (Implementation of the Spalart-Allmaras Model in FEniCS):} Details the numerical implementation of the standalone SA solver in FEniCS, including weak forms, IPCS flow solves, Picard coupling, and wall-distance computation.
 	\item \textbf{Chapter~\ref{ch:sa_verification} (Verification of the Spalart-Allmaras Solver for Turbulent Internal Flows):} Verifies the standalone FEniCS-SA forward solver against Ansys Fluent on turbulent channel-flow and U-bend benchmarks.
 	\item \textbf{Chapter~\ref{ch:topology_optimization_methodology} (Turbulent Topology Optimization Methodology):} Introduces the density-based optimization framework. It details Brinkman momentum penalization, topology penalties, reciprocal wall-distance penalization, filtering, projection, MMA, and the frozen-turbulence adjoint.
-	\item \textbf{Chapter~\ref{ch:benchmark_results} (Turbulent Topology Optimization Results):} Presents the turbulent topology optimization results for the pipe-bend and U-bend benchmarks from Bayat et al. and the diffuser benchmark from Yoon, documents the pipe-bend sensitivity verification, and evaluates extracted designs with both SA and SST $k-\omega$ turbulence models.
+	\item \textbf{Chapter~\ref{ch:benchmark_results} (Turbulent Topology Optimization Results):} Presents the turbulent topology optimization results for the pipe-bend and U-bend benchmarks from Bayat et al. and the diffuser benchmark from Yoon, and evaluates extracted designs with both SA and SST $k-\omega$ turbulence models. Appendix~\ref{app:C_topology_optimization_benchmarks} documents the pipe-bend sensitivity verification and numerical support material.
 	\item \textbf{Chapter~\ref{ch:conclusion} (Conclusion and Future Work):} Summarizes the main findings, answers the research questions conservatively, and outlines remaining limitations and future extensions toward three-dimensional and conjugate heat-transfer applications.
 \end{itemize}

@@ -87,41 +87,42 @@ QUADRATURE_DEGREE = 4
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 500
-COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-5
-COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-5
+COUPLED_PICARD_MAX_STEPS = 180
+COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
+COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
 PRESSURE_DROP_CONVERGENCE_WINDOW = 100
 PRESSURE_DROP_CONVERGENCE_RELATIVE_TOLERANCE = 5.0e-4
 PRESSURE_DROP_CONVERGENCE_REQUIRE_FLOW = True
-COUPLED_PICARD_SA_SWEEPS_PER_STEP = 3
+COUPLED_PICARD_SA_SWEEPS_PER_STEP = 1
 # The wall-resolved mesh is stiff near the wall. Keep the SA fixed-point update
 # damped so a single SA solve cannot inject a large turbulent-viscosity jump.
 
 COUPLED_PICARD_SA_RELAXATION = 0.01
 SA_NU_TILDE_FLOOR = 1.0e-12
-PICARD_CHECKPOINT_EVERY = 1
+PICARD_CHECKPOINT_EVERY = 5
 PICARD_CHECKPOINT_REQUIRE_FLOW_CONVERGENCE = False
 PICARD_CHECKPOINT_SAVE_PVD = True
 PICARD_CHECKPOINT_WRITE_LATEST = True
-PICARD_CHECKPOINT_ARCHIVE_EVERY = 5
+PICARD_CHECKPOINT_PVD_EVERY = 5
+PICARD_CHECKPOINT_ARCHIVE_EVERY = 20
 PICARD_CHECKPOINT_ARCHIVE_PREFIX = "Picard"
 PICARD_CHECKPOINT_ARCHIVE_CONTINUE_NUMBERING = True
 
 # [Picard] IPCS flow solve parameters
-FLOW_IPCS_TIME_STEP = 1.0e-5
-FLOW_IPCS_MAX_STEPS = 1500
+FLOW_IPCS_TIME_STEP = 1.0e-4
+FLOW_IPCS_MAX_STEPS = 180
 FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-4
-FLOW_IPCS_PRESSURE_TOLERANCE = 1.0e-4
-FLOW_IPCS_VELOCITY_RELAXATION = 0.2
-FLOW_IPCS_PRESSURE_RELAXATION = 0.3
+FLOW_IPCS_PRESSURE_TOLERANCE = 2.0e-3
+FLOW_IPCS_VELOCITY_RELAXATION = 0.3
+FLOW_IPCS_PRESSURE_RELAXATION = 0.1
 
 # [Final flow] IPCS flow solve parameters
-FLOW_IPCS_FINAL_MAX_STEPS = 4000
+FLOW_IPCS_FINAL_MAX_STEPS = 600
 
 FLOW_IPCS_LOG_EVERY = 25
 # Verbose IPCS diagnostics print to the terminal only; SimulationLog.txt stays compact.
-FLOW_IPCS_VERBOSE = True
+FLOW_IPCS_VERBOSE = False
 FLOW_IPCS_NORMALIZE_PRESSURE_MEAN = False
 
 # Fallback solver used by any IPCS block without an explicit block-specific setting.
@@ -140,15 +141,19 @@ SA_TRANSPORT_LINEAR_PRECONDITIONER = "default"
 SA_TRANSPORT_SUPG_FACTOR = 1.0
 SA_TRANSPORT_PSEUDO_TIME_STEP = 5.0e-2
 
-# Restart controls. With RESTART_REQUIRE_FILES=False, the first run in a new
-# result directory starts from the initial condition; later runs resume once
-# checkpoint HDF5 files exist. 
-RESTART_REQUIRE_FILES = True
+# Restart controls. Set UBEND_RESTART_CHECKPOINT to a checkpoint directory when
+# restarting from a known clean state, for example:
+# Results/U-Bend_SA/Medium_WallResolved_Steady/H5 files/Picard_0605
+#
+# With RESTART_REQUIRE_FILES=False, the first run in a new result directory
+# starts from the initial condition; later runs resume once checkpoint HDF5
+# files exist.
+RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 RESTART_PREFER_LATEST_CHECKPOINT = True
 
 RESTART_FROM_SAVED_STATE = True
-RESTART_CHECKPOINT_DIRECTORY = None
+RESTART_CHECKPOINT_DIRECTORY = os.environ.get("UBEND_RESTART_CHECKPOINT", None)
 
 # G-equation wall-distance parameters.
 WALL_DISTANCE_SIGMA_W = 0.1

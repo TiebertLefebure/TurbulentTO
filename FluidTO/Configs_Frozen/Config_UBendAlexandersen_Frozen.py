@@ -29,7 +29,7 @@ DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
 
-RESUME_OPTIMIZATION = False
+RESUME_OPTIMIZATION = True
 
 
 def create_design_mesh():

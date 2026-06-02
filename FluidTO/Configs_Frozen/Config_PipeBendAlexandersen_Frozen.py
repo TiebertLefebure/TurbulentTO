@@ -72,7 +72,7 @@ ALPHA_FLUID = 0.0
 
 # Switch this between "dissipation" (J_D) and "average_inlet_pressure" (J_p).
 # Objective-specific settings below keep both continuation paths in one config.
-OBJECTIVE_TYPE = "dissipation"
+OBJECTIVE_TYPE = "average_inlet_pressure"
 _OBJECTIVE_TYPE_NORMALIZED = OBJECTIVE_TYPE.strip().lower()
 _USE_PRESSURE_OBJECTIVE = _OBJECTIVE_TYPE_NORMALIZED in (
     "average_inlet_pressure",
@@ -143,7 +143,17 @@ SAVE_SA_CLIPPING_DIAGNOSTICS = (
 # and solid-indicator exponent.
 SA_NU_TILDE_PENALTY_ALPHA = 1.0e5
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD = [1e1, 3e1, 1e2, 1e3, 1e4, 3e4, 1e5]
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5]
+
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP = [
+    1.0e3,
+    3.0e3,
+    1.0e4,
+    3.0e4,
+    1.0e5,
+    1.0e5,
+    1.0e5,
+]
+
 SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = (
     SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP
     if _USE_PRESSURE_OBJECTIVE else SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD
@@ -156,7 +166,17 @@ SA_WALL_SIGMA = 0.1
 SA_WALL_G0 = 20.0
 SA_WALL_PENALTY_ALPHA = 1.0e5
 SA_WALL_PENALTY_ALPHA_SCHEDULE_JD = [1e1, 3e1, 1e2, 1e3, 1e4, 3e4, 1e5]
-SA_WALL_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5]
+
+SA_WALL_PENALTY_ALPHA_SCHEDULE_JP = [
+    1.0e3,
+    3.0e3,
+    1.0e4,
+    3.0e4,
+    1.0e5,
+    1.0e5,
+    1.0e5,
+]
+
 SA_WALL_PENALTY_ALPHA_SCHEDULE = (
     SA_WALL_PENALTY_ALPHA_SCHEDULE_JP
     if _USE_PRESSURE_OBJECTIVE else SA_WALL_PENALTY_ALPHA_SCHEDULE_JD
@@ -165,8 +185,8 @@ SA_WALL_PENALTY_N = 3.0
 SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
-SA_WALL_DENSITY_SOURCE = "passive" #"design"
-SA_WALL_SOLID_THRESHOLD = 0.15 #0.50
+SA_WALL_DENSITY_SOURCE = "design" #"design"
+SA_WALL_SOLID_THRESHOLD = 0.50 #0.50
 SA_WALL_DISTANCE_FLOOR = 0.25 * H_MAX
 
 # ================================================================== #
@@ -196,10 +216,11 @@ BETA_PROJ_SCHEDULE_JD = [1.0, 2.0, 4.0, 8.0, 8.0, 12.0, 16.0]
 MOVE_LIMIT_SCHEDULE_JD = [0.010, 0.008, 0.006, 0.004, 0.003, 0.002, 0.0015]
 MAX_INNER_ITERATIONS_SCHEDULE_JD = [60, 80, 100, 120, 160, 180, 220]
 
-Q_PENAL_SCHEDULE_JP = [0.02, 0.04, 0.08, 0.12, 0.18, 0.20]
-BETA_PROJ_SCHEDULE_JP = [2.0, 3.0, 4.5, 6.5, 9.0, 13.0]
-MOVE_LIMIT_SCHEDULE_JP = [0.015, 0.012, 0.009, 0.006, 0.004, 0.003]
-MAX_INNER_ITERATIONS_SCHEDULE_JP = [45, 45, 50, 60, 70, 90]
+Q_PENAL_SCHEDULE_JP = [0.02, 0.04, 0.08, 0.12, 0.18]
+BETA_PROJ_SCHEDULE_JP = [1.5, 3.0, 5.0, 8.0, 12.0]
+MOVE_LIMIT_SCHEDULE_JP = [0.012, 0.010, 0.007, 0.005, 0.003]
+MAX_INNER_ITERATIONS_SCHEDULE_JP = [60, 70, 90, 110, 140]
+
 
 Q_PENAL_SCHEDULE = (
     Q_PENAL_SCHEDULE_JP if _USE_PRESSURE_OBJECTIVE else Q_PENAL_SCHEDULE_JD
@@ -436,3 +457,6 @@ def mark_boundaries(mesh):
 def build_velocity_profile_sets():
     u_inlet = Expression(("u_max", "0.0"), degree=0, u_max=U_MAX_INLET)
     return [u_inlet], []
+
+
+##########

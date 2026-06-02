@@ -8,9 +8,9 @@ from Utilities_SharedTO import build_cell_tag_restriction_functions, load_mesh_f
 # -------------------------------------------------------------
 # Configuration: Yoon 2016 Diffuser - Laminar reference (Re = 1)
 #
-# Uses the same geometry and parabolic inlet/outlet velocity profiles as the
-# turbulent Yoon diffuser config. The laminar reference keeps those velocity
-# magnitudes and raises viscosity so rho * U_in * L / mu = 1.
+# Uses the same geometry and parabolic inlet profile as the pressure-outlet
+# turbulent Yoon diffuser config. The laminar reference keeps the inlet
+# magnitude and raises viscosity so rho * U_in * L / mu = 1.
 # -------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,8 +56,8 @@ MU_FLUID_VALUE = U_MAX_INLET * L * RHO_FLUID_VALUE / REYNOLDS_NUMBER
 ALPHA_FLUID = 0.0
 ALPHA_SOLID = 1.0e9
 
-# Re = rho * U_MAX_INLET * L / mu = 1, with U_MAX_INLET and U_MAX_OUTLET
-# matching the turbulent diffuser boundary profiles.
+# Re = rho * U_MAX_INLET * L / mu = 1, with the pressure outlet matching the
+# primary turbulent diffuser comparison.
 
 VOL_FRAC = 0.30
 INITIAL_DENSITY_VALUE = VOL_FRAC

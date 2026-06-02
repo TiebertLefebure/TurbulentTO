@@ -1,13 +1,13 @@
-from Configs_Frozen.Config_PipeBendAlexandersen_Frozen import *
+from Configs_Frozen.Config_PipeBendAlexandersen_Frozen_Jp_UBendSchedule import *
 
 
 # One-shot sensitivity verification for the Alexandersen pipe-bend case.
 #
-# This config intentionally inherits the working reciprocal_penalized wall
-# distance, design wall-density source, and power penalization settings from
-# Config_PipeBendAlexandersen_Frozen.py. The finite-difference perturbations
-# keep the SA eddy-viscosity and reciprocal wall-distance fields frozen, which
-# matches the frozen-turbulence adjoint derivative being checked.
+# This config intentionally inherits the J_p retry path used for the current
+# Bayat bend cases: reciprocal_penalized wall distance, design wall-density
+# source, and power penalization. The finite-difference perturbations keep the
+# SA eddy-viscosity and reciprocal wall-distance fields frozen, matching the
+# frozen-turbulence adjoint derivative being checked.
 
 RESULTS_ROOT_NAME = "Results_Frozen/Results_PipeBendAlexandersen_Frozen_Sensitivity"
 
