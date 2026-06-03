@@ -8,65 +8,69 @@
     font=\sffamily\small,
     >=Latex,
     mainbox/.style={draw=black!65, rounded corners=2pt, fill=white,
-                    align=center, inner xsep=7pt, inner ysep=5pt,
-                    minimum width=72mm, text width=68mm},
-    ipcstep/.style={draw=black!55, rounded corners=2pt, fill=white,
-                    align=center, inner xsep=5pt, inner ysep=4pt,
-                    minimum width=32mm, text width=30mm},
-    group/.style={draw=blue!70!black, rounded corners=3pt,
-                  inner xsep=9pt, inner ysep=9pt},
+                    align=left, inner xsep=7pt, inner ysep=5pt,
+                    minimum width=92mm, text width=86mm},
+    outside/.style={mainbox, fill=gray!7, align=center},
+    loopbox/.style={draw=blue!70!black, rounded corners=3pt,
+                    inner xsep=10pt, inner ysep=9pt},
+    badge/.style={circle, fill=blue!70!black, text=white,
+                  inner sep=1.2pt, minimum size=5mm,
+                  font=\sffamily\bfseries\scriptsize},
     arrow/.style={-{Latex[length=2.8mm,width=1.8mm]},
                   line width=0.75pt, draw=blue!70!black},
     returnarrow/.style={-{Latex[length=2.6mm,width=1.7mm]},
                         line width=0.65pt, draw=black!55},
-    label/.style={font=\sffamily\footnotesize, text=black!65, align=center}
+    smalllabel/.style={font=\sffamily\footnotesize, text=black!65, align=center}
 ]
 
-\node[mainbox, fill=gray!7] (eikonal) at (0,0)
-    {Solve relaxed Eikonal equation\\fixed wall distance $y$};
+\node[outside] (eikonal) at (0,0)
+    {\textbf{Relaxed Eikonal solve}\\
+     fixed wall distance $y$ for the SA closure};
 
-\node[mainbox] (eddy) at (0,-1.45)
-    {Assemble eddy viscosity from previous SA field\\
-     $\tilde{\nu}^{k}\rightarrow \nu_t^{k}\rightarrow \nu_{\mathrm{eff}}^{k}=\nu+\nu_t^{k}$};
+\node[mainbox, below=9mm of eikonal] (eddy)
+    {\hspace{7mm}\textbf{Assemble turbulence coefficients}\\
+     Use previous SA field $\tilde{\nu}^{k}$ to form
+     $\nu_t^{k}$ and $\nu_{\mathrm{eff}}^{k}=\nu+\nu_t^{k}$.};
 
-\node[ipcstep] (tent) at (-3.9,-3.25)
-    {tentative velocity\\$\mathbf{u}^{*}$};
-\node[ipcstep] (press) at (0,-3.25)
-    {pressure correction\\$p^{k+1}$};
-\node[ipcstep] (vel) at (3.9,-3.25)
-    {velocity update\\$\mathbf{u}^{k+1}$};
-\node[group, fit=(tent)(press)(vel), label={[label]above:IPCS velocity-pressure solve}] (ipcs) {};
+\node[mainbox, below=7mm of eddy] (ipcs)
+    {\hspace{7mm}\textbf{Advance velocity-pressure state with IPCS}\\
+     Tentative velocity $\mathbf{u}^{*}$ $\rightarrow$
+     pressure correction $p^{k+1}$ $\rightarrow$
+     velocity update $\mathbf{u}^{k+1}$.};
 
-\node[mainbox] (sa) at (0,-5.15)
-    {Solve SA transport equation\\
-     $\mathbf{u}^{k+1},\,y \rightarrow \tilde{\nu}^{k+1}$};
+\node[mainbox, below=7mm of ipcs] (sa)
+    {\hspace{7mm}\textbf{Solve SA transport equation}\\
+     Use $\mathbf{u}^{k+1}$ and $y$ to compute the next working variable
+     $\tilde{\nu}^{k+1}\in T_h$.};
 
-\node[mainbox] (relax) at (0,-6.65)
-    {Under-relax and bound $\tilde{\nu}^{k+1}$\\
-     recompute $\nu_t^{k+1}$};
+\node[mainbox, below=7mm of sa] (relax)
+    {\hspace{7mm}\textbf{Relax, bound, and check convergence}\\
+     Under-relax $\tilde{\nu}^{k+1}$, recompute $\nu_t^{k+1}$,
+     and test the Picard field updates.};
 
-\node[mainbox, fill=gray!7] (check) at (0,-8.05)
-    {Check Picard field updates};
+\node[badge] at ($(eddy.west)+(3mm,0)$) {1};
+\node[badge] at ($(ipcs.west)+(3mm,0)$) {2};
+\node[badge] at ($(sa.west)+(3mm,0)$) {3};
+\node[badge] at ($(relax.west)+(3mm,0)$) {4};
 
-\node[group, fit=(eddy)(ipcs)(sa)(relax)(check),
-      label={[font=\sffamily\bfseries\small,text=blue!70!black]north west:outer Picard iteration $k\rightarrow k+1$}] (picard) {};
+\node[loopbox, fit=(eddy)(ipcs)(sa)(relax)] (picard) {};
+\node[font=\sffamily\bfseries\small, text=blue!70!black, fill=white, inner sep=1.5pt,
+      anchor=west] at ($(picard.north west)+(3mm,0)$)
+      {outer Picard iteration $k\rightarrow k+1$};
 
-\node[mainbox, fill=gray!7, minimum width=46mm, text width=42mm] (stop) at (0,-9.45)
-    {converged state};
+\node[outside, below=9mm of relax, minimum width=48mm, text width=44mm] (stop)
+    {converged RANS-SA state};
 
 \draw[arrow] (eikonal) -- (picard.north);
-\draw[arrow] (eddy) -- (ipcs.north);
-\draw[arrow] (tent) -- (press);
-\draw[arrow] (press) -- (vel);
-\draw[arrow] (ipcs.south) -- (sa);
+\draw[arrow] (eddy) -- (ipcs);
+\draw[arrow] (ipcs) -- (sa);
 \draw[arrow] (sa) -- (relax);
-\draw[arrow] (relax) -- (check);
-\draw[arrow] (check) -- node[label, right] {yes} (stop);
+\draw[arrow] (relax) -- node[smalllabel, right] {converged} (stop);
 
-\draw[returnarrow] (check.west) -- ++(-2.15,0)
-    |- node[label, pos=0.25, left] {no\\next Picard step} (eddy.west);
+\draw[returnarrow] (relax.west) -- ++(-10mm,0)
+    |- node[smalllabel, pos=0.25, left] {not\\converged} (eddy.west);
 
-\node[label, anchor=west] at (-4.9,-10.25)
+\node[smalllabel, anchor=west] at ($(stop.south west)+(-12mm,-6mm)$)
     {$V_h$: velocity space \quad $Q_h$: pressure space \quad $T_h$: SA working-variable space};
 
 \end{tikzpicture}
