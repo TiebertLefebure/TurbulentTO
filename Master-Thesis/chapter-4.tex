@@ -36,14 +36,14 @@ Prior to this comparative analysis, the Ansys baseline itself was verified for g
 
 \begin{figure}[htpb]
 	\centering
-	\begin{subfigure}[b]{0.48\textwidth}
+	\begin{subfigure}[b]{0.45\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Channel-Ansys-Velocity}
 		\caption{Ansys Fluent SA contour for $u$}
 		\label{fig:channel_ansys}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.48\textwidth}
+	\begin{subfigure}[b]{0.49\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Channel-FEniCS-Velocity-Magnitude}
 		\caption{FEniCS SA contour for $u$}
@@ -62,14 +62,14 @@ Prior to this comparative analysis, the Ansys baseline itself was verified for g
 
 \begin{figure}[htpb]
 	\centering
-	\begin{subfigure}[b]{0.48\textwidth}
+	\begin{subfigure}[b]{0.45\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Channel-Ansys-NuTilde}
 		\caption{Ansys Fluent SA contour for $\tilde{\nu}$}
 		\label{fig:channel_ansys_nutilde}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.48\textwidth}
+	\begin{subfigure}[b]{0.54\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{Channel-FEniCS-NuTilde}
 		\caption{FEniCS SA contour for $\tilde{\nu}$}
@@ -94,7 +94,7 @@ and the corresponding plane-channel skin-friction coefficient,
 \end{equation}
 Here $u_x$ is the streamwise velocity component, $H$ is the channel height, $L$ is the streamwise periodic length, $\tau_w$ is the mean wall shear stress, $\rho$ is the fluid density, and $\Delta p$ is the imposed pressure difference. When the solver pressure is treated as kinematic pressure, the same expression is evaluated consistently with $\rho=1$. Since $\Delta p$ is fixed, $C_f$ is not independent of $U_{\mathrm{bulk}}$, but it is still useful because it converts the imposed forcing into the wall friction implied by the predicted flow rate.
 
-The two error metrics are cross-code discrepancies, not separate errors for each solver. After interpolating the FEniCS and Ansys profiles onto the same line coordinates $y_i$, the pointwise difference is
+The two error metrics are cross-code discrepancies, not separate errors for each solver. The exported fine-mesh profiles provide velocity magnitude along the channel diameter; for this fully developed channel this is equivalent to the streamwise velocity within the exported precision. After interpolating the FEniCS profile onto the Ansys line coordinates $y_i$, the pointwise difference is
 \begin{equation}
 	e_i = u_{x,\mathrm{FEniCS}}(y_i)-u_{x,\mathrm{Ansys}}(y_i).
 \end{equation}
@@ -102,6 +102,7 @@ The maximum pointwise velocity discrepancy is normalized by the maximum Ansys pr
 \begin{equation}
 	E_{\infty} =
 	\frac{\max_i |e_i|}{\max_i |u_{x,\mathrm{Ansys}}(y_i)|}\times 100\%,
+	\label{eq:channel_einf}
 \end{equation}
 and the relative profile error is evaluated as a line-integrated norm,
 \begin{equation}
@@ -110,26 +111,27 @@ and the relative profile error is evaluated as a line-integrated norm,
 	\frac{\int_0^H |u_{x,\mathrm{FEniCS}}-u_{x,\mathrm{Ansys}}|^2\,\mathrm{d}y}
 	{\int_0^H |u_{x,\mathrm{Ansys}}|^2\,\mathrm{d}y}
 	\right)^{1/2}\times 100\%.
+	\label{eq:channel_el2}
 \end{equation}
-The reported error metrics are therefore cross-code verification discrepancies between the FEniCS and Ansys profiles. They are assessed relative to the grid-independence evidence documented in Appendix~\ref{app:B_sa_solver_verification} and to the accuracy required before using the FEniCS solver in the topology optimization loop. The quantitative errors and macroscopic metrics are summarized in Table~\ref{tab:channel_errors}.
+These metrics are useful compact supplements when exported FEniCS and Ansys profile arrays are available. They should not be computed from visually digitized plots, because plot digitization and axis scaling would introduce an uncertainty unrelated to the solver comparison. For the fine-mesh channel profiles, the FEniCS data are sampled at 1001 uniformly spaced diameter coordinates, while the Ansys data are sampled at 190 exported diameter coordinates. Three duplicate Ansys coordinates have identical velocity values and are collapsed before integration. The FEniCS profile is then linearly interpolated onto the 187 unique Ansys coordinates, and Eq.~\eqref{eq:channel_el2} is evaluated with a trapezoidal line integral over those coordinates.
 
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Quantitative comparison of flow metrics and extracted profile discrepancies for the 2D channel benchmark.}
-	\label{tab:channel_errors}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+		\caption{Macroscopic flow metrics and fine-mesh profile discrepancies for the 2D channel benchmark. The profile-error norms are evaluated from the exported Ansys and FEniCS diameter profiles, with the FEniCS profile interpolated onto the unique Ansys coordinates.}
+		\label{tab:channel_errors}
+		\renewcommand{\arraystretch}{1.2}
+		\begin{tabularx}{\textwidth}{X c c c}
 		\hline
-		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Rel. diff.} \\
-		\hline
-		Bulk velocity ($U_\mathrm{bulk}$) [m/s] & [TBD] & $18.472$ & [TBD]\% \\
-		Friction coefficient ($C_f$) & [TBD] & $5.861\times10^{-3}$ & [TBD]\% \\
-		Max pointwise velocity discrepancy ($E_\infty$) & -- & -- & [TBD]\% \\
-		Relative $L_2$ velocity discrepancy ($E_{L_2}$) & -- & -- & [TBD]\% \\
-		\hline
-	\end{tabularx}
-\end{table}
+		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Discrepancy} \\
+			\hline
+			Bulk velocity ($U_\mathrm{bulk}$) [m/s] & $17.977$ & $18.458$ & $2.67\%$ \\
+			Friction coefficient ($C_f$) & $6.188\times10^{-3}$ & $5.870\times10^{-3}$ & $5.14\%$ \\
+			Maximum profile discrepancy ($E_{\infty}$) & \multicolumn{2}{c}{fine-mesh velocity profile} & $2.66\%$ \\
+			Relative profile norm ($E_{L_2}$) & \multicolumn{2}{c}{fine-mesh velocity profile} & $2.64\%$ \\
+			\hline
+		\end{tabularx}
+	\end{table}
 
 This agreement supports the verification that the core Navier-Stokes solver, relaxed Eikonal wall-distance field, and SA production/destruction terms behave correctly in a canonical wall-bounded turbulent flow. The main-text parameters are sufficient to interpret the result, while Appendix~\ref{app:B_sa_solver_verification} provides the detailed mesh and solver settings needed to reproduce it.
 
@@ -169,14 +171,14 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{UBend-FEniCS-VelocityMagnitude}
 		\caption{FEniCS SA contour for $u$}
 		\label{fig:ubend_fenics}
 	\end{subfigure}
 	\vspace{0.5cm}
-	\begin{subfigure}[b]{0.48\textwidth}
+	\begin{subfigure}[b]{\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{UBend-Verification-Velocity}
 		\caption{Velocity profiles extracted at the bend exit}
 		\label{fig:ubend_profiles}
 	\end{subfigure}
@@ -195,7 +197,7 @@ Having validated the spatial resolution of the FEniCS mesh, an equivalent grid-i
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{UBend-FEniCS-NuTilde}
 		\caption{FEniCS SA contour for $\tilde{\nu}$}
 		\label{fig:ubend_fenics_nutilde}
 	\end{subfigure}
@@ -216,7 +218,7 @@ For the U-bend, the inlet velocity is prescribed rather than produced by a fixed
 	\frac{1}{|\Gamma_{\mathrm{out}}|}\int_{\Gamma_{\mathrm{out}}} p_k \, \mathrm{d}\Gamma
 	\right],
 \end{equation}
-where $p_k$ is the kinematic pressure solved by the IPCS formulation, $\rho=997$ kg/m$^3$, and $|\Gamma|=\int_\Gamma 1\,\mathrm{d}\Gamma$. The inlet and outlet integrals correspond to the marked FEniCS facets \texttt{ds(2)} and \texttt{ds(3)}, respectively, so the reported value is the area-averaged inlet static pressure minus the area-averaged outlet static pressure, converted to pascals. The retained local comparison metrics are the same bend-exit profile discrepancies used for the channel,
+	where $p_k$ is the kinematic pressure solved by the IPCS formulation, $\rho=997$ kg/m$^3$, and $|\Gamma|=\int_\Gamma 1\,\mathrm{d}\Gamma$. The inlet and outlet integrals correspond to the marked FEniCS facets \texttt{ds(2)} and \texttt{ds(3)}, respectively, so the reported value is the area-averaged inlet static pressure minus the area-averaged outlet static pressure, converted to pascals. If coordinate-matched bend-exit profiles are exported, the same local comparison metrics used for the channel are computed as
 \begin{equation}
 	E_{\infty} =
 	\frac{\max_i \left||\mathbf{u}_{\mathrm{FEniCS}}(s_i)|-|\mathbf{u}_{\mathrm{Ansys}}(s_i)|\right|}
@@ -230,27 +232,27 @@ and
 	{\int_{\Gamma_D} |\mathbf{u}_{\mathrm{Ansys}}|^2\,\mathrm{d}s}
 	\right)^{1/2}\times 100\%,
 \end{equation}
-where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. Table~\ref{tab:ubend_errors} summarizes the quantitative error margins and the macroscopic pressure drop ($\Delta p$) across the 2D U-bend domain for both solvers. Since the FEniCS formulation solves for kinematic pressure, its pressure drop is converted to physical static pressure using $\rho=997$ kg/m$^3$ before comparison; equivalently, the fine Ansys pressure drop of $792.995$ Pa corresponds to $\Delta p/\rho = 0.7954$ m$^2$/s$^2$.
+	where $\Gamma_D$ denotes the line segment across the bend-exit diameter and $s$ is the corresponding arclength coordinate. As in the channel case, these profile norms are useful only when evaluated from the exported profile arrays rather than from visual plot digitization. Since the FEniCS formulation solves for kinematic pressure, any retained pressure-drop value must be converted to physical static pressure using $\rho=997$ kg/m$^3$ before comparison; equivalently, the fine Ansys pressure drop of $792.995$ Pa corresponds to $\Delta p/\rho = 0.7954$ m$^2$/s$^2$.
 
 \begin{table}[!ht]
 	\centering
 	\footnotesize
-	\caption{Quantitative comparison of flow metrics and extracted profile discrepancies for the 2D U-bend benchmark.}
-	\label{tab:ubend_errors}
-	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{X c c c}
+		\caption{Macroscopic pressure-drop comparison and exported bend-exit profile discrepancies for the 2D U-bend benchmark. The profile-error norms use the fine Ansys profile and the medium FEniCS profile, with the FEniCS profile interpolated onto the unique Ansys diameter coordinates.}
+		\label{tab:ubend_errors}
+		\renewcommand{\arraystretch}{1.2}
+		\begin{tabularx}{\textwidth}{X c c c}
 		\hline
-		\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Rel. diff.} \\
-		\hline
-		Pressure drop ($\Delta p$) [Pa] & $792.995$ & $[TBD]$ & $TBD\%$ \\
-		Max pointwise velocity discrepancy ($E_\infty$) & -- & -- & [TBD]\% \\
-		Relative $L_2$ velocity discrepancy ($E_{L_2}$) & -- & -- & [TBD]\% \\
-		\hline
-	\end{tabularx}
-\end{table}
+			\textbf{Metric} & \textbf{Ansys} & \textbf{FEniCS} & \textbf{Discrepancy} \\
+			\hline
+			Pressure drop ($\Delta p$) [Pa] & $792.995$ & $815.130$ & $2.79\%$ \\
+			Maximum profile discrepancy ($E_{\infty}$) & \multicolumn{2}{c}{bend-exit velocity profile} & $8.50\%$ \\
+			Relative profile norm ($E_{L_2}$) & \multicolumn{2}{c}{bend-exit velocity profile} & $2.75\%$ \\
+			\hline
+		\end{tabularx}
+	\end{table}
 
 \section{Conclusion}
 \label{sec:sa_verification_conclusion}
-The two verification cases answer the second research question by establishing the practical operating range of the custom FEniCS-SA solver before it is embedded in the topology optimization loop. The periodic channel confirms that the solver reproduces canonical wall-bounded turbulent behavior, including the near-wall damping and production balance that are central to the SA model. The U-bend checks the same implementation in a curved, separation-prone internal flow, where streamline curvature and adverse pressure gradients make the forward-flow prediction more demanding than in the channel. The localized velocity-profile agreement and pressure-drop metric indicate that the framework provides a credible forward-flow basis for the pressure-drop and dissipation objectives in the subsequent topology optimization campaigns.
+The two verification cases answer the second research question by establishing the practical operating range of the custom FEniCS-SA solver before it is embedded in the topology optimization loop. The periodic channel confirms that the solver reproduces canonical wall-bounded turbulent behavior, including the near-wall damping and production balance that are central to the SA model. On the fine mesh, the channel bulk velocity differs from the Ansys reference by $2.67\%$, while the exported diameter profile gives $E_{\infty}=2.66\%$ and $E_{L_2}=2.64\%$. These numbers do not imply pointwise equivalence with a commercial CFD code, but they show that the solver captures the dominant velocity scale and wall-bounded profile shape with sufficient accuracy for use as a forward-flow model in topology optimization. The U-bend then checks the same implementation in a curved, separation-prone internal flow, where streamline curvature and adverse pressure gradients make the forward-flow prediction more demanding than in the channel.
 
-These results do not remove the known limitations of a 2D SA model: secondary Dean vortices, anisotropic Reynolds stresses, and full three-dimensional separation physics remain outside the present solver scope. They do, however, show that the implemented SA equations, wall-distance calculation, and segregated coupling strategy are sufficiently consistent with Ansys Fluent to support the topology optimization methodology and results presented in Chapters~\ref{ch:topology_optimization_methodology} and \ref{ch:benchmark_results}. The verification should therefore be interpreted precisely: it validates the forward turbulent-flow solver that is extended by the optimizer. The separate sensitivity checks in Appendix~\ref{app:C_topology_optimization_benchmarks} then verify the additional frozen-adjoint derivative used by MMA.
+These results should therefore be interpreted as a targeted verification of the forward solver, not as a claim that the custom implementation perfectly aligns with Ansys Fluent. The known limitations of a 2D SA model remain: secondary Dean vortices, anisotropic Reynolds stresses, and full three-dimensional separation physics are outside the present solver scope. Within that scope, however, the implemented SA equations, wall-distance calculation, and segregated coupling strategy produce stable and physically plausible turbulent internal-flow fields that are accurate enough to support the pressure-drop and dissipation objectives used in the subsequent topology optimization campaigns. The separate sensitivity checks in Appendix~\ref{app:C_topology_optimization_benchmarks} then verify the additional frozen-adjoint derivative used by MMA.

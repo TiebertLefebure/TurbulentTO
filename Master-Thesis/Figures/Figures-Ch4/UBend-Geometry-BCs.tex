@@ -6,7 +6,7 @@
   font=\sffamily\small,
   flow/.style={-{Latex[length=2.8mm,width=1.8mm]}, line width=0.78pt, draw=blue!65!black},
   dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center},
+  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=3pt, align=center},
   wall/.style={black!82, line width=24pt, line cap=butt, line join=round},
   fluid/.style={blue!6, line width=20pt, line cap=butt, line join=round}
 ]
@@ -54,16 +54,20 @@
 
 % Extraction line at the start of the outlet straight section.
 \draw[black!65, dashed, line width=0.8pt] (\xr-\w,\cy) -- (\xr+\w,\cy);
-\node[bc, anchor=west, text width=29mm] at (\xr+0.70,\cy)
+\node[bc, anchor=west, text width=33mm] (profileLabel) at (\xr+0.95,\cy)
   {bend-exit\\profile line $\Gamma_D$};
+\draw[-{Latex[length=2.3mm,width=1.5mm]}, black!55, line width=0.65pt]
+  (profileLabel.west) -- (\xr+\w,\cy);
 
 % Boundary-condition labels.
 \node[bc, anchor=south east, text width=32mm] at (\xl-0.35,\ytop+0.40)
   {inlet\\$\mathbf{u}_{in}=1.42$ m/s\\$\tilde{\nu}_{in}=9.34{\times}10^{-5}$};
 \node[bc, anchor=south west, text width=25mm] at (\xr+0.35,\ytop+0.40)
   {outlet\\$p=0$ Pa};
-\node[bc, text width=35mm] at (\xc,3.55)
+\node[bc, anchor=west, text width=37mm] (wallLabel) at (\xr+0.95,3.65)
   {no-slip walls\\wall-resolved SA\\$Re_D\approx44{,}700$\\$De\approx15{,}000$};
+\draw[-{Latex[length=2.3mm,width=1.5mm]}, black!55, line width=0.65pt]
+  (wallLabel.west) -- (\xr,3.95);
 
 \draw[dim] (\xl-0.92,\ytop) -- node[midway, rotate=90, above, fill=white, inner sep=1pt]
   {shortened straight leg, $L=30D$} (\xl-0.92,\cy);

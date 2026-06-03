@@ -28,12 +28,12 @@ The first verification benchmark consists of a pressure-driven periodic 2D chann
 		Reference velocity & $U_{\mathrm{ref}}=18.5$ m/s, utilized to define the target Reynolds number \\
 		Kinematic viscosity & $\nu = 1.81818 \times 10^{-3}$ m$^2$/s \\
 		Reynolds number & $Re_H \approx 2.03 \times 10^4$ \\
-		Body force & $\mathbf{f}=(0,0)$ m/s$^2$ \\
-		Driving condition & Fixed static pressure drop from $p=2$ Pa to $p=0$ Pa across the periodic streamwise direction \\
-		Velocity boundary conditions & Periodic velocity between inlet/outlet planes; no-slip on top and bottom walls \\
-		Pressure boundary conditions & $p=2$ Pa at the upstream pressure plane; $p=0$ Pa at the downstream pressure plane \\
-		SA boundary conditions & Periodic $\tilde{\nu}$ between inlet/outlet planes; $\tilde{\nu}=0$ at walls \\
-		Initial fields & $\mathbf{u}_0=(18.5,0)$ m/s, $p_0=2$ Pa, $\tilde{\nu}_0=5.0 \times 10^{-3}$ m$^2$/s \\
+			Body force & $\mathbf{f}=(1.0,0)$ m/s$^2$ in the kinematic-pressure convention \\
+			Driving condition & Streamwise body-force mode, equivalent to a pressure drop of $2$ Pa over the periodic length $L=2$ m \\
+			Velocity boundary conditions & Periodic velocity between inlet/outlet planes; no-slip on top and bottom walls \\
+			Pressure boundary conditions & Periodic pressure field with no inlet/outlet pressure Dirichlet condition; pressure mean normalized during IPCS \\
+			SA boundary conditions & Periodic $\tilde{\nu}$ between inlet/outlet planes; $\tilde{\nu}=0$ at walls \\
+			Initial fields & $\mathbf{u}_0=(18.5,0)$ m/s, $p_0=0$ Pa, $\tilde{\nu}_0=5.0 \times 10^{-3}$ m$^2$/s \\
 		Verification mesh & \texttt{Fine\_FEniCS}; first layer $\Delta y_1 = 1.709 \times 10^{-3}$ m \\
 		\hline
 	\end{tabularx}
@@ -57,15 +57,17 @@ The channel flow was resolved using an Incremental Pressure Correction Scheme (I
 		Pressure space & $p$ & Scalar CG1 \\
 		SA working-variable space & $\tilde{\nu}$ & Scalar CG1, periodic in streamwise direction \\
 		Quadrature degree & -- & $2$ \\
-		Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $200$ \\
-		SA solves per Picard step & -- & $1$ \\
-		Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-6}$ \\
-		Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-6}$ \\
-		Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
-		IPCS pseudo-time step & $\Delta t$ & $5.0 \times 10^{-3}$ s \\
-		Maximum IPCS steps per Picard step & -- & $500$ \\
-		IPCS velocity tolerance & -- & $1.0 \times 10^{-6}$ \\
-		IPCS pressure tolerance & -- & $1.0 \times 10^{-6}$ \\
+			Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $400$ \\
+			SA solves per Picard step & -- & $1$ \\
+			Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-5}$ \\
+			Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-6}$ \\
+			Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
+			Outer diagnostic convergence & -- & Midline bulk velocity window of $100$ Picard steps with relative tolerance $1.0\times10^{-3}$ \\
+			IPCS pseudo-time step & $\Delta t$ & $5.0 \times 10^{-3}$ s \\
+			Maximum IPCS steps per Picard step & -- & $500$ \\
+			IPCS velocity tolerance & -- & $1.0 \times 10^{-6}$ \\
+			IPCS pressure tolerance & -- & $1.0 \times 10^{-6}$; pressure convergence is diagnostic in body-force mode \\
+			IPCS pressure normalization & -- & Enabled; the pressure correction is mean-normalized \\
 		Velocity relaxation factor & $\alpha_u$ & $0.3$ \\
 		Pressure relaxation factor & $\alpha_p$ & $0.3$ \\
 		SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.3$ \\
@@ -118,7 +120,7 @@ Visual confirmation of this spatial convergence is provided by the wall-normal v
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=\textwidth]{Channel-FEniCS-Mesh-Independence} % Replace with your channel mesh independence velocity profile plot
+	\includegraphics[width=\textwidth]{Channel-FEniCS-Mesh-Independence}
 	\caption{FEniCS wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
 	\label{fig:app_A_channel_mesh_independence}
 \end{figure}
@@ -160,7 +162,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=\textwidth]{Channel-Ansys-Mesh-Independence} % Replace with your Ansys channel mesh independence plot
+	\includegraphics[width=\textwidth]{Channel-Ansys-Mesh-Independence}
 	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
 	\label{fig:app_A_channel_mesh_indep_ansys}
 \end{figure}
@@ -196,7 +198,7 @@ The second verification benchmark evaluates a highly convective U-bend. Because 
 		Velocity boundary conditions & No-slip on all curved and straight pipe walls; natural velocity condition at pressure outlet \\
 		Pressure boundary conditions & $p=0$ Pa at outlet; pressure left free at inlet and walls \\
 		SA boundary conditions & $\tilde{\nu}_{in}=9.34 \times 10^{-5}$ m$^2$/s at inlet; $\tilde{\nu}=0$ at walls; natural condition at outlet \\
-		Initial fields & $\mathbf{u}_0=(0,0)$ m/s, $p_0=0$ Pa, $\tilde{\nu}_0=\tilde{\nu}_{in}$ \\
+			Initial fields & $\mathbf{u}_0=(0,-1.42)$ m/s, $p_0=0$ Pa, $\tilde{\nu}_0=\tilde{\nu}_{in}$ \\
 		Verification mesh & \texttt{Medium\_FEniCS}; first layer $\Delta y_1 = 1.20 \times 10^{-5}$ m \\
 		\hline
 	\end{tabularx}
@@ -225,14 +227,17 @@ Due to the adverse pressure gradients and secondary flow separation induced by t
 		Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-4}$ \\
 		Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-4}$ \\
 		Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
-		IPCS pseudo-time step & $\Delta t$ & $1.0 \times 10^{-4}$ s \\
-		Maximum IPCS steps per Picard step & -- & $180$ \\
-		IPCS velocity tolerance & -- & $1.0 \times 10^{-4}$ \\
-		IPCS pressure tolerance & -- & $2.0 \times 10^{-3}$ \\
-		Velocity relaxation factor & $\alpha_u$ & $0.3$ \\
-		Pressure relaxation factor & $\alpha_p$ & $0.1$ \\
-		SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.01$ \\
-		SA lower bound & $\tilde{\nu}_{\min}$ & $1.0 \times 10^{-12}$ \\
+			IPCS pseudo-time step & $\Delta t$ & $1.0 \times 10^{-4}$ s \\
+			Maximum IPCS steps per Picard step & -- & $180$ \\
+			Maximum IPCS steps for final flow & -- & $600$ \\
+			IPCS velocity tolerance & -- & $1.0 \times 10^{-4}$ \\
+			IPCS pressure tolerance & -- & $2.0 \times 10^{-3}$ \\
+			Pressure-drop convergence monitor & -- & Final-window length $100$ with relative tolerance $5.0\times10^{-4}$; flow convergence required \\
+			Velocity relaxation factor & $\alpha_u$ & $0.3$ \\
+			Pressure relaxation factor & $\alpha_p$ & $0.1$ \\
+			SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.01$ \\
+			SA pseudo-time stabilization & -- & SA transport pseudo-time step $5.0\times10^{-2}$ s \\
+			SA lower bound & $\tilde{\nu}_{\min}$ & $1.0 \times 10^{-12}$ \\
 		Wall-distance equation & -- & Relaxed Eikonal, $\sigma_w=0.1$, $G_0=20$ \\
 		Wall-distance Newton settings & -- & Relative tolerance $1.0 \times 10^{-8}$; absolute tolerance $1.0 \times 10^{-10}$; maximum $80$ iterations; relaxation $0.5$ \\
 		Linear solver strategy & -- & IPCS blocks: GMRES with ILU velocity/correction preconditioning and Hypre-AMG pressure preconditioning; SA transport: default solver \\
@@ -274,26 +279,26 @@ where $|\Gamma|=\int_{\Gamma}1\,\mathrm{d}\Gamma$ is the FEniCS boundary measure
 			Inflation layers & $10$ & $14$ & $18$ \\
 			Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
 			$t_{\mathrm{infl}}$ [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
-			Vertices & $23{,}751$ & $73{,}978$ & $182{,}450$ \\
-			Elements & $45{,}998$ & $144{,}952$ & $359{,}646$ \\
+				Vertices & $23{,}749$ & $73{,}978$ & $182{,}870$ \\
+				Elements & $45{,}994$ & $144{,}952$ & $360{,}486$ \\
 			\hline
 			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
-			Static pressure drop $\Delta p_s$ [Pa] & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-			$\epsilon_{\mathrm{rel}}(\Delta p_s)$ [\%] & -- & \textit{TBD} & \textit{TBD} \\
+				Static pressure drop $\Delta p_s$ [Pa] & \multicolumn{3}{c}{\textit{No completed three-grid pressure-drop set is checked in}} \\
+				$\epsilon_{\mathrm{rel}}(\Delta p_s)$ [\%] & -- & \multicolumn{2}{c}{\textit{Not reported}} \\
 			\hline
 		\end{tabular*}
 		\vspace{2pt}
 		\begin{minipage}{0.98\textwidth}
-			\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+				\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The checked-in U-bend pressure-drop residual files do not contain a completed coarse--medium--fine sequence, so no pressure-drop grid metric is reported for the FEniCS U-bend hierarchy.
 		\end{minipage}
 	\end{table}
 
-Convergence was visually verified by extracting the velocity profiles directly at the bend exit across the pipe diameter $D=0.028$ m, a highly sensitive region for curvature-induced separation, as illustrated in Figure~\ref{fig:app_A_ubend_mesh_independence}. The chosen \texttt{Medium\_FEniCS} grid perfectly captured the velocity gradients near the wall and provided sufficient isotropic resolution in the bulk flow to resolve the separation bubbles without numerical instability.
+The checked-in FEniCS U-bend mesh hierarchy is documented by the mesh parameters in Table~\ref{tab:app_A_ubend_meshes}. The repository does not currently include extracted Coarse--Medium--Fine bend-exit velocity-profile data for this FEniCS hierarchy, so Figure~\ref{fig:app_A_ubend_mesh_independence} records the data-availability status rather than a plotted convergence profile. The selected \texttt{Medium\_FEniCS} grid is therefore reported as the configured verification mesh, while the missing profile and incomplete pressure-drop sequence are not promoted to quantitative mesh-convergence evidence.
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=0.5\textwidth]{example-image} % Replace with your FEniCS U-bend mesh independence velocity profile plot
-	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine grids in FEniCS. The profiles demonstrate spatial convergence, justifying the selection of the Medium grid for the final verification.}
+	\fbox{\parbox[c][0.16\textheight][c]{0.72\textwidth}{\centering \small No checked-in FEniCS U-bend Coarse--Medium--Fine bend-exit velocity-profile data are available for this appendix figure.}}
+	\caption{Data-availability status for the FEniCS U-bend mesh-independence velocity-profile figure.}
 	\label{fig:app_A_ubend_mesh_independence}
 \end{figure}
 
@@ -335,7 +340,7 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 
 \begin{figure}[htpb]
 	\centering
-	\includegraphics[width=\textwidth]{UBend-Ansys-Mesh-Independence} % Replace with your Ansys U-bend mesh independence velocity profile plot
+	\includegraphics[width=\textwidth]{UBend-Ansys-Mesh-Independence}
 	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
 	\label{fig:app_A_ubend_mesh_indep_ansys}
 \end{figure}

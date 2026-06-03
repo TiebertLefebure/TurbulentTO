@@ -1,4 +1,4 @@
-from Configs_Frozen.Config_PipeBendAlexandersen_Frozen_Jp_UBendSchedule import *
+from Configs_Frozen.Config_PipeBendAlexandersen_Frozen_Jp_Old import *
 
 
 # One-shot sensitivity verification for the Alexandersen pipe-bend case.

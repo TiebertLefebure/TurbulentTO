@@ -56,9 +56,9 @@ where $\dot{m}_{\mathrm{out}}<0$ under Fluent's boundary-normal sign convention 
 	\end{tabularx}
 \end{table}
 
-\section{Ansys SA--SST Backward-Facing-Step Benchmark}
+\section{Ansys SA--\texorpdfstring{SST $k-\omega$}{SST k-omega} Backward-Facing-Step Benchmark}
 \label{sec:app_A_backstep_ansys_comparison}
-The third benchmark evaluates the backward-facing-step geometry introduced in Section~\ref{sec:separated_flow_without_curvature}. This case is included to expose turbulence-model sensitivity in separated internal flow, not to replace the experimental validation evidence from the Driver-Seegmiller/NASA comparisons discussed above. The geometry and boundary conditions are based on the backward-facing-step configuration from Marcib\'{a}l's master thesis and accompanying GitHub repository \cite{Marcibal2024,joove_keps}. They are shown in Figure~\ref{fig:backstep_geometry_bcs}. The flow enters a channel of height $H_\mathrm{in}=2.0$ m with a uniform inlet velocity of $U_\mathrm{in}=25$ m/s. At $x=0$, the lower wall drops by the step height $h=0.25$ m, giving an outlet height of $H_\mathrm{out}=2.25$ m. The benchmark Reynolds number is defined using the step height,
+The third benchmark evaluates the backward-facing-step geometry introduced in Section~\ref{sec:separated_flow_without_curvature}. This case is included to expose turbulence-model sensitivity in separated internal flow, not to replace the experimental validation evidence from the Driver-Seegmiller/NASA comparisons discussed above. The geometry and boundary conditions are based on the backward-facing-step configuration from Marcib\'{a}l's master thesis and accompanying codebase \cite{Marcibal2024,joove_keps}. They are shown in Figure~\ref{fig:backstep_geometry_bcs}. The flow enters a channel of height $H_\mathrm{in}=2.0$ m with a uniform inlet velocity of $U_\mathrm{in}=25$ m/s. At $x=0$, the lower wall drops by the step height $h=0.25$ m, giving an outlet height of $H_\mathrm{out}=2.25$ m. The benchmark Reynolds number is defined using the step height,
 \begin{equation}
 	Re_h = \frac{U_\mathrm{in} h}{\nu} = 3.44 \times 10^4 ,
 \end{equation}
@@ -67,7 +67,7 @@ because backward-facing-step results are conventionally compared using the step 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=\textwidth]{BackStep-Geometry-BCs}
-	\caption{Backward-facing-step benchmark geometry and boundary conditions, based on the configuration used by Marcib\'{a}l and the associated GitHub implementation \cite{Marcibal2024,joove_keps}. The first 5.0 m of the upper and lower boundaries are treated as symmetry/slip segments, while all remaining solid boundaries are no-slip walls. The streamwise dimension is compressed for readability.}
+	\caption{Backward-facing-step benchmark geometry and boundary conditions, based on the configuration used by Marcib\'{a}l and the associated code implementation \cite{Marcibal2024,joove_keps}. The first 5.0 m of the upper and lower boundaries are treated as symmetry/slip segments, while all remaining solid boundaries are no-slip walls. The streamwise dimension is compressed for readability.}
 	\label{fig:backstep_geometry_bcs}
 \end{figure}
 
@@ -76,7 +76,7 @@ The Fluent setup mirrors the wall-resolved SA assumptions used throughout this t
 \subsection{Wall-Resolved Ansys Grid-Sensitivity Study}
 \label{subsec:app_A_backstep_mesh_ansys}
 
-The grid-sensitivity study uses the same backward-facing-step geometry and named selections as the benchmark definition above. The no-slip wall boundaries are inflated with a fixed first-layer height of $\Delta y_1=1.30\times10^{-4}$ m. This first-layer height is kept constant on all three grids because the Reynolds number and target wall resolution are unchanged. The mesh refinement is therefore applied through the number of inflation layers, inflation growth rate, and streamwise element sizing. Unlike the attached channel and bend verification cases, this separated-flow benchmark is treated as a grid-sensitivity record rather than a strict verification case, while the SA--SST comparison below uses the finest converged mesh for each closure.
+The grid-sensitivity study uses the same backward-facing-step geometry and named selections as the benchmark definition above. The no-slip wall boundaries are inflated with a fixed first-layer height of $\Delta y_1=1.30\times10^{-4}$ m. This first-layer height is kept constant on all three grids because the Reynolds number and target wall resolution are unchanged. The mesh refinement is therefore applied through the number of inflation layers, inflation growth rate, and streamwise element sizing. Unlike the attached channel and bend verification cases, this separated-flow benchmark is treated as a grid-sensitivity record rather than a strict verification case, while the SA--SST $k-\omega$ comparison below uses the finest converged mesh for each closure.
 
 \begin{table}[htbp]
 	\centering
@@ -121,13 +121,13 @@ The grid-sensitivity study uses the same backward-facing-step geometry and named
 	\end{minipage}
 \end{table}
 
-The primary grid-sensitivity metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the downstream zero-crossing of the streamwise wall shear stress on the lower wall associated with the end of the primary recirculation region. The SA reattachment length decreases from $x_r/h=5.92$ on the coarse grid to $5.83$ on the medium grid and $5.69$ on the fine grid; the resulting medium--fine change remains above a strict one-percent mesh-independence criterion for this separated-flow metric. The total pressure loss $\Delta p_t$ is retained as a secondary metric and is computed from the mass-flow-weighted inlet-to-outlet total-pressure difference. Velocity profiles are additionally extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region; the SA--SST comparison is made using the finest converged mesh available for each turbulence closure.
+The primary grid-sensitivity metric is the normalized reattachment length $x_r/h$, where $x_r$ is obtained from the downstream zero-crossing of the streamwise wall shear stress on the lower wall associated with the end of the primary recirculation region. The SA reattachment length decreases from $x_r/h=5.92$ on the coarse grid to $5.83$ on the medium grid and $5.69$ on the fine grid; the resulting medium--fine change remains above a strict one-percent mesh-independence criterion for this separated-flow metric. The total pressure loss $\Delta p_t$ is retained as a secondary metric and is computed from the mass-flow-weighted inlet-to-outlet total-pressure difference. Velocity profiles are additionally extracted at $x/h=1$, $4$, $6$, and $10$, corresponding to $x=0.25$, $1.00$, $1.50$, and $2.50$ m downstream of the step. These stations cover the initial separated shear layer, the recirculation region, the expected reattachment region, and the downstream recovery region; the SA--SST $k-\omega$ comparison is made using the finest converged mesh available for each turbulence closure.
 
 
 
 \FloatBarrier
 
-The contour plots below should therefore be read as a model-form comparison on the same sudden-expansion geometry. The streamwise-velocity fields identify the separated low-speed region and the downstream recovery, while the turbulent-viscosity ratio shows how each closure supplies the modeled momentum diffusion that controls this recovery. The velocity contours use the exported range of each Fluent solution, whereas the turbulent-viscosity plots use a common color scale.
+The contour plots below should therefore be read as a model-form comparison on the same local backward-facing-step geometry, not as a new validation against the NASA Driver-Seegmiller geometry. The streamwise-velocity fields identify the separated low-speed region and the downstream recovery, while the turbulent-viscosity ratio shows how each closure supplies the modeled momentum diffusion that controls this recovery. The velocity contours use the exported range of each Fluent solution, whereas the turbulent-viscosity plots use a common color scale.
 
 \begin{figure}[htpb]
 	\centering
@@ -200,7 +200,7 @@ The turbulent-viscosity contours in Figure~\ref{fig:ansys_backstep_mut_mu} expla
 		\caption{$x/h=10$}
 		\label{fig:backstep_velocity_xh10}
 	\end{subfigure}
-	\caption{Normalized streamwise velocity profiles for the backward-facing-step benchmark at four downstream stations. The comparison isolates model-form sensitivity by running SA and SST $k-\omega$ on the same sudden-expansion geometry and boundary conditions.}
+	\caption{Normalized streamwise velocity profiles for the backward-facing-step benchmark at four downstream stations. The comparison isolates model-form sensitivity by running SA and SST $k-\omega$ on the same local backward-facing-step geometry and boundary conditions.}
 	\label{fig:backstep_velocity_profiles}
 \end{figure}
 

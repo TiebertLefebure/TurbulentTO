@@ -3,24 +3,24 @@
 \begin{document}
 \pagecolor{white}
 \begin{tikzpicture}[
-  font=\sffamily\footnotesize,
+  font=\sffamily\small,
   flow/.style={-{Latex[length=2.8mm]}, line width=0.75pt, draw=blue!65!black},
   dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
   section/.style={draw=red!70!black, line width=1.1pt},
   profile/.style={draw=black!65, dashed, line width=0.85pt},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center}
+  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=3pt, align=center}
 ]
 
-\node[font=\sffamily\bfseries\small, anchor=west] at (0.10,4.75)
+\node[font=\sffamily\bfseries\large, anchor=west] at (0.15,4.95)
   {VMFL048: 3D $180^\circ$ U-bend};
-\node[font=\sffamily\scriptsize, anchor=west] at (0.10,4.42)
+\node[font=\sffamily\small, anchor=west, text=black!70] at (0.15,4.58)
   {symmetry-plane view of the 3D Fluent domain};
 
 \def\r{1.25}
-\def\cx{8.20}
+\def\cx{8.75}
 \def\cy{2.55}
 \def\w{0.30}
-\def\xleft{3.10}
+\def\xleft{3.65}
 \def\ytop{\cy+\r}
 \def\ybot{\cy-\r}
 
@@ -32,9 +32,9 @@
 % Boundary planes and labels.
 \draw[section] (\xleft,\ytop-\w) -- (\xleft,\ytop+\w);
 \draw[section] (\xleft,\ybot-\w) -- (\xleft,\ybot+\w);
-\node[bc, anchor=east, text width=34mm] at (\xleft-0.28,\ytop)
+\node[bc, anchor=east, text width=37mm] at (\xleft-0.45,\ytop)
   {velocity-profile inlet\\$\bar{U}=1.42$ m/s};
-\node[bc, anchor=east, text width=28mm] at (\xleft-0.28,\ybot)
+\node[bc, anchor=east, text width=31mm] at (\xleft-0.45,\ybot)
   {pressure outlet\\$p=0$ Pa};
 
 % Flow direction.
@@ -57,10 +57,10 @@
 
 % Velocity-profile extraction line.
 \draw[profile] (\cx,\ybot-\w) -- (\cx,\ybot+\w);
-\node[bc, anchor=west, text width=32mm] at (\cx+0.45,\ybot)
+\node[bc, anchor=west, text width=36mm] at (\cx+0.75,\ybot)
   {velocity-profile\\line after bend};
 
-\node[bc, text width=43mm] at (5.35,0.20)
+\node[bc, text width=46mm] at (5.75,0.15)
   {shown symmetry plane\\no-slip pipe walls\\$Re_D\approx44{,}700$};
 
 \end{tikzpicture}

@@ -8,7 +8,7 @@ The numerical simulations and eventual topology optimization in this thesis are 
 
 To solve a PDE in FEniCS, the governing equations (the ``strong form'') must be mathematically transformed into a weak formulation, or variational form. FEniCS utilizes the Unified Form Language (UFL) to express these weak forms in Python code that closely mirrors the mathematical notation \cite{Langtangen2016}. This high-level mathematical scripting is particularly advantageous for topology optimization, as it makes the connection between the implemented residuals and the sensitivity equations explicit.
 
-To ensure complete transparency and reproducibility, the entire custom codebase developed for this thesis is available in the public GitHub repository \texttt{TurbulentTO}. To maintain modularity, the repository is divided into two primary directories. The \texttt{TurbulenceModels} directory contains the forward-flow Spalart-Allmaras solver and the verification benchmarks reported in Chapter~\ref{ch:sa_verification}. The \texttt{FluidTO} directory builds on this verified forward solver by adding the optimization algorithms, Brinkman and turbulence penalties, objective functions, and sensitivity calculations detailed in Chapter~\ref{ch:topology_optimization_methodology}.
+For reproducibility, two project folders accompany this thesis. \texttt{Turbulence\allowbreak Models} contains the standalone SA solver and the verification setup files. \texttt{FluidTO} contains the topology-optimization code and the frozen-adjoint benchmark setup files. The appendices refer to these folders when tabulating the numerical setups.
 
 \subsection{Derivation of a Weak Formulation}
 Before diving into the complex turbulence equations, it is instructive to demonstrate how a continuous PDE is translated into a discrete FEniCS formulation. To illustrate this methodology, consider the Poisson equation for pressure, which is a fundamental component of incompressible fluid solvers. The strong form of the Poisson equation is given by:
@@ -34,7 +34,7 @@ Because the momentum equation relies on the turbulent eddy viscosity ($\nu_t$), 
 To resolve this, the forward physics are decoupled using a \textbf{Picard iteration scheme} (successive substitution), a robust approach for segregated RANS solvers \cite{Ferziger2012, Versteeg2007}. During each Picard step, the flow solver advances using the eddy viscosity from the previous iteration. The newly updated velocity field is then passed to the Spalart-Allmaras solver to calculate a new eddy viscosity field. This alternating sequence forms the outer loop of the solver, iteratively updating the decoupled equations until the coupled physical system reaches a steady-state equilibrium.
 
 \subsection{Incremental Pressure Correction Scheme (IPCS)}
-Within the Picard loop, the Navier-Stokes equations themselves must be solved. Rather than solving for velocity and pressure simultaneously, the standalone verification solver utilizes an Incremental Pressure Correction Scheme (IPCS). This algorithmic splitting is based on the fractional-step projection methods originally pioneered by Chorin \cite{Chorin1968} and Temam \cite{Temam1969}. To drive the non-linear convective momentum terms toward a stable steady state, a pseudo-time stepping approach ($\Delta t$) is employed for the flow variables. The IPCS algorithm splits the fluid equations into three sequential steps per pseudo-time step:
+Within the Picard loop, the Navier-Stokes equations themselves must be solved. Rather than solving for velocity and pressure simultaneously, the standalone verification solver utilizes an Incremental Pressure Correction Scheme (IPCS). This algorithmic splitting is based on the fractional-step projection methods originally pioneered by Chorin \cite{Chorin1968} and Temam \cite{Temam1969}. The weak finite-element statements below follow standard Galerkin discretization practice used in FEniCS \cite{Logg2012,Langtangen2016}. To drive the non-linear convective momentum terms toward a stable steady state, a pseudo-time stepping approach ($\Delta t$) is employed for the flow variables. The IPCS algorithm splits the fluid equations into three sequential steps per pseudo-time step:
 \begin{enumerate}
 	\item \textbf{Tentative velocity step:} The momentum equation is solved using the pressure field from the previous iteration ($p^n$) to compute an intermediate, non-divergence-free velocity field ($\mathbf{u}^*$). Because this is a RANS framework, the diffusion term utilizes the effective kinematic viscosity, $(\nu + \nu_t)$. Treating the convective term explicitly and the diffusive term implicitly, the semi-discrete equation is:
 	\begin{equation}
@@ -81,12 +81,12 @@ and the corrected velocity is recovered through
 	-\int_\Omega \Delta t\,\nabla(p^{n+1}-p^n)\cdot\mathbf{v}\,dx .
 	\label{eq:ipcs_velocity_update_weak}
 \end{equation}
-In the forward-flow verification scripts, pressure is treated as a kinematic pressure and the viscous operator is written in the symmetric strain-rate form. No SUPG term is added to the momentum equation in the verification solver. Streamline stabilization, when used, is applied only to the SA working-variable transport equation described below. This is the forward turbulent-flow solve that is verified in Chapter~\ref{ch:sa_verification} and then extended in Chapter~\ref{ch:topology_optimization_methodology}. The topology-optimization implementation retains the same SA transport model, wall-distance machinery, and segregated forward-flow update, while adding Brinkman resistance, topology-dependent turbulence penalties, and a final frozen-viscosity residual with dynamic viscosity and the symmetric strain tensor for adjoint sensitivity assembly.
+In the forward-flow verification scripts, pressure is treated as a kinematic pressure and the viscous operator is written in the symmetric strain-rate form. No Streamline-Upwind/Petrov--Galerkin (SUPG) term is added to the momentum equation in the verification solver. SUPG is a residual-based stabilization that adds numerical diffusion along streamlines to damp nonphysical oscillations in advection-dominated transport. In this implementation, it is used only for the SA working-variable equation described below. The topology-optimization-specific Brinkman and density-penalty terms are introduced later in Chapter~\ref{ch:topology_optimization_methodology}, after the forward SA equation has been defined.
 
 The simulation is deemed converged to a steady state when the $L_2$ norm of the residual difference between successive Picard iterations falls below a defined tolerance limit ($\epsilon_{tol}$) for both the fluid and turbulence fields.
 
 \section{Detailed Formulation of the Spalart-Allmaras Model}
-As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. The SA transport equation is solved as a steady Picard problem within the outer flow loop. In selected convection-dominated runs, the linearized SA update is additionally stabilized by the SUPG and pseudo-time terms described below. The steady transport equation for the continuous nonlinear working variable $\tilde{\nu}$ is given by:
+As concluded in Chapter~\ref{ch:turbulence_modeling}, the Spalart-Allmaras (SA) one-equation model was selected for its balance of physical accuracy and numerical stability. The SA transport equation is solved as a steady Picard problem within the outer flow loop. In selected convection-dominated verification runs, the linearized SA update is additionally stabilized by the SUPG and pseudo-time terms described below. The later frozen topology-optimization configurations keep the SA pseudo-time damping disabled as a practical choice: pseudo-time stabilization can improve robustness in difficult forward solves, but it adds a tuning parameter and would need to be included consistently in the residual and adjoint if used during optimization. The steady transport equation for the continuous nonlinear working variable $\tilde{\nu}$ is given by:
 \begin{equation}
 	\mathbf{u} \cdot \nabla \tilde{\nu} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{y} \right)^2 + \frac{1}{\sigma} \left[ \nabla \cdot \left( (\nu + \tilde{\nu}) \nabla \tilde{\nu} \right) + c_{b2} (\nabla \tilde{\nu})^2 \right]
 	\label{eq:sa_steady_transport}
@@ -96,7 +96,7 @@ where $\nu$ is the molecular kinematic viscosity, $\sigma = 2/3$ is the turbulen
 \subsection{Picard-Linearized Weak SA Transport Form}
 The FEniCS implementation does not solve Eq.~\ref{eq:sa_steady_transport} as a fully nonlinear scalar problem. Instead, it uses the outer Picard state to freeze the nonlinear SA closure terms and then solves a linearized weak problem for the next working-variable field. The closure functions used in this weak form are defined in the following subsection.
 
-Let $\tilde{\nu}^{k}$ denote the previous Picard value of the SA working variable, while $\tilde{\nu}^{k+1}$ is the unknown being solved. The modified vorticity $\tilde{S}^{k}$, wall function $f_w^{k}$, diffusion coefficient, and explicit source terms are evaluated from $\tilde{\nu}^{k}$ and the current velocity field. The Picard-linearized SA step is: find $\tilde{\nu}^{k+1}\in T_h$ such that, for all scalar test functions $\xi\in T_h$,
+Let $\tilde{\nu}^{k}$ denote the previous Picard value of the SA working variable, while $\tilde{\nu}^{k+1}$ is the unknown being solved. The modified vorticity $\tilde{S}^{k}$, wall function $f_w^{k}$, diffusion coefficient, and explicit source terms are evaluated from $\tilde{\nu}^{k}$ and the current velocity field. The scalar finite-element space for the transported turbulence variable is denoted by $T_h$, analogous to the velocity space $V_h$ and pressure space $Q_h$ used in the IPCS weak forms. The Picard-linearized SA step is: find $\tilde{\nu}^{k+1}\in T_h$ such that, for all scalar test functions $\xi\in T_h$,
 \begin{equation}
 	\begin{aligned}
 		&\int_\Omega (\mathbf{u}\cdot\nabla\tilde{\nu}^{k+1})\xi\,dx
@@ -115,17 +115,18 @@ Let $\tilde{\nu}^{k}$ denote the previous Picard value of the SA working variabl
 	\end{aligned}
 	\label{eq:sa_picard_weak}
 \end{equation}
-The left-hand side contains convection, implicit diffusion, and implicit wall destruction. Production and cross-diffusion remain on the right-hand side as explicit Picard sources. After solving Eq.~\ref{eq:sa_picard_weak}, the working variable is under-relaxed and bounded before the turbulent eddy viscosity $\nu_t$ is recomputed from the standard SA algebraic relation.
+The left-hand side contains the advection term $(\mathbf{u}\cdot\nabla\tilde{\nu}^{k+1})$, implicit diffusion, and implicit wall destruction. Production and cross-diffusion remain on the right-hand side as explicit Picard sources. After solving Eq.~\ref{eq:sa_picard_weak}, the working variable is under-relaxed and bounded before the turbulent eddy viscosity $\nu_t$ is recomputed from the standard SA algebraic relation.
 
-When pseudo-time stabilization is enabled for the SA solve, the left-hand side of Eq.~\ref{eq:sa_picard_weak} is augmented by
+When pseudo-time stabilization is enabled for the SA solve, as in the steady U-bend verification configuration, the left-hand side of Eq.~\ref{eq:sa_picard_weak} is augmented by
 \begin{equation}
 	\int_\Omega
 	\frac{\tilde{\nu}^{k+1}-\tilde{\nu}^{k}}{\Delta t_{\tilde{\nu}}}
 	\xi\,dx .
+	\label{eq:sa_pseudo_time}
 \end{equation}
-This is a numerical damping term for the Picard update of the transported working variable; it does not alter the steady SA closure being targeted after convergence.
+This is a numerical damping term for the Picard update of the transported working variable; it does not alter the steady SA closure being targeted after convergence. It is therefore treated as optional forward-solver stabilization, not as a defining part of the topology-optimization formulation.
 
-For convection-dominated internal-flow cases, the implementation may augment the SA transport solve with streamline-upwind/Petrov--Galerkin (SUPG) stabilization. This stabilization is applied to the transported working variable $\tilde{\nu}$ only; it is not a modification of the RANS momentum equation and it is not an additional turbulence-model source term. With element size $h$ and local speed $|\mathbf{u}|$, the added streamline contribution has the form
+For convection-dominated internal-flow cases, the implementation may augment the SA transport solve with SUPG stabilization \cite{Brooks1982}. This stabilization is applied to the transported working variable $\tilde{\nu}$ only; it is not a modification of the RANS momentum equation and it is not an additional turbulence-model source term. With element size $h$ and local speed $|\mathbf{u}|$, the added streamline contribution has the form
 \begin{equation}
 	F_{\mathrm{SUPG},\tilde{\nu}} =
 	\int_\Omega \tau_{\tilde{\nu}}
@@ -134,8 +135,9 @@ For convection-dominated internal-flow cases, the implementation may augment the
 	\quad
 	\tau_{\tilde{\nu}} =
 	C_{\mathrm{SUPG}}\frac{h}{2|\mathbf{u}|},
+	\label{eq:sa_supg}
 \end{equation}
-where $\mathcal{R}_{\tilde{\nu}}$ is the strong advective-reaction residual of the Picard-linearized SA transport equation, including the pseudo-time term when it is active, and $C_{\mathrm{SUPG}}$ is a user-selected stabilization factor. In the verification benchmarks and in the turbulent topology-optimization runs, this term is used to suppress element-scale oscillations in $\tilde{\nu}$ while preserving the same underlying SA closure.
+where $\mathcal{R}_{\tilde{\nu}}$ is the strong residual corresponding to Eq.~\ref{eq:sa_picard_weak}: the pointwise advection, diffusion, wall-destruction reaction, and explicit production and cross-diffusion sources are collected on one side before being projected along the streamline test direction. When Eq.~\ref{eq:sa_pseudo_time} is active, its pseudo-time contribution is included in the same residual. The coefficient $C_{\mathrm{SUPG}}$ is a user-selected stabilization factor. In the verification benchmarks and in the turbulent topology-optimization runs, Eq.~\ref{eq:sa_supg} is used to suppress element-scale oscillations in $\tilde{\nu}$ while preserving the same underlying SA closure.
 
 \subsection{Closure Terms and Calibration Constants}
 The Spalart-Allmaras model relies on several interconnected closure functions to accurately capture boundary layer physics. The production term relies on a modified vorticity magnitude, $\tilde{S}$, which prevents the destruction of turbulence in regions where the vorticity goes to zero, while maintaining correct scaling near the wall \cite{Spalart1994}. The implementation uses the vorticity-based SA definition. First,
@@ -144,15 +146,7 @@ The Spalart-Allmaras model relies on several interconnected closure functions to
 	\quad \text{and} \quad
 	\bar{S} = \frac{\tilde{\nu}}{\kappa^2 y^2} f_{v2}.
 \end{equation}
-Here $S$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Karman constant, and $y$ is the distance to the nearest wall. To avoid negative modified vorticity values during nonlinear iterations, the code evaluates the standard protected form
-\begin{equation}
-	\tilde{S} =
-	\begin{cases}
-		S+\bar{S}, & \bar{S}\geq -c_{v2}S, \\
-		S + S\dfrac{c_{v2}^{2}S+c_{v3}\bar{S}}{(c_{v3}-2c_{v2})S-\bar{S}}, & \bar{S}< -c_{v2}S.
-	\end{cases}
-\end{equation}
-Small numerical floors are added in the implementation to prevent division by zero. The function $f_{v2}$ is a near-wall modifier:
+Here $S$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Karman constant, and $y$ is the distance to the nearest wall. During nonlinear iterations, the code evaluates the standard protected form of $\tilde{S}$ recommended in the SA reference implementation \cite{NasaTurb} so that the production term remains well defined when $S+\bar{S}$ becomes small. Small numerical floors are added in the implementation to prevent division by zero. The function $f_{v2}$ is a near-wall modifier:
 \begin{equation}
 	f_{v2} = 1 - \frac{\chi}{1 + \chi f_{v1}} \quad \text{where} \quad \chi = \frac{\tilde{\nu}}{\nu} \quad \text{and} \quad f_{v1} = \frac{\chi^3}{\chi^3 + c_{v1}^3}.
 \end{equation}
@@ -190,43 +184,27 @@ Here, $G$ is an intermediate reciprocal-distance field variable. The parameter $
 \end{equation}
 The code applies small numerical floors and non-negativity safeguards during this recovery to prevent division-by-zero and roundoff artifacts, but the mathematical equation used in the thesis remains the Yoon formulation above.
 
-This system is implemented as a nonlinear weak residual for $G$. After multiplying by a scalar test function and integrating the $\sigma_w G \nabla^2 G$ term by parts, the residual contains only first derivatives of $G$:
+This system is implemented as a nonlinear weak residual for $G$. Following the Galerkin statement of Yoon's relaxed wall-distance equation \cite{Yoon2016}, the PDE is multiplied by a scalar test function and the $\sigma_w G \nabla^2 G$ term is integrated by parts, so that the residual contains only first derivatives of $G$:
 \begin{equation}
 	(1-\sigma_w)\int_\Omega |\nabla G|^2 z\,dx
 	-\sigma_w\int_\Omega G\nabla G\cdot\nabla z\,dx
 	-(1+2\sigma_w)\int_\Omega G^4 z\,dx=0 .
+	\label{eq:relaxed_eikonal_weak}
 \end{equation}
 
-\section{Global Benchmark Solver Path}
-For the verification benchmarks in Chapter~\ref{ch:sa_verification}, the forward solver starts from initialized velocity, pressure, SA working-variable, and wall-distance fields. The channel and U-bend verification cases share the same solver path; only the mesh, boundary conditions, physical forcing, and diagnostic pressure-drop definitions differ. Figure~\ref{fig:sa_forward_solver_path} summarizes the resulting algorithm.
+\section{Picard-IPCS Coupling Algorithm}
+The solver coupling is independent of the particular verification geometry, so the iteration scheme is part of the implementation rather than the benchmark definition. For fixed-wall verification cases, the relaxed Eikonal problem is solved first using Eq.~\ref{eq:relaxed_eikonal_weak}, giving the wall-distance field $y$ used by the SA closure. The coupled RANS-SA state is then advanced by the outer Picard loop summarized in Figure~\ref{fig:picard_ipcs_coupling}.
 
 \begin{figure}[!ht]
 	\centering
-	\fbox{%
-	\begin{minipage}{0.92\textwidth}
-		\centering
-		\textbf{Pre-processing}\\[0.3em]
-		Mesh, finite-element spaces, boundary markers, material constants, and initial fields\\[0.6em]
-		$\Downarrow$\\[0.6em]
-		\textbf{Wall-distance solve}\\[0.3em]
-		Solve the relaxed Eikonal residual for $G$ and recover $y=1/G-1/G_0$\\[0.6em]
-		$\Downarrow$\\[0.6em]
-		\textbf{Outer Picard loop}\\[0.3em]
-		Recompute $\nu_t(\tilde{\nu})$
-		$\rightarrow$ IPCS velocity-pressure update
-		$\rightarrow$ SA weak transport solve
-		$\rightarrow$ relaxation and bounds\\[0.6em]
-		$\Downarrow$\\[0.6em]
-		\textbf{Convergence and export}\\[0.3em]
-		Check field residuals, diagnostic pressure drop, $\tilde{\nu}$ extrema, and velocity-magnitude extrema; export fields for post-processing.
-	\end{minipage}}
-	\caption{Algorithmic path of the standalone FEniCS RANS-SA verification solver. The wall distance is computed first, after which the segregated Picard loop alternates between IPCS flow solves and SA working-variable transport updates.}
-	\label{fig:sa_forward_solver_path}
+	\includegraphics[width=0.95\textwidth]{Picard-IPCS-Coupling}
+	\caption{Nested Picard-IPCS coupling used by the FEniCS RANS-SA solver. The eddy viscosity $\nu_t$ is assembled from the previous SA working variable $\tilde{\nu}$, the velocity-pressure pair is advanced by the IPCS weak problems, and the updated velocity then drives the next SA transport solve.}
+	\label{fig:picard_ipcs_coupling}
 \end{figure}
 
-Inside each Picard cycle, the eddy viscosity is assembled from the previous SA working variable, the velocity-pressure state is advanced through the IPCS weak problems in Eqs.~\ref{eq:ipcs_tentative_weak}--\ref{eq:ipcs_velocity_update_weak}, and the SA field is updated with Eq.~\ref{eq:sa_picard_weak}. The SA solve may include the pseudo-time and SUPG terms described above, but no SUPG stabilization is added to the RANS momentum equation. After each Picard update, the solver applies relaxation and admissible lower bounds to $\tilde{\nu}$, recomputes convergence diagnostics, and writes checkpoints at the configured interval.
+Inside Picard iteration $k$, the eddy viscosity $\nu_t^k$ is assembled from the previous SA working variable $\tilde{\nu}^k$ and inserted into the effective viscosity $\nu+\nu_t^k$ of the tentative velocity problem. The velocity-pressure pair is then advanced through the IPCS weak problems in Eqs.~\ref{eq:ipcs_tentative_weak}--\ref{eq:ipcs_velocity_update_weak}. The resulting velocity field $\mathbf{u}^{k+1}$ is used in the SA weak transport solve, Eq.~\ref{eq:sa_picard_weak}, optionally with the pseudo-time term in Eq.~\ref{eq:sa_pseudo_time} and the SUPG term in Eq.~\ref{eq:sa_supg}. After the SA solve, $\tilde{\nu}^{k+1}$ is under-relaxed and bounded, $\nu_t^{k+1}$ is recomputed, and the field updates are checked against the prescribed Picard tolerance.
 
-Once the residual and benchmark-specific diagnostic tolerances are satisfied, the solver exports the velocity, pressure, SA working variable, eddy viscosity, and wall-distance fields used for the verification plots. During long runs, the simulation log also records the pressure drop, $\tilde{\nu}$ extrema, and velocity-magnitude extrema so that nonphysical turbulence growth or excessive core acceleration can be detected before full convergence.
+The pressure-drop and profile-error definitions are intentionally not part of this algorithmic section. They depend on the benchmark geometry and boundary conditions, so they are introduced with the channel and U-bend verification cases in Chapter~\ref{ch:sa_verification}.
 
 \section{Conclusion}
 This chapter has established the numerical formulation of the FEniCS-SA forward solver used for the verification benchmarks. The key ingredients are the weak-form finite-element implementation, Picard decoupling of the velocity-pressure and turbulence fields, IPCS pseudo-time stepping for the incompressible flow solve, the steady SA transport equation, and the relaxed Eikonal wall-distance formulation.

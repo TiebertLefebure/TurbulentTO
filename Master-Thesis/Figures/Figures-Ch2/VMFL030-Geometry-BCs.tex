@@ -10,7 +10,7 @@
     line join=round,
     font=\sffamily,
     note/.style={draw=black!60, rounded corners=1.5pt, fill=white,
-                 align=center, inner xsep=6pt, inner ysep=4pt,
+                 align=center, inner xsep=7pt, inner ysep=4pt,
                  font=\sffamily\small},
     flow/.style={blue!78!black, -{Latex[length=3.6mm,width=2.2mm]}, line width=0.9pt},
     wall/.style={black!82, line width=28pt},
@@ -24,7 +24,7 @@
 \def\a{0.34}
 \def\cx{2.25}
 \def\cy{2.75}
-\def\xout{6.55}
+\def\xout{7.15}
 
 \coordinate (inletCenter) at ({\cx-\R},0.35);
 \coordinate (bendStart) at ({\cx-\R},\cy);
@@ -61,24 +61,24 @@
 \fill[black] (bendCenter) circle (1.05pt);
 \draw[dim] (bendCenter) -- node[above, sloped, fill=white, inner sep=1pt]
     {$R_c=2.8D$} ($(bendCenter)!0.72!(profMid)$);
-\draw[dim] ({\cx-\R-\a},0.72) -- node[above, fill=white, inner sep=1pt]
-    {$D=1~\mathrm{m}$} ({\cx-\R+\a},0.72);
+\draw[dim] ({\cx-\R-\a},0.12) -- node[below, fill=white, inner sep=1pt]
+    {$D=1~\mathrm{m}$} ({\cx-\R+\a},0.12);
 
 % Labels are kept outside the flow region to avoid overlaps.
-\node[note, anchor=east, text width=35mm] at (-0.35,0.70)
+\node[note, anchor=east, text width=37mm] at (-0.55,0.70)
     {fully developed\\turbulent inlet profile\\zero transverse velocity};
-\node[note, anchor=south, text width=26mm] at (\xout,5.55)
+\node[note, anchor=south, text width=29mm] at (\xout,5.72)
     {pressure outlet\\$p=0~\mathrm{Pa}$};
-\node[note, anchor=west, text width=32mm] (profileLabel) at (4.35,3.55)
+\node[note, anchor=west, text width=34mm] (profileLabel) at (4.85,3.38)
     {$75^\circ$ along bend\\velocity-profile plane};
 \draw[-{Latex[length=2.4mm,width=1.6mm]}, black!55, line width=0.65pt]
     (profileLabel.west) -- ($(profMid)+(0.08,0.02)$);
 
-\node[note, anchor=north, text width=40mm] at (2.90,-0.05)
+\node[note, anchor=north, text width=43mm] at (3.25,-0.08)
     {shown symmetry plane\\3D half-domain simulation\\$Re_D\approx43{,}000$};
-\node[font=\sffamily\bfseries\large, anchor=west] at (-0.35,5.45)
+\node[font=\sffamily\bfseries\large, anchor=west] at (-0.55,5.55)
     {VMFL030: 3D $90^\circ$ pipe bend};
-\node[font=\sffamily\small, anchor=west, text=black!70] at (-0.35,5.15)
+\node[font=\sffamily\small, anchor=west, text=black!70] at (-0.55,5.22)
     {flow arrows indicate the pipe centerline direction};
 
 \end{tikzpicture}

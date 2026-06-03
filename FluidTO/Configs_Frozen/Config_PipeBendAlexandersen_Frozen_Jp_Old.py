@@ -18,7 +18,7 @@ from Configs_Frozen.Config_PipeBendAlexandersen_Frozen import *  # noqa: F401,F4
 # It does not modify the current PipeBendAlexandersen J_p config.
 # ===================================================================
 
-RESUME_OPTIMIZATION = True
+RESUME_OPTIMIZATION = False
 
 VOL_FRAC = 0.25
 OBJECTIVE_TYPE = "average_inlet_pressure"

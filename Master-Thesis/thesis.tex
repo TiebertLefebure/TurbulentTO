@@ -111,13 +111,13 @@ Finally, I want to thank my family and friends for their unwavering encouragemen
 
 \begin{abstract}
 
-As modern electronic, automotive, and energy systems grow increasingly compact and power-dense, their thermal performance increasingly depends on low-loss internal-flow paths that can distribute coolant without excessive pumping power. This thesis focuses on the flow-only part of that broader thermal-management problem. It develops a density-based topology optimization framework for turbulent internal-flow configurations in FEniCS, using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence weak-form adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward loop but treated as fixed coefficients during sensitivity assembly.
+As compact electronic, automotive, and energy systems become more power-dense, thermal-management hardware increasingly depends on low-loss internal-flow paths. This thesis addresses the hydraulic part of that problem: turbulent flow-only topology optimization for manifolds, bends, U-bends, and diffusers before conjugate heat transfer is added. A density-based FEniCS framework is developed using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward solve but fixed during sensitivity assembly.
 
-The work first establishes the modeling scope of SA for curved internal flows and then verifies the custom FEniCS-SA implementation against Ansys Fluent on a periodic turbulent channel and a curved U-bend. These verification cases show that the implemented wall-distance, SA transport, and segregated flow-coupling strategy reproduce the relevant Ansys-SA behavior sufficiently for the topology optimization studies, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
+The work first defines the modeling limits of SA for curved and separated internal flows, then verifies the custom FEniCS-SA solver against Ansys Fluent for a periodic turbulent channel and a two-dimensional U-bend. These cases show qualitative and profile-level agreement sufficient for use as the forward solver in the optimization framework, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
 
-The topology optimization framework is evaluated on pipe-bend and U-bend benchmarks from Bayat et al. and a turbulent diffuser benchmark from Yoon. For the pipe bend, the implemented frozen sensitivity agrees with central finite differences to a maximum coordinate relative discrepancy of $1.47\times10^{-4}$, and the directional Taylor check shows approximately second-order remainder convergence. The extracted pipe-bend geometry is then validated in Ansys Fluent with both SA and SST $k-\omega$ closures: switching from Ansys-SA to SST $k-\omega$ increases the validated pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$, indicating moderate turbulence-model sensitivity rather than collapse of the optimized design. Under identical SST $k-\omega$ operating conditions, the turbulent pipe-bend design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference.
+The framework is then evaluated on turbulent pipe-bend, U-bend, and diffuser benchmarks. For the completed pipe-bend verification, frozen sensitivities agree with central finite differences to a maximum coordinate discrepancy of $5.92\times10^{-5}$, and the directional Taylor check shows approximately second-order remainder convergence. Ansys re-analysis of the extracted pipe-bend design shows moderate closure sensitivity: replacing Ansys-SA by SST $k-\omega$ increases pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$. Under identical SST $k-\omega$ operating conditions, the turbulent design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference. The U-bend is retained as the companion $180^\circ$ return-flow benchmark and is interpreted using the same validation standard. The pressure-outlet diffuser gives a more cautionary result: the turbulent SA design improves on the laminar reference under Ansys-SA, but the ranking reverses under SST $k-\omega$, showing that separated diffuser performance is strongly closure-sensitive.
 
-The thesis therefore concludes that a frozen-SA topology optimization framework can produce credible low-loss turbulent internal-flow designs when its modeling assumptions are stated explicitly and the final geometries are independently re-analyzed. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction. These limitations define the most important next steps: three-dimensional extension, conjugate heat-transfer coupling, and adjoint hierarchies that reintroduce selected turbulence sensitivities.
+The main conclusion is that frozen-SA topology optimization can produce credible low-loss turbulent internal-flow designs when its assumptions are explicit and final geometries are independently re-analyzed. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction.
 
 \end{abstract}
 
@@ -159,13 +159,15 @@ The thesis therefore concludes that a frozen-SA topology optimization framework 
 		PDE & Partial Differential Equation \\
 		RAMP & Rational Approximation of Material Properties \\
 		RANS & Reynolds-Averaged Navier-Stokes \\
-		SA  & Spalart-Allmaras \\
-		SIMP & Solid Isotropic Material with Penalization \\
-		SNES & Scalable Nonlinear Equations Solver \\
-		SST $k-\omega$ & Shear Stress Transport $k-\omega$ model \\
-		TO  & Topology Optimization \\
-		UFL & Unified Form Language \\
-		VMFL & Ansys Fluent verification benchmark case \\
+			SA  & Spalart-Allmaras \\
+			SIMP & Solid Isotropic Material with Penalization \\
+			SNES & Scalable Nonlinear Equations Solver \\
+			SUPG & Streamline-Upwind/Petrov--Galerkin stabilization \\
+			SST $k-\omega$ & Shear Stress Transport $k-\omega$ model \\
+			TMR & NASA Turbulence Modeling Resource \\
+			TO  & Topology Optimization \\
+			UFL & Unified Form Language \\
+			VMFL & Ansys Fluent verification benchmark case \\
 		XFEM & Extended Finite Element Method \\
 	\end{tabularx}
 \end{flushleft}
@@ -184,9 +186,9 @@ The thesis therefore concludes that a frozen-SA topology optimization framework 
 		$\Delta P$ & Macroscopic total pressure drop [Pa] \\
 		$R_c$ & Radius of curvature [m] \\
 		$Re$ & Bulk Reynolds number [-] \\
-		$S, \tilde{S}$ & Scalar vorticity magnitude and modified SA vorticity magnitude [1/s] \\
-		$t$ & Time / Pseudo-time [s] \\
-		$\tau_w$ & Wall shear stress [Pa] \\
+			$S, \tilde{S}$ & Scalar vorticity magnitude and modified SA vorticity magnitude [1/s] \\
+			$t$ & Time / Pseudo-time [s] \\
+			$\tau_w$ & Wall shear stress [Pa] \\
 		$\mathbf{u}, \bar{u}_i$ & Velocity vector / Mean velocity component [m/s] \\
 		$u'_i$ & Fluctuating velocity component [m/s] \\
 		$U_{\mathrm{ref}}, U_{\mathrm{bulk}}, U_{\max}$ & Reference, bulk, and maximum velocity [m/s] \\
@@ -205,31 +207,38 @@ The thesis therefore concludes that a frozen-SA topology optimization framework 
 		$\tilde{\nu}$ & Spalart-Allmaras working variable [m$^2$/s] \\
 		$\rho$ & Fluid density [kg/m$^3$] \\
 		$\omega$ & Scalar vorticity in two-dimensional flow [1/s] \\
-		$\Omega_{ij}$ & Vorticity tensor [1/s] \\
-		$\kappa$ & von Kármán constant [-] \\
-	\end{tabularx}
-\end{flushleft}
+			$\Omega_{ij}$ & Vorticity tensor [1/s] \\
+			$\chi$ & Spalart-Allmaras viscosity ratio, $\tilde{\nu}/\nu$ [-] \\
+			$\kappa$ & von Kármán constant [-] \\
+			$\sigma$ & Spalart-Allmaras turbulent Prandtl number [-] \\
+		\end{tabularx}
+	\end{flushleft}
 
 \subsection*{Numerical Implementation (FEniCS)}
 \begin{flushleft}
 	\renewcommand{\arraystretch}{1.1}
 	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
 		$G, G_0$ & Relaxed Eikonal field variable and boundary value [1/m] \\
-		$h, h_{avg}$ & Finite element cell diameter and average cell size [m] \\
-		$p_k$ & Kinematic pressure [m$^2$/s$^2$] \\
-		$s$ & Arclength coordinate along a profile line [m] \\
-		$e_i$ & Pointwise profile error or design-space basis vector, depending on context [-] \\
-		$E_\infty, E_{L_2}$ & Maximum and relative $L_2$ profile discrepancies [-] \\
-		$\Delta h$ & Finite-difference design perturbation [-] \\
-		$S_i^{\mathrm{FD}}, S_i^{\mathrm{fr}}$ & Finite-difference and frozen-adjoint sensitivity of sampled design variable $i$ \\
-		$\varepsilon_i^{\mathrm{fr}}$ & Relative frozen-adjoint sensitivity discrepancy [-] \\
-		$||\cdot||_{L_2}$ & $L_2$ (Euclidean) norm [-] \\
-		$\llbracket \cdot \rrbracket$ & Jump operator across an internal element facet [-] \\
-		$\Gamma_{\mathrm{in}}, \Gamma_{\mathrm{out}}, \Gamma_D$ & Inlet, outlet, and profile-extraction boundaries \\
-		$\mathbf{n}$ & Outward-pointing normal vector [-] \\
-		$v, \xi$ & Test functions for pressure and turbulence equations [-] \\
-		$\alpha_u, \alpha_{\tilde{\nu}}$ & Relaxation factors for velocity and turbulence [-] \\
-		$\Delta t$ & Pseudo-time step [s] \\
+			$h, h_{avg}$ & Finite element cell diameter and average cell size [m] \\
+			$p_k$ & Kinematic pressure [m$^2$/s$^2$] \\
+			$s$ & Arclength coordinate along a profile line [m] \\
+			$e_i$ & Pointwise profile error or design-space basis vector, depending on context [-] \\
+			$E_\infty, E_{L_2}$ & Maximum and relative $L_2$ profile discrepancies [-] \\
+			$C_{\mathrm{SUPG}}$ & User-selected SUPG stabilization factor [-] \\
+			$\Delta h$ & Finite-difference design perturbation [-] \\
+			$\Delta t_{\tilde{\nu}}$ & Pseudo-time step used for optional SA transport damping [s] \\
+			$S_i^{\mathrm{FD}}, S_i^{\mathrm{fr}}$ & Finite-difference and frozen-adjoint sensitivity of sampled design variable $i$ \\
+			$\varepsilon_i^{\mathrm{fr}}$ & Relative frozen-adjoint sensitivity discrepancy [-] \\
+			$||\cdot||_{L_2}$ & $L_2$ (Euclidean) norm [-] \\
+			$\llbracket \cdot \rrbracket$ & Jump operator across an internal element facet [-] \\
+			$\Gamma_{\mathrm{in}}, \Gamma_{\mathrm{out}}, \Gamma_D$ & Inlet, outlet, and profile-extraction boundaries \\
+			$\mathbf{n}$ & Outward-pointing normal vector [-] \\
+			$\mathcal{R}_{\tilde{\nu}}$ & Strong residual of the Picard-linearized SA transport equation [-] \\
+			$T_h, V_h, Q_h$ & Discrete turbulence, velocity, and pressure finite-element spaces \\
+			$\tau_{\tilde{\nu}}$ & SUPG stabilization parameter for SA working-variable transport [s] \\
+			$v, \xi$ & Test functions for pressure and turbulence equations [-] \\
+			$\alpha_u, \alpha_{\tilde{\nu}}$ & Relaxation factors for velocity and turbulence [-] \\
+			$\Delta t$ & Pseudo-time step [s] \\
 		$\epsilon_{tol}$ & Convergence tolerance [-] \\
 		$\phi$ & General scalar field variable [-] \\
 		$\sigma_w$ & Eikonal relaxation constant [-] \\

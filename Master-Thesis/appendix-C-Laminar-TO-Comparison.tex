@@ -2,10 +2,6 @@
 \label{app:C_topology_optimization_benchmarks}
 \label{app:C_laminar_turbulent_topology_comparison}
 
-\providecommand{\meshplaceholder}[1]{%
-	\fbox{\parbox[c][0.20\textheight][c]{0.88\linewidth}{\centering \textbf{Placeholder}\\[0.5em]#1}}%
-}
-
 This appendix supports Chapter~\ref{ch:benchmark_results}. It combines the turbulent and laminar topology-optimization support material in one place and groups it by benchmark case. Within each benchmark, the ordering is: turbulent-TO FEniCS settings and diagnostics, frozen-sensitivity checks where applicable, turbulent-design Ansys mesh independence, laminar-TO FEniCS settings and diagnostics, and laminar-design Ansys mesh independence.
 
 Unless stated otherwise, all mesh-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
@@ -24,7 +20,7 @@ All three turbulent topology optimization benchmarks use the same basic coupling
 
 The pipe-bend and U-bend benchmarks then share a Bayat-style pressure-loss setup, while the diffuser follows the Yoon dissipation benchmark. The common mechanisms and the benchmark-specific parameter values are summarized in Table~\ref{tab:app_B_shared_coupling_conventions}.
 
-The pipe-bend finite-difference sensitivity verification in Section~\ref{subsec:alexandersen_pipebend_sensitivity} is not assigned a separate configuration table. It uses the same geometry, physical parameters, wall-distance convention, penalty settings, objective, filter, and solver setup as the pipe-bend topology optimization run. The only additional settings are the finite-difference sampling parameters listed in Table~\ref{tab:app_B_alexandersen_pipebend_numerical}.
+The pipe-bend finite-difference sensitivity verification in Section~\ref{subsec:alexandersen_pipebend_sensitivity} uses a dedicated sensitivity configuration. It inherits the archived \texttt{Jp\_Old} pipe-bend settings and stores its own finite-difference output tables, so it should be read as a frozen-adjoint implementation check rather than as the current production pipe-bend continuation table.
 
 \begin{table}[htbp]
 	\centering
@@ -43,9 +39,9 @@ The pipe-bend finite-difference sensitivity verification in Section~\ref{subsec:
 		Wall-distance recovery & Reciprocal recovery from the relaxed Eikonal variable $G$ & Reciprocal recovery from the relaxed Eikonal variable $G$ \\
 		Adjoint treatment & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly & Frozen-turbulence adjoint; $\tilde{\nu}$ and $G$ frozen during gradient assembly \\
 		Solid threshold for wall source & $\bar{\gamma}=0.50$ & No separate threshold parameter in the diffuser configuration \\
-		SA working-variable penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
-		Wall-distance penalty & Amplitude schedule ending at $10^5$; exponent $n=4$ & Amplitude $10^5$; exponent $n=3$ \\
-		Wall-distance parameters & $\sigma_w=0.01$, $G_0=20$ & $\sigma_w=0.1$, $G_0=20$ \\
+			SA working-variable penalty & Power-law solid indicator with amplitude continuation ending at $10^5$ and exponent $n=3$ & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
+			Wall-distance penalty & Power-law solid indicator with amplitude continuation ending at $10^5$ and exponent $n=3$ & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
+			Wall-distance parameters & $\sigma_w=0.1$, $G_0=20$ & $\sigma_w=0.1$, $G_0=20$ \\
 		SA inlet treatment & Turbulence-intensity estimate: $I=7.5\%$, $\ell/H=0.05$, eddy-viscosity ratio capped at $50$ & Prescribed $\tilde{\nu}=1$ at inlet and outlet \\
 		Optimization objective & Average inlet pressure with fixed outlet pressure $p=0$ & Dissipation objective $J_D$; the velocity-outlet baseline prescribes inlet and outlet profiles, while the primary pressure-outlet case prescribes the inlet profile and fixes outlet static pressure \\
 		\hline
@@ -105,15 +101,16 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 		FEniCS optimization mesh & -- & \texttt{mesh\_yplus1.xdmf}; $39{,}128$ vertices, $77{,}334$ triangles, $h_{\max}=0.007L$ \\
 		Objective & $J_p$ & Average inlet pressure \\
 		Initial design density & $\gamma_0$ & $V_f=0.25$, matched to the filtered volume \\
-		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
-		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/30,\ 1/15]$ \\
-		Projection continuation & $\beta$ & $[4,\ 6,\ 9,\ 13]$ with threshold $\eta=0.50$ \\
-		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
-		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
-		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
-		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
+			Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^3$ for the active $J_p$ path \\
+			RAMP continuation & $q$ & $[0.02,\ 0.04,\ 0.08,\ 0.12,\ 0.18]$ \\
+			Projection continuation & $\beta$ & $[1.5,\ 3,\ 5,\ 8,\ 12]$ with threshold $\eta=0.50$ \\
+			MMA move limits & -- & $[0.012,\ 0.010,\ 0.007,\ 0.005,\ 0.003]$ \\
+			Maximum optimization iterations & -- & Five continuation stages with $[60,\ 70,\ 90,\ 110,\ 140]$ MMA iterations; stop if objective change is below $10^{-5}$ for eight iterations \\
+			Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
+			SA and wall-distance penalty continuation & -- & Shared $J_p$ amplitude schedule $[10^3,\ 3\times10^3,\ 10^4,\ 3\times10^4,\ 10^5,\ 10^5,\ 10^5]$; the first five entries are used by the active five-stage continuation \\
+			Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
+			Frozen NS-SA coupling & -- & Five Picard updates per design iteration with SA relaxation factor $0.04$ for the active $J_p$ path \\
+			Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
 		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
 		Sensitivity verification samples & -- & Five active DG0 cells, seed $13$ \\
 		Sensitivity verification step & $\Delta h$ & $10^{-6}$, central finite difference \\
@@ -124,12 +121,12 @@ The pipe-bend case follows the setup of Bayat et al.~\cite{Bayat2026}. The refer
 
 \subsection{Frozen Sensitivity Verification}
 \label{subsec:alexandersen_pipebend_sensitivity}
-The frozen adjoint is checked directly on the pipe-bend configuration. This is the relevant local test for the final thesis setup because it uses the same topology-dependent SA and wall-distance penalties, inlet-pressure objective, and frozen-turbulence adjoint used during the optimization. No full turbulence-adjoint or wall-distance-adjoint comparison is made; the purpose is to compare the derivative supplied to MMA with objective changes obtained by re-solving the perturbed velocity-pressure state. The check follows the common literature practice of combining coordinate finite differences on selected design variables with a directional Taylor test over multiple step sizes. It therefore verifies the implemented derivative of the objective actually used in the pipe-bend run, $J_p$. If a later pipe-bend or U-bend campaign switches from $J_p$ to the dissipation objective $J_D$, the same diagnostic should be repeated because the adjoint right-hand side and the direct objective derivative change.
+	The frozen adjoint is checked directly on the pipe-bend sensitivity configuration in \texttt{Config\_PipeBendAlexandersen\_Frozen\_Sensitivity.py}. That file inherits the archived \texttt{Config\_PipeBendAlexandersen\_Frozen\_Jp\_Old.py} path, not the current production pipe-bend continuation table above. It therefore uses the same inlet-pressure objective and frozen-turbulence adjoint algebra, but with the old single-stage $J_p$ setup: $\alpha_{\mathrm{solid}}=100$, $q=1/150$, $\beta=4$, move limit $0.010$, one frozen-SA Picard update with SA relaxation $0.20$, wall-distance parameter $\sigma_w=0.01$, and power-law SA/wall-distance penalty exponent $n=4$. No full turbulence-adjoint or wall-distance-adjoint comparison is made; the purpose is to compare the frozen derivative supplied to MMA with objective changes obtained by re-solving the perturbed velocity-pressure state. If a current five-stage production pipe-bend or U-bend campaign is used as the final design source, the same diagnostic should be rerun on that exact configuration.
 
-The check is performed at the initial pipe-bend design state, with base objective
-$J_0=1.8363$. In every perturbation, the SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ are held fixed. This matches the frozen-turbulence assumption used by the adjoint: the flow state is re-solved, but the turbulence and wall-distance updates are not differentiated.
+	The checked-in coordinate finite-difference result is performed at the initial pipe-bend design state, with base objective
+	$J_0=1.8343209502$. In every perturbation, the SA working variable $\tilde{\nu}^{0}$ and reciprocal wall-distance field $G^{0}$ are held fixed. This matches the frozen-turbulence assumption used by the adjoint: the flow state is re-solved, but the turbulence and wall-distance updates are not differentiated.
 
-Five active $DG_0$ design cells are selected using a fixed pseudo-random sampling procedure, so that the same control volumes are used whenever the verification script is rerun. These sampled control volumes are labelled $CV_1$--$CV_5$ in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison}. For sampled cell $i$, the raw density vector $\boldsymbol{\gamma}$ is perturbed by $\pm\Delta h\,\mathbf{e}_i$, where $\mathbf{e}_i$ is the unit vector for that active design variable and $\Delta h=10^{-6}$. The central finite-difference derivative is
+	The sensitivity configuration evaluates five active $DG_0$ samples with seed $13$. For sampled cell $i$, the raw density vector $\boldsymbol{\gamma}$ is perturbed by $\pm\Delta h\,\mathbf{e}_i$, where $\mathbf{e}_i$ is the unit vector for that active design variable and $\Delta h=10^{-6}$. The central finite-difference derivative is
 \begin{equation}
 	S_i^{\mathrm{FD}}
 	=
@@ -170,49 +167,49 @@ The frozen-adjoint value for the same cell is denoted by $S_i^{\mathrm{fr}}$; th
 		\shortstack{\textbf{Absolute}\\\textbf{error}\\$\Delta_i^{\mathrm{abs}}$} &
 		\shortstack{\textbf{Relative}\\\textbf{error}\\$\varepsilon_i^{\mathrm{fr}}$} \\
 		\hline
-		$CV_1$ & $-2.7041\times10^{-5}$ & $-2.7042\times10^{-5}$ & $4.1371\times10^{-10}$ & $1.5299\times10^{-5}$ \\
-		$CV_2$ & $-2.1494\times10^{-6}$ & $-2.1491\times10^{-6}$ & $3.1679\times10^{-10}$ & $1.4738\times10^{-4}$ \\
-		$CV_3$ & $-1.6641\times10^{-4}$ & $-1.6641\times10^{-4}$ & $3.6170\times10^{-10}$ & $2.1735\times10^{-6}$ \\
-		$CV_4$ & $-1.7281\times10^{-5}$ & $-1.7281\times10^{-5}$ & $1.5118\times10^{-12}$ & $8.7488\times10^{-8}$ \\
-		$CV_5$ & $2.3808\times10^{-5}$ & $2.3808\times10^{-5}$ & $8.1272\times10^{-11}$ & $3.4136\times10^{-6}$ \\
+			$CV_1$ & $-2.7011\times10^{-5}$ & $-2.7010\times10^{-5}$ & $1.5875\times10^{-10}$ & $5.8774\times10^{-6}$ \\
+			$CV_2$ & $-2.1146\times10^{-6}$ & $-2.1148\times10^{-6}$ & $1.2513\times10^{-10}$ & $5.9171\times10^{-5}$ \\
+			$CV_3$ & $-1.6664\times10^{-4}$ & $-1.6664\times10^{-4}$ & $4.2394\times10^{-10}$ & $2.5440\times10^{-6}$ \\
+			$CV_4$ & $-1.7209\times10^{-5}$ & $-1.7209\times10^{-5}$ & $4.3775\times10^{-10}$ & $2.5437\times10^{-5}$ \\
+			$CV_5$ & $ 2.3641\times10^{-5}$ & $ 2.3641\times10^{-5}$ & $2.0497\times10^{-10}$ & $8.6700\times10^{-6}$ \\
 		\hline
 	\end{tabular}
 \end{table}
 
-The coordinate check shows close agreement between the frozen-adjoint derivative and the re-solved central finite differences. The largest absolute discrepancy is $4.14\times10^{-10}$, and the largest relative discrepancy is $1.47\times10^{-4}$ for $CV_2$. This relative error remains small and is amplified by the small magnitude of the $CV_2$ derivative, approximately $2.15\times10^{-6}$, which places the finite-difference objective change generated by a $10^{-6}$ perturbation close to roundoff.
+	The coordinate checks show close agreement between the frozen-adjoint derivative and the re-solved central finite differences across all five samples. The maximum absolute discrepancy is $4.38\times10^{-10}$, and the maximum relative discrepancy is $5.92\times10^{-5}$. The sign of the derivative also agrees in all five samples.
+
+	The same sampled active cells are also used for a directional Taylor check with steps $(10^{-3},3\times10^{-4},10^{-4},3\times10^{-5})$ and seed $29$. The directional derivative is
+	$9.6668564775\times10^{-5}$, and the central finite differences remain within $8.66\times10^{-8}$ relative error over the tested step range. The symmetric Taylor remainder decays with approximately second-order behavior, as reported in Table~\ref{tab:alexandersen_pipebend_taylor_check}.
 
 \begin{table}[!ht]
 	\centering
 	\scriptsize
-	\caption{Directional Taylor check for the frozen pipe-bend configuration. Values are taken from \texttt{TaylorCheckLog.tsv}. The same five sampled cells as in Table~\ref{tab:alexandersen_pipebend_fd_adjoint_comparison} are perturbed together.}
+	\caption{Directional Taylor check for the frozen pipe-bend sensitivity configuration. Values are taken from \texttt{TaylorCheckLog.tsv}.}
 	\label{tab:alexandersen_pipebend_taylor_check}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabular}{c c c c c c}
+	\begin{tabular}{c c c c c}
 		\hline
-		\textbf{Step} &
-		\shortstack{\textbf{Adjoint}\\\textbf{directional}\\\textbf{derivative}} &
-		\shortstack{\textbf{Central}\\\textbf{finite-difference}\\\textbf{directional}\\\textbf{derivative}} &
-		\shortstack{\textbf{Relative}\\\textbf{error}} &
-		\shortstack{\textbf{Symmetric}\\\textbf{Taylor}\\\textbf{remainder}} &
-		\shortstack{\textbf{Observed}\\\textbf{order}} \\
+		\textbf{Step $\epsilon$} &
+		\shortstack{\textbf{Frozen}\\\textbf{directional}\\\textbf{derivative}} &
+		\shortstack{\textbf{Central}\\\textbf{finite}\\\textbf{difference}} &
+		\shortstack{\textbf{Directional}\\\textbf{relative}\\\textbf{error}} &
+		\shortstack{\textbf{Symmetric}\\\textbf{Taylor}\\\textbf{order}} \\
 		\hline
-		$1.0\times10^{-3}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $1.5795\times10^{-8}$ & $2.1515\times10^{-11}$ & -- \\
-		$3.0\times10^{-4}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $3.8379\times10^{-9}$ & $1.9358\times10^{-12}$ & $2.0003$ \\
-		$1.0\times10^{-4}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $1.5386\times10^{-8}$ & $2.1494\times10^{-13}$ & $2.0006$ \\
-		$3.0\times10^{-5}$ & $9.6135\times10^{-5}$ & $9.6135\times10^{-5}$ & $3.4657\times10^{-8}$ & $1.9096\times10^{-14}$ & $2.0107$ \\
+		$1.0\times10^{-3}$ & $9.6668564775\times10^{-5}$ & $9.6668565153\times10^{-5}$ & $3.9055\times10^{-9}$ & -- \\
+		$3.0\times10^{-4}$ & $9.6668564775\times10^{-5}$ & $9.6668563524\times10^{-5}$ & $1.2939\times10^{-8}$ & $2.0006$ \\
+		$1.0\times10^{-4}$ & $9.6668564775\times10^{-5}$ & $9.6668562044\times10^{-5}$ & $2.8252\times10^{-8}$ & $2.0077$ \\
+		$3.0\times10^{-5}$ & $9.6668564775\times10^{-5}$ & $9.6668573146\times10^{-5}$ & $8.6596\times10^{-8}$ & $2.1339$ \\
 		\hline
 	\end{tabular}
 \end{table}
 
-The Taylor check provides a complementary directional test. Instead of perturbing one cell at a time, the test perturbs the same five sampled cells together along one fixed direction and checks whether the objective change follows the adjoint's first-order prediction as the step is reduced. The direction signs for $CV_1$--$CV_5$ are $(+,+,-,+,-)$, defining a combined perturbation of the coordinate-check cells rather than a separate set of locations. Table~\ref{tab:alexandersen_pipebend_taylor_check} shows that the central finite-difference directional derivatives agree with the adjoint value to a maximum relative error of $3.47\times10^{-8}$ over the tested steps. The Taylor remainders decrease with approximately second-order rates, which is the expected behavior when the implemented gradient captures the local first-order objective change.
-
-These tests therefore verify the implemented frozen-turbulence derivative for the pipe-bend setup used in the optimization. The conclusion is deliberately limited to that derivative: the SA working variable and reciprocal wall-distance field are held fixed during the checks, matching the optimization adjoint; consequently, the result should not be interpreted as validation of a fully coupled turbulence sensitivity. Repeating the same diagnostic on the U-bend would test the same algebraic implementation path rather than a fundamentally different adjoint formulation. Since there is no independent reference field for this SA frozen derivative, a spatial $dJ_p/d\gamma$ contour is not used as a verification metric; the relevant evidence is the coordinate finite-difference agreement and the second-order Taylor behavior reported above.
+	This check verifies the implemented frozen-turbulence derivative for the archived pipe-bend sensitivity setup that generated the stored TSV file. The conclusion is deliberately limited to that derivative: the SA working variable and reciprocal wall-distance field are held fixed during the checks, matching the optimization adjoint; consequently, the result should not be interpreted as validation of a fully coupled turbulence sensitivity or as a sensitivity check of the newer five-stage production bend continuation. Repeating the same diagnostic on the current pipe-bend and U-bend configurations would test the exact continuation, penalty, and IPCS settings used for those production runs.
 
 \FloatBarrier
 
 \subsection{Turbulent FEniCS Optimization Diagnostics}
 \label{subsec:app_B_alexandersen_pipebend_turb_diagnostics}
-Figure~\ref{fig:alexandersen_pipebend_histories} reports the convergence behavior that accompanies the final turbulent pipe-bend topology. The pressure objective is normalized by its initial value $J_0$, while the volume constraint is plotted as the relative residual
+Figure~\ref{fig:alexandersen_pipebend_histories} records the checked-in convergence-history status for the turbulent pipe-bend topology. The pressure objective is normalized by its initial value $J_0$, while the volume constraint is defined as the relative residual
 \begin{equation}
 	r_V^{(k)} = 100 \frac{v_f^{(k)} - V_f}{V_f},
 	\label{eq:alexandersen_pipebend_volume_residual}
@@ -221,12 +218,12 @@ where $v_f^{(k)}$ is the realized fluid volume fraction at MMA iteration $k$. Wi
 
 \begin{figure}[htbp]
 	\centering
-	\includegraphics[width=\textwidth]{PipeBend-Turbulent-Convergence-History}
-	\caption{Optimization convergence history for the turbulent pipe-bend benchmark. The blue curve shows the normalized pressure objective $J/J_0$, while the orange curve shows the relative volume-fraction residual $r_V$ from Eq.~\eqref{eq:alexandersen_pipebend_volume_residual}.}
+	\fbox{\parbox[c][0.18\textheight][c]{0.82\textwidth}{\centering \small Checked-in turbulent pipe-bend production traces contain only global MMA iterations 0--3. No completed five-stage convergence history is available for this appendix figure.}}
+	\caption{Data-availability status for the turbulent pipe-bend optimization convergence history. A complete plot would show the normalized pressure objective $J/J_0$ and the relative volume-fraction residual $r_V$ from Eq.~\eqref{eq:alexandersen_pipebend_volume_residual}.}
 	\label{fig:alexandersen_pipebend_histories}
 \end{figure}
 
-The objective decreases rapidly during the first part of the optimization, reaching roughly one tenth of its initial value by the end of the run. The subsequent oscillations are expected for the continuation-based MMA solve, since changes in the interpolation and projection parameters alter the effective optimization landscape. The small negative peaks in the residual occur immediately after new continuation stages are introduced, most clearly near global MMA iterations 110 and 190, before MMA rebalances the objective and constraint in the following iterations.
+The checked-in \texttt{ObjectiveFunction\_Convergence.txt} and \texttt{VolumeConstraint\_Convergence.txt} files for the active turbulent pipe-bend $J_p$ results contain a header and four data rows, corresponding to global MMA iterations $0$--$3$. This is not a completed five-stage production history, so no late-stage continuation oscillations or final objective-reduction trend are reported here.
 
 \FloatBarrier
 
@@ -277,7 +274,7 @@ The extracted turbulent pipe-bend geometry is meshed in Ansys Fluent with a patc
 
 \subsection{Laminar FEniCS Configuration Differences}
 \label{subsec:app_C_alexandersen_pipebend_lam_config}
-The laminar pipe-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_PipeBendAlexandersen\_Laminar.py}. It reuses the turbulent pipe-bend setup in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and~\ref{tab:app_B_alexandersen_pipebend_numerical} wherever not stated otherwise: the geometry, wall-resolved mesh, non-design inlet and outlet ducts, uniform inlet velocity, pressure-outlet treatment, $V_f=0.25$ volume constraint, average inlet-pressure objective $J_p$, Brinkman limits, filter radius, and projection threshold are unchanged. Table~\ref{tab:app_C_alexandersen_pipebend_lam_differences} lists the laminar-specific differences.
+	The laminar pipe-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_PipeBendAlexandersen\_Laminar.py}. It reuses the turbulent pipe-bend setup in Tables~\ref{tab:app_B_alexandersen_pipebend_physical} and~\ref{tab:app_B_alexandersen_pipebend_numerical} wherever not stated otherwise: the geometry, wall-resolved mesh, non-design inlet and outlet ducts, uniform inlet velocity, pressure-outlet treatment, $V_f=0.25$ volume constraint, average inlet-pressure objective $J_p$, filter radius, and projection threshold are unchanged. The Brinkman resistance and continuation controls are laminar-specific and are listed in Table~\ref{tab:app_C_alexandersen_pipebend_lam_differences}.
 
 \begin{table}[htbp]
 	\centering
@@ -289,12 +286,13 @@ The laminar pipe-bend reference is a completed FEniCS topology-optimization run 
 		\hline
 		\textbf{Parameter} & \textbf{Laminar setting} \\
 		\hline
-		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
-		Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
-		Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{in}}=0.2L$ as the turbulent case \\
-		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
-		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-8}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $220$ \\
-		Continuation and optimizer controls & The $q$ and $\beta$ schedules match the turbulent run, but the laminar run uses move limits $\{0.04,0.03,0.02,0.012,0.008,0.005,0.003\}$ and inner-iteration budgets $\{80,100,140,200,200,240,260\}$ \\
+			Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
+			Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{in}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
+			Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{in}}=0.2L$ as the turbulent case \\
+			Brinkman penalty & RAMP form with $\alpha_{\mathrm{fluid}}=0$ and $\alpha_{\mathrm{solid}}=10^5$ \\
+			Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+			Forward and adjoint solves & SNES/MUMPS laminar Newton forward solves with relative tolerance $10^{-6}$, absolute tolerance $10^{-8}$, and maximum forward iteration count $220$; the adjoint is solved as a linear system with MUMPS \\
+			Continuation and optimizer controls & Seven-stage schedule $q=\{0.01,0.02,0.04,0.08,0.08,0.12,0.20\}$, $\beta=\{1,2,4,8,8,12,16\}$, move limits $\{0.010,0.008,0.006,0.004,0.003,0.002,0.0015\}$, and inner-iteration budgets $\{12,25,45,80,120,160,220\}$; stop if objective change is below $10^{-6}$ for ten iterations \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -348,7 +346,7 @@ Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} reports the Ansys mesh-inde
 	\end{tabular*}
 	\vspace{2pt}
 	\begin{minipage}{0.98\textwidth}
-		\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. For $\epsilon_{\mathrm{rel}}$ rows, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change.
+			\scriptsize \textit{Note.} $\Phi_D$ = viscous dissipation; $\Delta p_s$ = static pressure drop; SST denotes SST $k$--$\omega$. The checked-in repository does not contain a completed turbulent U-bend Ansys validation hierarchy, so no mesh-independence metrics are reported for this design.
 	\end{minipage}
 \end{table}
 
@@ -404,15 +402,16 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 		Reference FEniCS mesh & -- & \texttt{mesh\_yplus1.xdmf}; wall-resolved triangular Gmsh mesh with $45{,}280$ vertices, $85{,}780$ triangles, near-wall refinement based on $y^+\approx1$, and far-field $h_{\max}=0.007L$ \\
 		Objective & $J_p$ & Average inlet pressure \\
 		Initial design density & $\gamma_0$ & $V_f=0.27$, matched to the filtered volume \\
-		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=100$ \\
-		RAMP continuation & $q$ & Code schedule $q=1/q_{\alpha}=[1/150,\ 1/75,\ 1/35,\ 1/12]$ \\
-		Projection continuation & $\beta$ & $[8,\ 10,\ 18,\ 18]$ with threshold $\eta=0.50$ \\
-		MMA move limits & -- & $[0.05,\ 0.04,\ 0.03,\ 0.02]$ \\
-		Maximum optimization iterations & -- & Four continuation stages with $25$ MMA iterations each; stop if objective change is below $10^{-5}$ for five iterations \\
-		Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
-		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.20$ \\
-		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
+			Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^3$ for the active $J_p$ path \\
+			RAMP continuation & $q$ & $[0.02,\ 0.04,\ 0.08,\ 0.12,\ 0.18]$ \\
+			Projection continuation & $\beta$ & $[1.5,\ 3,\ 5,\ 8,\ 12]$ with threshold $\eta=0.50$ \\
+			MMA move limits & -- & $[0.012,\ 0.010,\ 0.007,\ 0.005,\ 0.003]$ \\
+			Maximum optimization iterations & -- & Five continuation stages with $[60,\ 70,\ 90,\ 110,\ 140]$ MMA iterations; stop if objective change is below $10^{-5}$ for ten iterations \\
+			Filter radius & $r_f$ & $4h_{\max}=0.028L$ \\
+			SA and wall-distance penalty continuation & -- & Shared amplitude schedule $[10^3,\ 3\times10^3,\ 10^4,\ 3\times10^4,\ 10^5,\ 10^5,\ 10^5]$; the first five entries are used by the active five-stage continuation \\
+			Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
+			Frozen NS-SA coupling & -- & Five Picard updates per design iteration with SA relaxation factor $0.04$ for the active $J_p$ path \\
+			Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
 		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
 		\hline
 	\end{tabularx}
@@ -420,12 +419,12 @@ The U-bend case follows Fig.~11 and Table~4 of Bayat et al.~\cite{Bayat2026}. It
 
 \subsection{Turbulent FEniCS Optimization Diagnostics}
 \label{subsec:app_B_alexandersen_ubend_turb_diagnostics}
-The U-bend convergence history is reserved in Figure~\ref{fig:alexandersen_ubend_histories}. As for the pipe bend, the final figure should combine the normalized inlet-pressure objective and the relative volume-fraction residual on shared iteration coordinates so that objective progress and constraint activity can be read together.
+Figure~\ref{fig:alexandersen_ubend_histories} records the checked-in convergence-history status for the turbulent U-bend topology. No frozen U-bend result directory or convergence-history files are currently checked in under \texttt{FluidTO/Results\_Frozen}, so the normalized inlet-pressure objective and relative volume-fraction residual are not reported here.
 
 \begin{figure}[htbp]
 	\centering
-	\meshplaceholder{Combined convergence history: normalized $J_p/J_0$ and relative volume residual $r_V$ vs. MMA iteration}
-	\caption{Optimization convergence history for the turbulent U-bend benchmark. The final figure should use the same combined-objective and volume-residual format as Figure~\ref{fig:alexandersen_pipebend_histories}.}
+	\fbox{\parbox[c][0.18\textheight][c]{0.82\textwidth}{\centering \small No checked-in turbulent U-bend frozen-optimization convergence-history files are available for this appendix figure.}}
+	\caption{Data-availability status for the turbulent U-bend optimization convergence history.}
 	\label{fig:alexandersen_ubend_histories}
 \end{figure}
 
@@ -443,25 +442,14 @@ The U-bend convergence history is reserved in Figure~\ref{fig:alexandersen_ubend
 		\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
-		Mesh type & [TBD] & [TBD] & [TBD] \\
-		Near-wall & [TBD] & [TBD] & [TBD] \\
-		$\Delta y_1$ [m] & [TBD] & [TBD] & [TBD] \\
-		Inflation layers & [TBD] & [TBD] & [TBD] \\
-		Growth rate & [TBD] & [TBD] & [TBD] \\
-		Elements / cells & [TBD] & [TBD] & [TBD] \\
-		$y^+_{\max}$, SA & [TBD] & [TBD] & [TBD] \\
-		$y^+_{\max}$, SST & [TBD] & [TBD] & [TBD] \\
+		Mesh-study status & \multicolumn{3}{c}{\textit{No extracted turbulent U-bend Ansys validation mesh hierarchy is checked in}} \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Validation metrics}} \\
-		$\Phi_D^{\mathrm{SA}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
-		$\Phi_D^{\mathrm{SST}}$ [W/m] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Phi_D^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
-		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SA}})$ [\%] & -- & [TBD] & [TBD] \\
-		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & [TBD] & [TBD] & [TBD] \\
-		$\epsilon_{\mathrm{rel}}(\Delta p_s^{\mathrm{SST}})$ [\%] & -- & [TBD] & [TBD] \\
-		Selected validation mesh & \multicolumn{3}{c}{[TBD]} \\
+		$\Phi_D^{\mathrm{SA}}$ [W/m] & \multicolumn{3}{c}{\textit{Not reported}} \\
+		$\Phi_D^{\mathrm{SST}}$ [W/m] & \multicolumn{3}{c}{\textit{Not reported}} \\
+		Static pressure drop $\Delta p_s^{\mathrm{SA}}$ [Pa] & \multicolumn{3}{c}{\textit{Not reported}} \\
+		Static pressure drop $\Delta p_s^{\mathrm{SST}}$ [Pa] & \multicolumn{3}{c}{\textit{Not reported}} \\
+		Selected validation mesh & \multicolumn{3}{c}{\textit{Not reported}} \\
 		\hline
 	\end{tabular*}
 	\vspace{2pt}
@@ -474,7 +462,7 @@ The U-bend convergence history is reserved in Figure~\ref{fig:alexandersen_ubend
 
 \subsection{Laminar FEniCS Configuration Differences}
 \label{subsec:app_C_alexandersen_ubend_lam_config}
-The laminar U-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_UBendAlexandersen\_Laminar.py}. It reuses the turbulent U-bend setup in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and~\ref{tab:app_B_alexandersen_ubend_numerical} wherever not stated otherwise: the geometry, fixed separator, wall-resolved mesh, non-design ports, uniform inlet velocity, pressure-outlet treatment, $V_f=0.27$ volume constraint, average inlet-pressure objective $J_p$, Brinkman limits, filter radius, and projection threshold are unchanged. Table~\ref{tab:app_C_alexandersen_ubend_lam_differences} lists the laminar-specific differences.
+	The laminar U-bend reference is a completed FEniCS topology-optimization run from \texttt{Config\_UBendAlexandersen\_Laminar.py}. It reuses the turbulent U-bend setup in Tables~\ref{tab:app_B_alexandersen_ubend_physical} and~\ref{tab:app_B_alexandersen_ubend_numerical} wherever not stated otherwise: the geometry, fixed separator, wall-resolved mesh, non-design ports, uniform inlet velocity, pressure-outlet treatment, $V_f=0.27$ volume constraint, average inlet-pressure objective $J_p$, filter radius, and projection threshold are unchanged. The Brinkman resistance and continuation controls are laminar-specific and are listed in Table~\ref{tab:app_C_alexandersen_ubend_lam_differences}.
 
 \begin{table}[htbp]
 	\centering
@@ -486,12 +474,13 @@ The laminar U-bend reference is a completed FEniCS topology-optimization run fro
 		\hline
 		\textbf{Parameter} & \textbf{Laminar setting} \\
 		\hline
-		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
-		Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
-		Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{port}}=0.2L$ as the turbulent case \\
-		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
-		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-8}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $260$ \\
-		Continuation and optimizer controls & The $q$ and $\beta$ schedules match the turbulent run, but the laminar run uses move limits $\{0.02,0.015,0.010,0.006,0.004,0.003,0.002\}$ and inner-iteration budgets $\{80,100,140,200,200,240,260\}$ \\
+			Flow model & Laminar incompressible Navier--Stokes; the SA working variable, reciprocal wall-distance equation, topology-dependent SA penalties, and frozen-turbulence coupling are omitted \\
+			Reynolds number & $Re=1$, based on $U_{\mathrm{in}}H_{\mathrm{port}}\rho/\mu$ instead of the turbulent $Re=5{,}000$ setup \\
+			Density and viscosity & $\rho=1.0$ and $\mu=0.2$, with the same $U_{\mathrm{in}}=1$ and $H_{\mathrm{port}}=0.2L$ as the turbulent case \\
+			Brinkman penalty & RAMP form with $\alpha_{\mathrm{fluid}}=0$ and $\alpha_{\mathrm{solid}}=10^5$ \\
+			Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+			Forward and adjoint solves & SNES/MUMPS laminar Newton forward solves with relative tolerance $10^{-6}$, absolute tolerance $10^{-8}$, and maximum forward iteration count $260$; the adjoint is solved as a linear system with MUMPS \\
+			Continuation and optimizer controls & Seven-stage schedule $q=\{0.01,0.02,0.04,0.08,0.08,0.12,0.20\}$, $\beta=\{1,2,4,8,8,12,16\}$, move limits $\{0.010,0.008,0.006,0.004,0.003,0.002,0.0015\}$, and inner-iteration budgets $\{12,25,45,80,120,160,220\}$; stop if objective change is below $10^{-6}$ for ten iterations \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -607,15 +596,15 @@ For the body-fitted Fluent evaluations, the inlet parabolic profile is shifted t
 		Objective & $J_D$ & Dissipation objective over the design domain \\
 		Initial design density & $\gamma_0$ & $V_f=0.30$, matched to the filtered volume \\
 		Brinkman penalty & $\alpha(\bar{\gamma})$ & RAMP form with $\alpha_{\mathrm{fluid}}=0$, $\alpha_{\mathrm{solid}}=10^9$ \\
-		RAMP continuation & $q$ & 12-stage schedule: 0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.35, 0.50, 0.75, 1.00, 1.00 \\
-		Projection continuation & $\beta$ & 12-stage schedule: 1, 2, 4, 8, 8, 12, 16, 32, 64, 96, 128, 128, with threshold $\eta=0.50$ \\
-		MMA move limits & -- & 12-stage schedule: 0.05, 0.04, 0.03, 0.02, 0.012, 0.010, 0.0075, 0.005, 0.0035, 0.0025, 0.0015, 0.0010 \\
-		Maximum optimization iterations & -- & 12-stage schedule: 50, 60, 80, 100, 200, 180, 220, 260, 260, 220, 260, 360 MMA iterations; stop if objective change is below $10^{-6}$ for ten iterations \\
+			RAMP continuation & $q$ & 8-stage schedule: 0.01, 0.02, 0.04, 0.08, 0.08, 0.12, 0.20, 0.35 \\
+			Projection continuation & $\beta$ & 8-stage schedule: 1, 2, 4, 8, 8, 12, 16, 32, with threshold $\eta=0.50$ \\
+			MMA move limits & -- & 8-stage schedule: 0.05, 0.04, 0.03, 0.02, 0.012, 0.010, 0.0075, 0.005 \\
+			Maximum optimization iterations & -- & 8-stage schedule: 50, 60, 80, 100, 200, 180, 220, 260 MMA iterations; stop if objective change is below $10^{-6}$ for ten iterations \\
 		Filter radius & $r_f$ & $4h_{\max}=2.22\times10^{-2}L$ \\
 		SA working-variable penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
 		Wall-distance penalty & -- & Power-law solid indicator with amplitude $10^5$ and exponent $n=3$ \\
 		Wall-distance equation & -- & Reciprocal penalized relaxed Eikonal equation with $\sigma_w=0.1$ and $G_0=20$ \\
-		Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by a warm-started SNES Newton line-search final flow solve \\
+			Forward flow solver & -- & IPCS flow solves for frozen-SA Picard updates, followed by an SNES Newton line-search final flow solve \\
 		Frozen NS-SA coupling & -- & Three Picard updates per design iteration with SA relaxation factor $0.15$ \\
 		Linear solver & -- & MUMPS for SNES/state and adjoint solves; BiCGSTAB with ILU preconditioning for IPCS warm-start solves \\
 		Adjoint treatment & -- & Frozen-turbulence adjoint in $(\mathbf{u}^*,p^*)$; $\tilde{\nu}$ and $G$ are frozen during gradient assembly \\
@@ -727,7 +716,7 @@ The extracted turbulent diffuser geometry is meshed with the same wall-resolved 
 
 \subsection{Laminar FEniCS Configuration Differences}
 \label{subsec:app_C_yoon_diffuser_lam_config}
-The existing laminar diffuser reference is a completed FEniCS topology-optimization run from \texttt{Config\_DiffuserYoon\_Laminar.py}. It reuses the pressure-outlet turbulent diffuser setup in Tables~\ref{tab:app_B_yoon_diffuser_physical} and~\ref{tab:app_B_yoon_diffuser_numerical} wherever not stated otherwise: the square $L=1~\mathrm{m}$ domain, full-height parabolic inlet, center-third pressure outlet with $p=0~\mathrm{Pa}$, no prescribed outlet velocity, $V_f=0.30$ volume constraint, dissipation objective $J_D$, Brinkman limits, mesh, filter radius, projection threshold, continuation schedules, MMA move limits, and maximum MMA iterations are unchanged. Table~\ref{tab:app_C_yoon_diffuser_lam_differences} therefore lists only the laminar-specific differences.
+	The existing laminar diffuser reference is a completed FEniCS topology-optimization run from \texttt{Config\_DiffuserYoon\_Laminar.py}. It reuses the pressure-outlet turbulent diffuser setup in Tables~\ref{tab:app_B_yoon_diffuser_physical} and~\ref{tab:app_B_yoon_diffuser_numerical} wherever not stated otherwise: the square $L=1~\mathrm{m}$ domain, full-height parabolic inlet, center-third pressure outlet with $p=0~\mathrm{Pa}$, no prescribed outlet velocity, $V_f=0.30$ volume constraint, dissipation objective $J_D$, Brinkman limits, mesh, filter radius, and projection threshold are unchanged. The laminar Reynolds number, solver settings, and continuation controls are listed in Table~\ref{tab:app_C_yoon_diffuser_lam_differences}.
 
 \begin{table}[htbp]
 	\centering
@@ -739,11 +728,12 @@ The existing laminar diffuser reference is a completed FEniCS topology-optimizat
 		\hline
 		\textbf{Parameter} & \textbf{Laminar setting} \\
 		\hline
-		Flow model & Laminar incompressible Navier--Stokes; the SA working variable, SA wall-distance equation, and frozen-turbulence coupling are omitted \\
-		Reynolds number & $Re=1$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ instead of the turbulent $Re=3{,}000$ setup \\
-		Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$ and $\mu=3000~\mathrm{Pa\,s}$, with the same $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$ as the turbulent pressure-outlet case; no outlet velocity is prescribed \\
-		Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
-		Forward and adjoint solves & SNES/MUMPS laminar Newton solves with relative tolerance $10^{-6}$; the forward absolute tolerance is $10^{-9}$, the adjoint absolute tolerance is $10^{-9}$, and the maximum forward iteration count is $200$ \\
+			Flow model & Laminar incompressible Navier--Stokes; the SA working variable, SA wall-distance equation, and frozen-turbulence coupling are omitted \\
+			Reynolds number & $Re=1$, based on $U_{\max,\mathrm{in}}L\rho/\mu$ instead of the turbulent $Re=3{,}000$ setup \\
+			Density and viscosity & $\rho=1000~\mathrm{kg/m^3}$ and $\mu=3000~\mathrm{Pa\,s}$, with the same $U_{\max,\mathrm{in}}=3~\mathrm{m/s}$ as the turbulent pressure-outlet case; no outlet velocity is prescribed \\
+			Flow finite elements & Taylor--Hood $P_2/P_1$ for $(\mathbf{u},p)$; no separate $P_1$ SA working-variable space is used \\
+			Forward and adjoint solves & SNES/MUMPS laminar Newton forward solves with method \texttt{newtontr}, relative tolerance $10^{-6}$, absolute tolerance $10^{-9}$, and maximum forward iteration count $80$; the adjoint is solved as a linear system with MUMPS \\
+			Continuation and optimizer controls & Seven-stage schedule $q=\{0.01,0.02,0.04,0.08,0.08,0.12,0.20\}$, $\beta=\{1,2,4,8,8,12,16\}$, move limits $\{0.010,0.008,0.006,0.004,0.003,0.002,0.0015\}$, and inner-iteration budgets $\{12,25,45,80,120,160,220\}$; stop if objective change is below $10^{-6}$ for ten iterations \\
 		\hline
 	\end{tabularx}
 \end{table}

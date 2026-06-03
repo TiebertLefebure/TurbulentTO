@@ -8,6 +8,13 @@ This thesis is positioned within that broader energy and thermal-management cont
 
 Mathematical optimization offers a way to design such internal-flow layouts without prescribing the final channel topology in advance. Among these strategies, topology optimization has emerged as a powerful computational design tool for fluid and thermal-management problems \cite{Fawaz2022}. In a fully coupled thermal problem, the eventual objective may involve heat-transfer rate, maximum temperature, or thermal resistance. In the flow-only problem treated here, the relevant objectives are instead pressure drop and dissipated mechanical energy. This restriction is not merely a simplification for convenience: turbulent density-based topology optimization remains challenging even before the energy equation is added, because the flow solver, turbulence model, wall treatment, geometry representation, and adjoint sensitivity calculation all interact with the evolving topology.
 
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=\textwidth]{Heat-Sink-TO}
+	\caption{Topology-optimized heat sink from Barroca et al.~\cite{Barroca2023}, showing the optimized fin layout with velocity magnitude (left) and temperature (right).}
+	\label{fig:barroca_heat_sink}
+\end{figure}
+
 The central gap addressed in this thesis is therefore that density-based fluid topology optimization is far more mature for laminar flows than for turbulent internal flows. Laminar assumptions are attractive because they simplify both the governing equations and the associated adjoint sensitivities, but they are often not representative of compact engineering flow paths operating at industrial Reynolds numbers. In turbulent internal flows, the chosen Reynolds-Averaged Navier-Stokes (RANS) closure, near-wall treatment, and response to curvature or separation can influence the optimized topology itself. Before turbulent conjugate heat-transfer optimization can be treated as a reliable design tool, the underlying turbulent flow-only optimization problem must first be stabilized, verified, validated, and interpreted critically.
 
 \section{Conceptual Overview of Density-Based Topology Optimization}
@@ -19,23 +26,23 @@ Because gradient-based optimizers require continuous and differentiable function
 
 \begin{figure}[htpb]
 	\centering
-	\begin{subfigure}[b]{0.32\textwidth}
+	\begin{subfigure}[b]{0.28\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Initial-Density-Field}
 		\caption{Initial projected field}
 		\label{fig:to_initial}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.32\textwidth}
+	\begin{subfigure}[b]{0.28\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Intermediate-Density-Field}
 		\caption{Continuous distribution}
 		\label{fig:to_intermediate}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.32\textwidth}
+	\begin{subfigure}[b]{0.40\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{Final-Density-Field}
 		\caption{Discrete topology}
 		\label{fig:to_final}
 	\end{subfigure}
@@ -52,11 +59,11 @@ Extending topology optimization to the turbulent regime is highly non-trivial. I
 
 \begin{figure}[htpb]
 	\centering
-	\begin{minipage}[c]{0.4\textwidth}
+	\begin{minipage}[c]{0.37\textwidth}
 		\includegraphics[width=\textwidth]{Manifold-TO-domain}
 	\end{minipage}
 	\hfill
-	\begin{minipage}[c]{0.58\textwidth}
+	\begin{minipage}[c]{0.60\textwidth}
 		\includegraphics[width=\textwidth]{Manifold-TO-solution}
 	\end{minipage}
 	\caption{Topology optimized manifolds with turbulent flow. Adapted from Dilgen et al. \cite{Dilgen2018}.}
@@ -68,15 +75,15 @@ Pioneering works by Yoon (2016) \cite{Yoon2016} and Dilgen et al. (2018) \cite{D
 \section{Objectives and Research Questions}
 The main objective of this Master's thesis is to extend density-based topology optimization to internal flow configurations operating in the turbulent regime. The phrase ``flow configurations'' in the title is intentional: the work targets the hydraulic part of energy and thermal-management devices, not the complete heat-transfer device. To achieve this goal, the thesis investigates the coupling of incompressible flow, RANS turbulence modeling, Brinkman topology penalization, and gradient-based optimization within an automated finite-element framework. By isolating the fluid mechanics from heat-transfer calculations, the thesis bounds its scope to establish a stable and verifiable baseline for future turbulent thermal design.
 
-Rather than relying solely on black-box commercial CFD software, the core framework is implemented in \textbf{FEniCS}, an open-source computing platform for solving partial differential equations \cite{Alnaes2015}. FEniCS and UFL provide the mathematical flexibility required to write finite-element weak forms directly, verify the one-equation Spalart-Allmaras (SA) turbulence model, and assemble the residual derivatives used by the frozen-turbulence adjoint. For transparency and reproducibility, the complete FEniCS source code developed for this thesis is open-source and publicly available at: \url{https://github.com/TiebertLefebure/TurbulentTO.git}.
+Rather than relying solely on black-box commercial CFD software, the core framework is implemented in \textbf{FEniCS}, an open-source computing platform for solving partial differential equations \cite{Alnaes2015}. FEniCS and UFL provide the mathematical flexibility required to write finite-element weak forms directly, verify the one-equation Spalart-Allmaras (SA) turbulence model, and assemble the residual derivatives used by the frozen-turbulence adjoint.
 
 At this stage, it is important to distinguish two different comparisons that appear later in the thesis. A comparison between laminar-optimized and turbulent-optimized layouts is useful as supporting design context, because it shows how inertia and turbulence alter the preferred topology. However, this comparison is not treated as the principal CFD validation step. The decisive assessment instead consists of re-analyzing the final SA-optimized geometries in Ansys Fluent, first with the same SA model and then with the SST $k-\omega$ closure.
 
 Based on this methodology, this thesis seeks to answer the following research questions:
 \begin{enumerate}
-	\item \textbf{How accurately does the Spalart-Allmaras turbulence model predict curvature-dominated internal turbulent flows, and where do its physical limitations appear?}
+	\item \textbf{How accurately does the Spalart-Allmaras turbulence model predict curved and separated internal turbulent flows, and where do its physical limitations appear?}
 
-	Chapter~\ref{ch:turbulence_modeling} answers this question by combining turbulence-model theory, Dean-number-based literature evidence, and Ansys Fluent comparisons on curved internal-flow benchmarks. The goal is not to prove a universal Dean-number threshold, but to define the operating range in which SA is credible for the present thesis.
+	Chapter~\ref{ch:turbulence_modeling} answers this question by combining turbulence-model theory, curved-pipe and separated-flow literature evidence, and Ansys Fluent comparisons on curved internal-flow benchmarks. The Dean number is used only as a rough physical scale for the bend cases, not as a universal validity threshold for SA.
 
 	\item \textbf{Can a custom FEniCS implementation of the Spalart-Allmaras turbulence model achieve quantitative agreement with Ansys Fluent for turbulent internal-flow benchmarks?}
 
@@ -90,10 +97,10 @@ Based on this methodology, this thesis seeks to answer the following research qu
 \section{Outline of the Thesis}
 The remainder of this thesis is structured into the following six chapters:
 \begin{itemize}
-	\item \textbf{Chapter~\ref{ch:turbulence_modeling} (Turbulence Modeling):} Provides the theoretical background on fluid dynamics and turbulence. It discusses the Navier-Stokes equations, RANS modeling, near-wall treatment, the physical characteristics of the Spalart-Allmaras model, and the curvature limits relevant to this thesis.
+	\item \textbf{Chapter~\ref{ch:turbulence_modeling} (Turbulence Modeling):} Provides the theoretical background on fluid dynamics and turbulence. It discusses the Navier-Stokes equations, RANS modeling, near-wall treatment, the physical characteristics of the Spalart-Allmaras model, and the curvature and separation limits relevant to this thesis.
 	\item \textbf{Chapter~\ref{ch:fenics_implementation} (Implementation of the Spalart-Allmaras Model in FEniCS):} Details the numerical implementation of the standalone SA solver in FEniCS, including weak forms, IPCS flow solves, Picard coupling, and wall-distance computation.
 	\item \textbf{Chapter~\ref{ch:sa_verification} (Verification of the Spalart-Allmaras Solver for Turbulent Internal Flows):} Verifies the standalone FEniCS-SA forward solver against Ansys Fluent on turbulent channel-flow and U-bend benchmarks.
 	\item \textbf{Chapter~\ref{ch:topology_optimization_methodology} (Turbulent Topology Optimization Methodology):} Introduces the density-based optimization framework. It details Brinkman momentum penalization, topology penalties, reciprocal wall-distance penalization, filtering, projection, MMA, and the frozen-turbulence adjoint.
-	\item \textbf{Chapter~\ref{ch:benchmark_results} (Turbulent Topology Optimization Results):} Presents the turbulent topology optimization results for the pipe-bend and U-bend benchmarks from Bayat et al. and the diffuser benchmark from Yoon, and evaluates extracted designs with both SA and SST $k-\omega$ turbulence models. Appendix~\ref{app:C_topology_optimization_benchmarks} documents the pipe-bend sensitivity verification and numerical support material.
+	\item \textbf{Chapter~\ref{ch:benchmark_results} (Turbulent Topology Optimization Results):} Presents the turbulent topology optimization results for the pipe-bend and U-bend benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}, and evaluates extracted designs with both SA and SST $k-\omega$ turbulence models. Appendix~\ref{app:C_topology_optimization_benchmarks} documents the pipe-bend sensitivity verification and numerical support material.
 	\item \textbf{Chapter~\ref{ch:conclusion} (Conclusion and Future Work):} Summarizes the main findings, answers the research questions conservatively, and outlines remaining limitations and future extensions toward three-dimensional and conjugate heat-transfer applications.
 \end{itemize}
