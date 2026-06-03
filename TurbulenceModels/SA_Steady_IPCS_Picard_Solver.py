@@ -445,6 +445,8 @@ def run_steady_sa_ipcs_picard(
                 "Diagnostic-window Picard convergence requires relative_tolerance > 0."
             )
 
+    restart_state = {"loaded": False, "directory": None}
+
     def maybe_restart_from_saved_state():
         if not bool(simulation_prm.get("RESTART_FROM_SAVED_STATE", False)):
             return False
@@ -510,6 +512,8 @@ def run_steady_sa_ipcs_picard(
             "Loaded restart state from {}.".format(restart_dir),
             is_root=is_root,
         )
+        restart_state["loaded"] = True
+        restart_state["directory"] = restart_dir
         return True
 
     maybe_restart_from_saved_state()
@@ -543,6 +547,31 @@ def run_steady_sa_ipcs_picard(
 
     checkpoint_archive_offset = discover_checkpoint_archive_offset()
 
+    def infer_restart_iteration_offset():
+        if not restart_state["loaded"]:
+            return 0
+
+        restart_dir = restart_state.get("directory")
+        if restart_dir not in (None, ""):
+            restart_basename = os.path.basename(os.path.normpath(restart_dir))
+            prefix = "{}_".format(checkpoint_archive_prefix)
+            if restart_basename.startswith(prefix):
+                try:
+                    return int(restart_basename[len(prefix):])
+                except ValueError:
+                    pass
+
+        return checkpoint_archive_offset
+
+    restart_iteration_offset = infer_restart_iteration_offset()
+    if restart_iteration_offset > 0:
+        root_print(
+            "Continuing Picard numbering from existing checkpoint index {:04d}.".format(
+                restart_iteration_offset
+            ),
+            is_root=is_root,
+        )
+
     def save_h5_checkpoint_field(field, path):
         temporary_path = "{}.tmp".format(path)
         save_h5_file(field, temporary_path)
@@ -565,8 +594,17 @@ def run_steady_sa_ipcs_picard(
         checkpoint_directories = [checkpoint_h5_dir]
         if checkpoint_write_latest:
             checkpoint_directories.append(os.path.join(checkpoint_h5_dir, checkpoint_latest_dir_name))
-        if archive and checkpoint_archive_every > 0 and picard_iter > 0 and picard_iter % checkpoint_archive_every == 0:
-            archive_index = checkpoint_archive_offset + picard_iter
+        relative_picard_iter = picard_iter - restart_iteration_offset
+        if (
+            archive
+            and checkpoint_archive_every > 0
+            and relative_picard_iter > 0
+            and relative_picard_iter % checkpoint_archive_every == 0
+        ):
+            if checkpoint_archive_continue_numbering:
+                archive_index = checkpoint_archive_offset + relative_picard_iter
+            else:
+                archive_index = picard_iter
             checkpoint_directories.append(
                 os.path.join(
                     checkpoint_h5_dir,
@@ -585,7 +623,10 @@ def run_steady_sa_ipcs_picard(
             and (
                 force_pvd
                 or checkpoint_pvd_every == 0
-                or (picard_iter > 0 and picard_iter % checkpoint_pvd_every == 0)
+                or (
+                    picard_iter > restart_iteration_offset
+                    and (picard_iter - restart_iteration_offset) % checkpoint_pvd_every == 0
+                )
             )
         )
         if save_checkpoint_pvd:
@@ -605,6 +646,53 @@ def run_steady_sa_ipcs_picard(
             )
         residual_keys.append(diagnostic["key"])
     residuals = {key: [] for key in residual_keys}
+
+    def load_residual_history(path):
+        values = []
+        with open(path, "r") as residual_file:
+            for line in residual_file:
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
+                values.append(float(stripped_line))
+        return values
+
+    def seed_residual_histories_from_disk():
+        if not restart_state["loaded"] or restart_iteration_offset <= 0:
+            return
+
+        residual_directory = saving_directory.get("RESIDUALS")
+        if residual_directory in (None, "") or not os.path.isdir(residual_directory):
+            return
+
+        loaded_keys = []
+        for key in residuals:
+            residual_path = os.path.join(residual_directory, key + ".txt")
+            if not os.path.exists(residual_path):
+                continue
+            try:
+                residuals[key] = load_residual_history(residual_path)[:restart_iteration_offset]
+            except ValueError:
+                root_print(
+                    "Residual history '{}' could not be parsed; starting that history empty.".format(
+                        residual_path
+                    ),
+                    is_root=is_root,
+                )
+                residuals[key] = []
+                continue
+            loaded_keys.append(key)
+
+        if loaded_keys:
+            root_print(
+                "Loaded residual histories through Picard {:04d}: {}.".format(
+                    restart_iteration_offset,
+                    ", ".join(sorted(loaded_keys)),
+                ),
+                is_root=is_root,
+            )
+
+    seed_residual_histories_from_disk()
     start_time = time.time()
 
     def save_residual_histories():
@@ -745,9 +833,17 @@ def run_steady_sa_ipcs_picard(
     # SA transport solve at fixed velocity until all coupled fields stop moving.
     converged = False
     interrupted = False
-    last_completed_picard = 0
-    picard_iter = 0
-    for picard_iter in range(1, max_picard + 1):
+    last_completed_picard = restart_iteration_offset
+    picard_iter = restart_iteration_offset
+    if restart_iteration_offset >= max_picard:
+        root_print(
+            "Restarted state is already at or beyond the configured maximum of {} Picard iterations.".format(
+                max_picard
+            ),
+            is_root=is_root,
+        )
+
+    for picard_iter in range(restart_iteration_offset + 1, max_picard + 1):
         u_prev_picard.assign(u0)
         p_prev_picard.assign(p0)
         nu_tilde_prev_picard.assign(turbulence_model.nu_tilde0)
@@ -843,7 +939,8 @@ def run_steady_sa_ipcs_picard(
                 )
         checkpoint_saved = False
         checkpoint_skipped = False
-        if picard_checkpoint_every > 0 and picard_iter % picard_checkpoint_every == 0:
+        relative_picard_iter = picard_iter - restart_iteration_offset
+        if picard_checkpoint_every > 0 and relative_picard_iter % picard_checkpoint_every == 0:
             if flow_converged or not checkpoint_require_flow_convergence:
                 checkpoint_saved = save_picard_checkpoint()
             else:

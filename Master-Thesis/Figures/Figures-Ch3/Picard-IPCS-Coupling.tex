@@ -28,32 +28,32 @@
      fixed wall distance $y$ for the SA closure};
 
 \node[mainbox, below=9mm of eikonal] (eddy)
-    {\hspace{7mm}\textbf{Assemble turbulence coefficients}\\
+    {\textbf{Assemble turbulence coefficients}\\
      Use previous SA field $\tilde{\nu}^{k}$ to form
      $\nu_t^{k}$ and $\nu_{\mathrm{eff}}^{k}=\nu+\nu_t^{k}$.};
 
 \node[mainbox, below=7mm of eddy] (ipcs)
-    {\hspace{7mm}\textbf{Advance velocity-pressure state with IPCS}\\
+    {\textbf{Advance velocity-pressure state with IPCS}\\
      Tentative velocity $\mathbf{u}^{*}$ $\rightarrow$
      pressure correction $p^{k+1}$ $\rightarrow$
      velocity update $\mathbf{u}^{k+1}$.};
 
 \node[mainbox, below=7mm of ipcs] (sa)
-    {\hspace{7mm}\textbf{Solve SA transport equation}\\
+    {\textbf{Solve SA transport equation}\\
      Use $\mathbf{u}^{k+1}$ and $y$ to compute the next working variable
      $\tilde{\nu}^{k+1}\in T_h$.};
 
 \node[mainbox, below=7mm of sa] (relax)
-    {\hspace{7mm}\textbf{Relax, bound, and check convergence}\\
+    {\textbf{Relax, bound, and check convergence}\\
      Under-relax $\tilde{\nu}^{k+1}$, recompute $\nu_t^{k+1}$,
      and test the Picard field updates.};
 
-\node[badge] at ($(eddy.west)+(3mm,0)$) {1};
-\node[badge] at ($(ipcs.west)+(3mm,0)$) {2};
-\node[badge] at ($(sa.west)+(3mm,0)$) {3};
-\node[badge] at ($(relax.west)+(3mm,0)$) {4};
+\node[badge] (badge1) at ($(eddy.west)+(-5mm,0)$) {1};
+\node[badge] (badge2) at ($(ipcs.west)+(-5mm,0)$) {2};
+\node[badge] (badge3) at ($(sa.west)+(-5mm,0)$) {3};
+\node[badge] (badge4) at ($(relax.west)+(-5mm,0)$) {4};
 
-\node[loopbox, fit=(eddy)(ipcs)(sa)(relax)] (picard) {};
+\node[loopbox, fit=(badge1)(badge2)(badge3)(badge4)(eddy)(ipcs)(sa)(relax)] (picard) {};
 \node[font=\sffamily\bfseries\small, text=blue!70!black, fill=white, inner sep=1.5pt,
       anchor=west] at ($(picard.north west)+(3mm,0)$)
       {outer Picard iteration $k\rightarrow k+1$};

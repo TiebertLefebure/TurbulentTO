@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -29,8 +29,11 @@ BOUNDARY_MARKERS = {
     "OUTFLOW": [3],
     "WALLS": [4],
 }
+# =================================
 
+RESTART_FROM_SAVED_STATE = False
 
+# =================================
 
 # Physical parameters.
 PIPE_RADIUS = 0.014 # [m]
@@ -87,7 +90,7 @@ QUADRATURE_DEGREE = 4
 
 # Outer coupled fixed-point loop:
 # one Picard step = one flow-to-steady IPCS solve + SA_SWEEPS_PER_STEP SA solves.
-COUPLED_PICARD_MAX_STEPS = 180
+COUPLED_PICARD_MAX_STEPS = 1000
 COUPLED_PICARD_VELOCITY_TOLERANCE = 1.0e-4
 COUPLED_PICARD_PRESSURE_TOLERANCE = 1.0e-4
 COUPLED_PICARD_NU_TILDE_TOLERANCE = 1.0e-6
@@ -111,7 +114,7 @@ PICARD_CHECKPOINT_ARCHIVE_CONTINUE_NUMBERING = True
 
 # [Picard] IPCS flow solve parameters
 FLOW_IPCS_TIME_STEP = 1.0e-4
-FLOW_IPCS_MAX_STEPS = 180
+FLOW_IPCS_MAX_STEPS = 200
 FLOW_IPCS_VELOCITY_TOLERANCE = 1.0e-4
 FLOW_IPCS_PRESSURE_TOLERANCE = 2.0e-3
 FLOW_IPCS_VELOCITY_RELAXATION = 0.3
@@ -152,7 +155,6 @@ RESTART_REQUIRE_FILES = False
 RESTART_H5_DIRECTORY = "{}/H5 files".format(RESULTS_ROOT)
 RESTART_PREFER_LATEST_CHECKPOINT = True
 
-RESTART_FROM_SAVED_STATE = True
 RESTART_CHECKPOINT_DIRECTORY = os.environ.get("UBEND_RESTART_CHECKPOINT", None)
 
 # G-equation wall-distance parameters.

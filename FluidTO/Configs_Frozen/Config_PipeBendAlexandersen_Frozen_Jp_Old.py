@@ -18,7 +18,7 @@ from Configs_Frozen.Config_PipeBendAlexandersen_Frozen import *  # noqa: F401,F4
 # It does not modify the current PipeBendAlexandersen J_p config.
 # ===================================================================
 
-RESUME_OPTIMIZATION = False
+RESUME_OPTIMIZATION = True
 
 VOL_FRAC = 0.25
 OBJECTIVE_TYPE = "average_inlet_pressure"
@@ -27,7 +27,7 @@ INITIAL_DENSITY_MATCH_FILTERED_VOLUME = True
 
 # Old J_p run: weak Brinkman impedance was important for reproducing
 # the Alexandersen-like bend topology.
-ALPHA_SOLID = 100.0
+ALPHA_SOLID = 1000.0
 
 # Old frozen-SA settings from 8fedc94.
 SA_SUPG_STABILIZATION = True #False
@@ -51,7 +51,7 @@ SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
 PICARD_STEPS = 1 #3
-TURBULENCE_RELAXATION = 0.20
+TURBULENCE_RELAXATION = 0.15 #0.20
 
 LINEAR_SOLVER = "mumps"
 
@@ -76,7 +76,7 @@ FORWARD_SNES_STOP_AT_ACCEPT_NORM = False
 FORWARD_RETRY_BACKTRACK_DESIGN = False
 FORWARD_RETRY_BACKTRACK_FACTORS = [0.5, 0.25, 0.10, 0.05]
 
-FORWARD_IPCS_DT = 2.5e-6
+FORWARD_IPCS_DT = 1.0e-5
 FORWARD_IPCS_MAX_ITERS = 300
 FORWARD_IPCS_VELOCITY_RTOL = 5.0e-4 #1.0e-4
 FORWARD_IPCS_PRESSURE_RTOL = 5.0e-3 #2.0e-3

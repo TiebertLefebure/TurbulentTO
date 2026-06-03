@@ -1,0 +1,89 @@
+\chapter{Topology-Optimization Methodology Support}
+\label{app:topology_methodology_support}
+
+This appendix collects implementation and visualization details that support Chapter~\ref{ch:topology_optimization_methodology}. The sections follow the order in which the corresponding topics are introduced in the methodology chapter, while keeping secondary implementation details out of the main text.
+
+\section{RAMP Brinkman Interpolation}
+\label{sec:app_topology_ramp_heaviside}
+For visualization, the Brinkman resistance in Eq.~\ref{eq:brinkman_interpolation} can be normalized as
+\begin{equation}
+	\hat{\alpha}(\bar{\gamma}) =
+	\frac{\alpha(\bar{\gamma})-\alpha_{fluid}}
+	{\alpha_{solid}-\alpha_{fluid}} .
+	\label{eq:normalized_brinkman_resistance}
+\end{equation}
+When $\alpha_{fluid}=0$, this becomes $\hat{\alpha}=\alpha(\bar{\gamma})/\alpha_{solid}$. With the $q$ convention used in this thesis, small $q$ values make most intermediate densities comparatively fluid-like except very close to $\bar{\gamma}=0$, while larger $q$ values increase the resistance over a wider part of the intermediate-density range.
+
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=0.72\textwidth]{RAMP-Interpolation-Curve}
+	\caption{Normalized RAMP Brinkman resistance from Eq.~\ref{eq:brinkman_interpolation} for $q=\{0.01,0.05,0.1,0.5,1.0\}$.}
+	\label{fig:ramp_interpolation_curve}
+\end{figure}
+
+\section{Active and Passive Density Regions}
+\label{sec:app_topology_active_passive_regions}
+Figure~\ref{fig:filter_domain_schematic} sketches the distinction between active design cells and passive non-design extensions. Active cells are updated by MMA. Passive-fluid cells, such as inlet and outlet extensions, are fixed to $\bar{\gamma}=1$ but remain part of the flow domain. Passive-solid cells, when present, are fixed to $\bar{\gamma}=0$.
+
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=0.80\textwidth]{Filter-Domain-Schematic}
+	\caption{Schematic active design region with passive inlet and outlet extensions. Passive cells are fixed by the density bounds but still participate in the forward flow solve.}
+	\label{fig:filter_domain_schematic}
+\end{figure}
+
+\section{DG0 Density Filtering and Active-Mask Normalization}
+\label{sec:app_topology_filtering}
+The density filter in Eq.~\ref{eq:dg_helmholtz_filter} is applied to the DG0 design field before projection. Near fixed inlet and outlet extensions, the active-mask normalization prevents passive-fluid cells from smoothing into the active design domain.
+
+To prevent fixed inlet and outlet extensions from smoothing into the active design domain, the implementation filters only the active contribution and normalizes by the filtered active mask:
+\begin{equation}
+	\tilde{\gamma}
+	=
+	\frac{\mathcal{H}(M\gamma)}
+	{\mathcal{H}(M)} .
+	\label{eq:active_mask_filter}
+\end{equation}
+Here $\mathcal{H}$ denotes the filter solve and $M$ is the active-cell indicator. After projection, passive-cell density bounds are restored. During sensitivity assembly, the same chain is traversed in reverse so that MMA receives gradients only for active design degrees of freedom.
+
+\section{Heaviside Projection Curve}
+\label{sec:app_topology_heaviside}
+The Heaviside projection from Eq.~\ref{eq:tanh_projection} is visualized in Fig.~\ref{fig:heaviside_projection_curve}. Increasing $\beta$ sharpens the transition between solid-like and fluid-like projected densities.
+
+\begin{figure}[!ht]
+	\centering
+	\includegraphics[width=0.68\textwidth]{Heaviside-Projection-Curve}
+	\caption{Heaviside projection from Eq.~\ref{eq:tanh_projection} at $\eta=0.5$, with the filtered density $\tilde{\gamma}$ on the horizontal axis and the projected density $\bar{\gamma}$ on the vertical axis.}
+	\label{fig:heaviside_projection_curve}
+\end{figure}
+
+\section{Inlet Turbulence Conversion}
+\label{sec:app_topology_inlet_turbulence}
+When an inlet turbulence intensity $I$ and turbulence length scale $\ell$ are provided, the code first estimates an eddy-viscosity ratio using the standard $k$--$\varepsilon$ inlet relations,
+\begin{equation}
+	k=\frac{3}{2}(UI)^2,
+	\qquad
+	\epsilon=C_\mu^{3/4}\frac{k^{3/2}}{\ell},
+	\qquad
+	\frac{\nu_t}{\nu}
+	=
+	C_\mu^{1/4}\sqrt{\frac{3}{2}}\,
+	I\,\frac{U\ell}{\nu}.
+	\label{eq:inlet_turbulence_to_viscosity_ratio}
+\end{equation}
+If the Reynolds number and length-scale ratio are supplied instead, $U\ell/\nu$ is replaced by $Re\,(\ell/L)$.
+
+The resulting ratio is converted to the SA inlet working variable by solving the SA viscosity relation
+\begin{equation}
+	\nu_t = \tilde{\nu} f_{v1},
+	\qquad
+	f_{v1}=\frac{\chi^3}{\chi^3+c_{v1}^3},
+	\qquad
+	\chi=\frac{\tilde{\nu}}{\nu}.
+	\label{eq:sa_viscosity_ratio_conversion}
+\end{equation}
+This conversion is only an inlet initialization and boundary-condition device. The SA transport equation still determines the interior $\tilde{\nu}$ field during the forward solve.
+
+\section{Forward-Solver Controls}
+\label{sec:app_topology_forward_controls}
+The optimization code uses IPCS and Picard updates for robust forward progress, then assembles the final frozen-viscosity residual used by the adjoint. Some benchmark configurations also use SNES recovery schedules, convection continuation, and accepted-residual criteria during difficult intermediate designs. These controls are numerical devices for obtaining a usable final state; the frozen adjoint in Chapter~\ref{ch:topology_optimization_methodology} is assembled from the final steady residual in Eq.~\ref{eq:penalized_momentum_weak}, not from a differentiation of every IPCS or Picard substep.

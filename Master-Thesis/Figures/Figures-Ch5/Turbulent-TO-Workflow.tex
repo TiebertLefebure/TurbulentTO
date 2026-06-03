@@ -1,44 +1,84 @@
-\documentclass[tikz,border=4pt]{standalone}
-\usetikzlibrary{arrows.meta,calc,positioning}
+\documentclass[tikz,border=5pt]{standalone}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+
 \begin{document}
 \pagecolor{white}
 \begin{tikzpicture}[
-  font=\sffamily\small,
-  stage/.style={
-    draw=black!65,
-    rounded corners=2pt,
-    line width=0.5pt,
-    align=center,
-    minimum height=13mm,
-    text width=27mm,
-    inner xsep=4pt,
-    inner ysep=3pt,
-    fill=black!3
-  },
-  arrow/.style={-{Latex[length=3mm,width=1.8mm]}, line width=0.7pt, draw=black!75, shorten <=2pt, shorten >=2pt},
-  loop/.style={-{Latex[length=2.8mm,width=1.8mm]}, line width=0.65pt, draw=black!55, rounded corners=5pt, shorten <=2pt, shorten >=2pt}
+    font=\sffamily\small,
+    >=Latex,
+    mainbox/.style={draw=black!65, rounded corners=2pt, fill=white,
+                    align=left, inner xsep=7pt, inner ysep=5pt,
+                    minimum width=92mm, text width=86mm},
+    outside/.style={mainbox, fill=gray!7, align=center},
+    loopbox/.style={draw=red!70!black, rounded corners=3pt,
+                    inner xsep=10pt, inner ysep=9pt},
+    badge/.style={circle, fill=red!70!black, text=white,
+                  inner sep=1.2pt, minimum size=5mm,
+                  font=\sffamily\bfseries\scriptsize},
+    arrow/.style={-{Latex[length=2.8mm,width=1.8mm]},
+                  line width=0.75pt, draw=blue!70!black},
+    returnarrow/.style={-{Latex[length=2.6mm,width=1.7mm]},
+                        line width=0.65pt, draw=red!70!black},
+    smalllabel/.style={font=\sffamily\footnotesize, text=black!65, align=center}
 ]
 
-\node[stage] (density) at (0,0) {\textbf{Density}\\filter, project,\\restore bounds};
-\node[stage] (physics) at (3.65,0) {\textbf{Penalties}\\Brinkman, SA,\\wall distance};
-\node[stage] (forward) at (7.30,0) {\textbf{Forward SA}\\wall distance, flow,\\turbulence};
-\node[stage] (adjoint) at (10.95,0) {\textbf{Frozen adjoint}\\final flow residual\\and sensitivities};
-\node[stage] (mma) at (14.60,0) {\textbf{MMA update}\\active design\\variables};
+\node[outside] (design) at (0,0)
+    {\textbf{Current active design}\\
+     raw density vector $\gamma^n$ on the free DG0 cells};
 
-\draw[arrow] (density) -- (physics);
-\draw[arrow] (physics) -- (forward);
-\draw[arrow] (forward) -- node[above, fill=white, inner sep=1pt, font=\sffamily\footnotesize]
-  {accepted state} (adjoint);
+\node[mainbox, below=9mm of design] (density)
+    {\textbf{Filter, project, and restore bounds}\\
+     Apply the DG0 density filter, Heaviside projection, and passive-cell
+     bounds to obtain the physical density $\bar{\gamma}^n$.};
+
+\node[mainbox, below=7mm of density] (penalties)
+    {\textbf{Assemble topology penalties}\\
+     Form the Brinkman resistance $\alpha(\bar{\gamma}^n)$, SA damping, and
+     topology-dependent wall-distance forcing.};
+
+\node[mainbox, below=7mm of penalties] (forward)
+    {\textbf{Forward SA update}\\
+     Recompute the accepted state $(\mathbf{u},p,\tilde{\nu},G)$ through the
+     wall-distance, velocity-pressure, and SA forward loop.};
+
+\node[mainbox, below=7mm of forward] (adjoint)
+    {\textbf{Frozen adjoint sensitivities}\\
+     Differentiate the final frozen-viscosity flow residual for the selected
+     objective while treating $\tilde{\nu}^{fr}$ and $G^{fr}$ as fixed.};
+
+\node[mainbox, below=7mm of adjoint] (mma)
+    {\textbf{MMA design update}\\
+     Map objective and volume sensitivities back to the active raw variables;
+     MMA returns the next design $\gamma^{n+1}$.};
+
+\node[badge] (badge1) at ($(density.west)+(-5mm,0)$) {1};
+\node[badge] (badge2) at ($(penalties.west)+(-5mm,0)$) {2};
+\node[badge] (badge3) at ($(forward.west)+(-5mm,0)$) {3};
+\node[badge] (badge4) at ($(adjoint.west)+(-5mm,0)$) {4};
+\node[badge] (badge5) at ($(mma.west)+(-5mm,0)$) {5};
+
+\node[loopbox, fit=(badge1)(badge2)(badge3)(badge4)(badge5)(density)(penalties)(forward)(adjoint)(mma)] (iteration) {};
+\node[font=\sffamily\bfseries\small, text=red!70!black, fill=white, inner sep=1.5pt,
+      anchor=west] at ($(iteration.north west)+(3mm,0)$)
+      {topology optimization iteration $n\rightarrow n+1$};
+
+\node[outside, below=9mm of mma, minimum width=48mm, text width=44mm] (stop)
+    {optimized density field};
+
+\draw[arrow] (design) -- (iteration.north);
+\draw[arrow] (density) -- (penalties);
+\draw[arrow] (penalties) -- (forward);
+\draw[arrow] (forward) -- node[smalllabel, right] {accepted\\state} (adjoint);
 \draw[arrow] (adjoint) -- (mma);
+\draw[arrow] (mma) -- (stop);
 
-\draw[loop] (mma.south) -- ++(0,-0.85) -| node[pos=0.28, below, fill=white, inner sep=1pt, font=\sffamily\footnotesize]
-  {next iteration} (density.south);
+\draw[returnarrow] (mma.east) -- ++(13mm,0)
+    |- node[smalllabel, pos=0.26, right] {next\\iteration} (density.east);
 
-\draw[loop] (forward.north) -- ++(0,0.72) -| node[pos=0.25, above, fill=white, inner sep=1pt, font=\sffamily\footnotesize]
-  {Picard loop} (physics.north);
-
-\node[anchor=west, font=\sffamily\footnotesize, text=black!65] at (0,-1.95)
-  {The adjoint differentiates the final frozen-viscosity flow residual; turbulence and wall-distance fields are updated only in the forward loop.};
+\node[smalllabel, anchor=west] at ($(stop.south west)+(-22mm,-6mm)$)
+    {$\bar{\gamma}$: physical density \quad $G$: reciprocal wall-distance field
+     \quad $\tilde{\nu}$: SA working variable};
 
 \end{tikzpicture}
 \end{document}

@@ -1,0 +1,58 @@
+\documentclass[tikz,border=4mm]{standalone}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\pgfmathdeclarefunction{heaviside}{2}{%
+	\pgfmathparse{%
+		(
+			tanh(#1*0.5)
+			+
+			tanh(#1*(#2-0.5))
+		)
+		/
+		(
+			tanh(#1*0.5)
+			+
+			tanh(#1*(1-0.5))
+		)
+	}%
+}
+\begin{document}
+\pagecolor{white}
+\begin{tikzpicture}
+\begin{axis}[
+	width=10.0cm,
+	height=8.0cm,
+	xmin=0, xmax=1,
+	ymin=0, ymax=1,
+	xlabel={Filtered density $\tilde{\gamma}$},
+	ylabel={Projected density $\bar{\gamma}$},
+	xtick={0,0.25,0.5,0.75,1},
+	ytick={0,0.25,0.5,0.75,1},
+	xticklabels={$0$,$0.25$,$0.5$,$0.75$,$1$},
+	yticklabels={$0$,$0.25$,$0.5$,$0.75$,$1$},
+	grid=both,
+	major grid style={black!10},
+	minor grid style={black!5},
+	axis background/.style={fill=white},
+	axis line style={black!70},
+	tick style={black!70},
+	legend cell align=left,
+	legend style={draw=none, fill=white, fill opacity=0.92, text opacity=1, at={(0.03,0.97)}, anchor=north west}
+]
+\addplot[black!35, dashed, domain=0:1, samples=2] {x};
+\addlegendentry{$\bar{\gamma}=\tilde{\gamma}$}
+\addplot[black!35, dashed, forget plot] coordinates {(0.5,0) (0.5,1)};
+\addplot[black!35, dashed, forget plot] coordinates {(0,0.5) (1,0.5)};
+\addplot[thick, blue!70!black, domain=0:1, samples=260] {heaviside(1,x)};
+\addlegendentry{$\beta=1$}
+\addplot[thick, teal!70!black, domain=0:1, samples=260] {heaviside(2,x)};
+\addlegendentry{$\beta=2$}
+\addplot[thick, green!50!black, domain=0:1, samples=260] {heaviside(4,x)};
+\addlegendentry{$\beta=4$}
+\addplot[thick, orange!80!black, domain=0:1, samples=260] {heaviside(8,x)};
+\addlegendentry{$\beta=8$}
+\addplot[thick, red!75!black, domain=0:1, samples=260] {heaviside(16,x)};
+\addlegendentry{$\beta=16$}
+\end{axis}
+\end{tikzpicture}
+\end{document}

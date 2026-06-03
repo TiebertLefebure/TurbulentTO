@@ -7,18 +7,14 @@
 
 \section{Introduction}
 \label{sec:ch6_introduction}
-Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}. The Bayat cases use reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and a frozen-turbulence adjoint. The diffuser benchmark uses the same frozen-SA topology optimization machinery, but it minimizes the dissipation objective $J_D$.
+Building upon the FEniCS-SA solver verified in Chapter~\ref{ch:sa_verification} and the topology optimization methodology developed in Chapter~\ref{ch:topology_optimization_methodology}, this chapter evaluates the turbulent topology optimization solver on the pipe-bend and U-bend internal-flow benchmarks from Bayat et al.~\cite{Bayat2026} and the diffuser benchmark from Yoon~\cite{Yoon2016}. Table~\ref{tab:ch6_benchmark_cases} gives the operating points and validation analyses. Each benchmark section then introduces only the geometry, objective, and interpretation needed for that case.
 
-The optimized pipe-bend, U-bend, and diffuser layouts are interpreted through their projected density fields, velocity fields, and independent sharp-geometry CFD validation. The frozen-sensitivity verification, FEniCS convergence histories, numerical settings, and Ansys grid-independence studies are documented in Appendix~\ref{app:C_topology_optimization_benchmarks}. For the completed pipe-bend sensitivity check, five central finite-difference samples agree with the frozen-adjoint derivative to a maximum relative discrepancy of $5.92\times10^{-5}$, and the directional Taylor check recovers approximately second-order remainder decay. This verifies the derivative used by MMA for the frozen-turbulence $J_p$ setup, while leaving the fully coupled turbulence and wall-distance derivative outside the claim.
-
-The benchmark sections below introduce the geometry, boundary conditions, objective, and validation metrics needed to read the results without consulting the appendices first. Appendix~\ref{app:C_topology_optimization_benchmarks} retains the full turbulent and laminar numerical settings, FEniCS convergence histories, and Ansys grid-independence studies for the extracted designs, grouped by benchmark case.
-
-All mesh-independence relative differences referenced from Appendix~\ref{app:C_topology_optimization_benchmarks} follow the appendix convention: coarse--medium differences are normalized by the coarse value, while medium--fine differences are normalized by the fine value.
+The optimized layouts are interpreted through projected density fields, velocity fields, and independent sharp-geometry CFD validation in Ansys Fluent. Appendix~\ref{app:C_topology_optimization_benchmarks} retains the supporting frozen-sensitivity verification, FEniCS convergence histories, numerical settings, and Ansys grid-independence studies, grouped by benchmark case.
 
 \section{Benchmark Cases and Evaluation Metrics}
 \label{sec:ch6_strategy_metrics}
 
-The three benchmarks cover curved internal flows and a diffuser with a prescribed outlet contraction. The pipe bend targets the $V_f=0.25$, $Re=5{,}000$ case from Bayat et al.~\cite{Bayat2026}, while the U-bend targets their $V_f=0.27$, $Re=5{,}000$ case with a $180^\circ$ flow reversal. The diffuser targets the $Re=3{,}000$ turbulent diffuser from Yoon~\cite{Yoon2016}, where the original solid mass usage of $70\%$ corresponds to a maximum fluid fraction of $V_f=0.30$ in the present density convention. Table~\ref{tab:ch6_benchmark_cases} summarizes the operating point and analyses reported for each case.
+The three benchmarks cover curved internal flows and a diffuser with a prescribed outlet contraction. The Bayat cases use reciprocal wall-distance penalization, topology-dependent SA and wall-distance reaction terms, an average inlet-pressure objective, and a frozen-turbulence adjoint. The diffuser uses the same frozen-SA optimization machinery, but it minimizes the dissipation objective $J_D$.
 
 \begin{table}[!ht]
 	\centering
@@ -26,30 +22,20 @@ The three benchmarks cover curved internal flows and a diffuser with a prescribe
 	\caption{Benchmark cases evaluated in Chapter~\ref{ch:benchmark_results}. Detailed physical and numerical parameters are listed in Appendix~\ref{app:C_topology_optimization_benchmarks}.}
 	\label{tab:ch6_benchmark_cases}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c X}
+		\begin{tabularx}{\textwidth}{l c c >{\raggedright\arraybackslash}X}
 		\hline
 		\textbf{Case} & \textbf{$V_f$} & \textbf{$Re$} & \textbf{Analyses reported} \\
 		\hline
-		Pipe bend & $0.25$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison \\
-		U-bend & $0.27$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison \\
-		Diffuser & $0.30$ & $3{,}000$ & Velocity-outlet baseline; pressure-outlet FEniCS optimization with $J_D$; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison for the pressure-outlet case \\
+			Pipe bend~\cite{Bayat2026} & $0.25$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison \\
+			U-bend~\cite{Bayat2026} & $0.27$ & $5{,}000$ & FEniCS optimization; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison \\
+			Diffuser~\cite{Yoon2016} & $0.30$ & $3{,}000$ & Velocity-outlet baseline; pressure-outlet FEniCS optimization with $J_D$; Ansys-SA and Ansys-SST $k-\omega$ CFD validation; laminar-design comparison for the pressure-outlet case \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-\subsection{Optimization and Validation Metrics}
-\label{subsec:ch6_metrics}
-Throughout the optimization process, the pipe-bend and U-bend benchmarks minimize the average inlet-pressure objective $J_p$ defined in Eq.~\ref{eq:inlet_pressure_objective}. This pressure is averaged over the physical inlet boundary of the fixed non-design extension, where the inlet velocity is prescribed. The outlet pressure is fixed to zero, so reducing $J_p$ directly reduces the pressure level required to drive the prescribed inlet flow through the evolving topology. The optimization problem is still solved on a diffuse Brinkman domain, but once a design is extracted for Ansys Fluent, the Brinkman penalty is removed and the solid-fluid interface becomes a sharp wall.
+The pipe-bend and U-bend cases minimize the average inlet-pressure objective $J_p$ defined in Eq.~\ref{eq:inlet_pressure_objective}, which keeps their setup comparable with the Bayat benchmark objective. The diffuser case minimizes the dissipation objective $J_D$ defined in Eq.~\ref{eq:dissipation_objective}, matching the formulation used by Yoon~\cite{Yoon2016}. All extracted geometries are then evaluated as sharp-wall Ansys Fluent models, where the Brinkman penalty is removed and the validation metrics are recomputed on the exported flow domain.
 
-This choice is made to remain consistent with the Bayat/Alexandersen benchmark objective and reported performance metric. For prescribed-flow internal problems, pressure drop and mechanical dissipation are physically related, so the dissipation objective $J_D$ is also a valid formulation for these bend cases. In the present implementation, however, switching from $J_p$ to $J_D$ is not a pure objective substitution: stable optimization behavior also depends on the Brinkman solid impedance, continuation schedule, and topology-dependent SA and wall-distance penalties. The dissipation formulation is therefore treated as a feasible alternative requiring separate numerical tuning, while the pipe-bend and U-bend results reported here use $J_p$ for consistency with the reference benchmark.
-
-The diffuser benchmark instead minimizes the dissipation objective $J_D$ defined in Eq.~\ref{eq:dissipation_objective}. This matches the objective used by Yoon~\cite{Yoon2016}: physical viscous dissipation plus Brinkman drag is integrated over the design domain and minimized subject to the volume constraint. The original Yoon-style setup prescribes parabolic velocity profiles at both inlet and outlet. Because that outlet Dirichlet condition can influence the optimized outlet geometry, this chapter also introduces a pressure-outlet diffuser variant in which the inlet profile and objective are retained but the outlet velocity profile is replaced by a fixed static pressure. The pressure-outlet variant is used as the primary diffuser result, while the velocity-outlet case is retained as a boundary-condition sensitivity baseline.
-
-All three benchmark cases use the power-law SA sink, the power-law reciprocal wall-distance penalty, and the frozen-turbulence adjoint introduced in Chapter~\ref{ch:topology_optimization_methodology}.
-
-Bayat et al.~\cite{Bayat2026} report corresponding final average inlet-pressure objectives for their standard $k$-$\varepsilon$ computations in Table~7. Their ``conventional'' method is the density-based turbulent topology optimization formulation without the proposed implicit wall-functions: solid regions are imposed through Brinkman/body-force penalization, including damping of $k$ and $\varepsilon$ toward zero in solid material, on the same diffuse optimization mesh. It is therefore distinct from the body-fitted re-simulations with explicit wall-functions that they use for validation. Since the present thesis uses a wall-resolved SA model instead of $k$-$\varepsilon$, the conventional values from Bayat et al. are used only as scale comparisons in the individual Bayat benchmark discussions below. For the diffuser benchmark, the reference comparison is qualitative because Yoon~\cite{Yoon2016} reports the laminar and turbulent diffuser layouts and post-processing behavior rather than a directly matching $J_D$ table for the diffuser.
-
-To bridge this gap, the primary validation metric is the physical viscous dissipation integrated over the full exported CFD domain, including the non-design inlet, outlet, and fixed regions that are retained in the final geometry,
+The primary validation metric is the physical viscous dissipation integrated over the full exported CFD domain, including the non-design inlet, outlet, and fixed regions that are retained in the final geometry,
 \begin{equation}
 	\Phi_D = \int_{\Omega}
 	\frac{1}{2} \mu_{\mathrm{eff}}
@@ -58,7 +44,7 @@ To bridge this gap, the primary validation metric is the physical viscous dissip
 	\,d\Omega ,
 	\label{eq:ch6_validation_dissipation}
 \end{equation}
-where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys and $\mathbf{S}=\frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right)$ is the symmetric strain-rate tensor. The integrand in Eq.~\ref{eq:ch6_validation_dissipation} can therefore also be written as $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$. In the Ansys Fluent post-processing, the scalar strain-rate magnitude is $\dot{\gamma}=\sqrt{2\mathbf{S}:\mathbf{S}}$, so the custom field function $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ is equivalent to the integrand in Eq.~\ref{eq:ch6_validation_dissipation}. The effective viscosity is $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent evaluations and $\mu_{\mathrm{eff}}=\mu$ for laminar reference solves.
+where $\Omega$ denotes the complete sharp-geometry flow domain exported to Ansys and $\mathbf{S}=\frac{1}{2}\left(\nabla\mathbf{u}+\nabla\mathbf{u}^{T}\right)$ is the symmetric strain-rate tensor. The integrand in Eq.~\ref{eq:ch6_validation_dissipation} can therefore also be written as $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$. In the Ansys Fluent post-processing, the scalar strain-rate magnitude is $\dot{\gamma}=\sqrt{2\mathbf{S}:\mathbf{S}}$, so the custom field function $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ is equivalent to the integrand in Eq.~\ref{eq:ch6_validation_dissipation}. Because the reported Ansys validations all re-solve the extracted geometries as turbulent flows, the effective viscosity used in these post-processed metrics is $\mu_{\mathrm{eff}}=\mu+\mu_t$.
 
 The second global validation metric is the static pressure drop between the physical inlet and outlet sections,
 \begin{equation}
@@ -90,20 +76,20 @@ The local benchmark geometry used for the present implementation is shown in Fig
 
 \subsection{Optimization Results}
 \label{subsec:alexandersen_pipebend_fenics}
-Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected density field $\bar{\gamma}$ and the corresponding velocity magnitude. The supporting coordinate finite-difference and Taylor checks for the frozen adjoint are reported in Appendix~\ref{app:C_topology_optimization_benchmarks}. Despite the differing turbulence models, the FEniCS-SA topology is expected to follow the same broad routing strategy as the $k$-$\varepsilon$ reference: the primary high-speed path should bypass the sharpest corners to minimize momentum loss, while boundary-layer treatment can still affect the exact gray-scale density distribution near the walls.
+Figure~\ref{fig:alexandersen_pipebend_fenics_results} illustrates the projected density field $\bar{\gamma}$ and the corresponding velocity magnitude. The supporting coordinate finite-difference and Taylor checks for the frozen adjoint are reported in Appendix~\ref{app:C_topology_optimization_benchmarks}. The FEniCS-SA result shows the same broad routing strategy as the $k$-$\varepsilon$ reference from Bayat et al.~\cite{Bayat2026}: the main high-speed path bypasses the sharpest corners to reduce momentum loss. The exact gray-scale density distribution near the walls still differs because the turbulence closure and near-wall treatment are not the same.
 
 \begin{figure}[!ht]
 	\centering
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology-Jp}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_pipebend_topology}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
+	\begin{subfigure}[b]{0.49\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Velocity-FEniCS}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Velocity-FEniCS-Jp}
 		\caption{Velocity magnitude and vector field.}
 		\label{fig:alexandersen_pipebend_velocity}
 	\end{subfigure}
@@ -137,11 +123,11 @@ The structural robustness of the extracted pipe-bend topology is verified in Tab
 	\end{tabularx}
 \end{table}
 
-Using the Ansys-SA result as the reference, the SST $k-\omega$ evaluation increases the pressure drop by approximately $4.5\%$ and the viscous dissipation by approximately $8.5\%$. The SST $k-\omega$ model therefore predicts slightly higher losses, as expected for a closure that is more sensitive to adverse pressure gradients, but the changes remain modest. This suggests that the optimized pipe-bend geometry is robust under a change of turbulence closure, rather than being tuned only to the SA model.
+Using the Ansys-SA result as the reference, the SST $k-\omega$ evaluation increases the pressure drop by approximately $4.5\%$ and the viscous dissipation by approximately $8.5\%$. The SST $k-\omega$ model therefore predicts slightly higher losses, consistent with a closure that is more sensitive to adverse pressure gradients, but the changes remain modest. This suggests that the optimized pipe-bend geometry is robust under a change of turbulence closure, rather than being tuned only to the SA model.
 
 \subsection{Comparison with Laminar Design}
 \label{subsec:alexandersen_pipebend_laminar}
-The laminar reference uses the same pipe-bend mesh, design-domain restrictions, inlet and outlet treatment, objective type, and volume fraction, but replaces the SA turbulent state equations by the laminar flow formulation and is optimized at $Re=1$. The expected distinction is that a laminar bend can minimize wall length and viscous shear in the creeping-flow limit, but may produce a sharper or less separation-aware turn when evaluated at the target turbulent Reynolds number. The comparison is therefore interpreted under identical turbulent operating conditions, rather than by comparing the laminar and turbulent optimization objectives directly.
+The laminar reference uses the same pipe-bend mesh, design-domain restrictions, inlet and outlet treatment, objective type, and volume fraction, but replaces the SA turbulent state equations by the laminar flow formulation and is optimized at $Re=1$. This laminar optimization favors a sharper, shorter turn that is appropriate for the creeping-flow reference problem but less suitable once the extracted geometry is operated at the target turbulent Reynolds number. The comparison is therefore interpreted under identical turbulent operating conditions, rather than by comparing the laminar and turbulent optimization objectives directly.
 
 Figure~\ref{fig:alexandersen_pipebend_laminar_topologies} compares the laminar and turbulent optimized topologies before sharp-geometry extraction. The laminar-design mesh-independence study supporting the SST $k-\omega$ result is reported in Table~\ref{tab:app_C_alexandersen_pipebend_lam_mesh} of Appendix~\ref{app:C_topology_optimization_benchmarks}.
 
@@ -150,14 +136,14 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_topologies} compares the laminar a
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{PipeBend-Laminar-Topology-Jp}
-		\caption{Projected density field $\bar{\gamma}$: laminar-optimized design ($Re=1$).  Final objective value $J_p=101.742~\mathrm{Pa}$.}
+		\caption{Projected density field $\bar{\gamma}$: laminar-optimized design ($Re=1$).}
 		\label{fig:alexandersen_pipebend_laminar_topo}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology}
-		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized design ($Re=5{,}000$). Final objective value $J_p=[TBD]~\mathrm{Pa}$.}
+		\includegraphics[width=\textwidth]{PipeBend-Turbulent-Topology-Jp}
+		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized design ($Re=5{,}000$).}
 		\label{fig:alexandersen_pipebend_turbulent_topo}
 	\end{subfigure}
 	\caption{Laminar and turbulent topology comparison for the pipe-bend benchmark.}
@@ -165,7 +151,7 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_topologies} compares the laminar a
 \end{figure}
 
 
-Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the corresponding SST $k-\omega$ velocity contours through the extracted laminar and turbulent pipe-bend designs. These contours provide the flow-field evidence behind the scalar metrics: sharper turns and corners in the laminar design are expected to promote stronger local separation and momentum loss when the geometry is operated at the turbulent Reynolds number.
+Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the corresponding SST $k-\omega$ velocity contours through the extracted laminar and turbulent pipe-bend designs. These contours provide the flow-field evidence behind the scalar metrics: sharper turns and corners in the laminar design promote stronger local separation and momentum loss when the geometry is operated at the turbulent Reynolds number.
 
 \begin{figure}[!ht]
 	\centering
@@ -201,11 +187,11 @@ Figure~\ref{fig:alexandersen_pipebend_laminar_velocity_comparison} shows the cor
 		\caption{Turbulent viscosity ratio field $\mu_t/\mu$: turbulent-optimized design.}
 		\label{fig:alexandersen_pipebend_turbulent_turbviscratio_sst}
 	\end{subfigure}
-	\caption{Turbulent viscosity ratio comparison for the pipe-bend designs, again with an identical turbulent flow (SST $k-\omega$ model).}
+	\caption{Turbulent viscosity ratio comparison for the pipe-bend designs, evaluated with an identical turbulent flow (SST $k-\omega$ model).}
 	\label{fig:alexandersen_pipebend_laminar_turbviscratio_comparison}
 \end{figure}
 
-The final SST $k-\omega$ comparison in Table~\ref{tab:alexandersen_pipebend_laminar_perf} evaluates the extracted laminar and turbulent pipe-bend designs under identical turbulent operating conditions. A lower pressure drop and lower viscous dissipation for the turbulent design would support the need for a turbulent topology optimization framework rather than a laminar surrogate.
+The final SST $k-\omega$ comparison in Table~\ref{tab:alexandersen_pipebend_laminar_perf} evaluates the extracted laminar and turbulent pipe-bend designs under identical turbulent operating conditions. The turbulent design reduces the viscous dissipation from $0.0313$ to $0.0166~\mathrm{W/m}$ and the pressure drop from $0.5444$ to $0.1522~\mathrm{Pa}$. These reductions, $47.0\%$ and $72.0\%$ respectively, show that the turbulent topology optimization framework outperforms the laminar surrogate for the target turbulent operating point.
 
 \begin{table}[!ht]
 	\centering
@@ -245,16 +231,16 @@ Figure~\ref{fig:alexandersen_ubend_fenics_results} reports the final projected d
 
 \begin{figure}[!ht]
 	\centering
-	\begin{subfigure}[b]{0.47\textwidth}
+	\begin{subfigure}[b]{0.45\textwidth}
 		\centering
-		\validationplaceholder{Projected density field $\bar{\gamma}$, $V_f=0.27$}
+		\includegraphics[width=\textwidth]{UBend-Turbulent-Topology-Jp}
 		\caption{Projected density field $\bar{\gamma}$.}
 		\label{fig:alexandersen_ubend_topology}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
+	\begin{subfigure}[b]{0.53\textwidth}
 		\centering
-		\validationplaceholder{Velocity-magnitude contours}
+		\includegraphics[width=\textwidth]{UBend-Turbulent-Velocity-FEniCS-Jp}
 		\caption{Velocity magnitude and vector field.}
 		\label{fig:alexandersen_ubend_velocity}
 	\end{subfigure}
@@ -304,7 +290,7 @@ Figure~\ref{fig:alexandersen_ubend_laminar_topologies} compares the laminar and 
 	\hfill
 	\begin{subfigure}[b]{0.47\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{example-image}
+		\includegraphics[width=\textwidth]{UBend-Turbulent-Topology-Jp}
 		\caption{Projected density field $\bar{\gamma}$: turbulent-optimized design ($Re=5{,}000$). Final objective value $J_p=[TBD]~\mathrm{Pa}$.}
 		\label{fig:alexandersen_ubend_turbulent_topo}
 	\end{subfigure}
@@ -353,11 +339,11 @@ Table~\ref{tab:alexandersen_ubend_laminar_perf} compares the extracted laminar a
 
 \section{Diffuser Benchmark}
 \label{sec:yoon_diffuser}
-The diffuser benchmark follows the third numerical example of Yoon~\cite{Yoon2016}, but it is presented in two stages. The first stage keeps the original velocity-outlet formulation, where both inlet and outlet are prescribed by parabolic velocity profiles. This case is useful as a reference because it follows the published benchmark, but it also exposes a boundary-condition sensitivity: prescribing the outflow profile can encourage the optimizer to widen the geometry near the outlet so that the imposed profile is easier to satisfy. The second stage therefore replaces the outlet velocity profile by a pressure outlet while retaining the same inlet profile, Reynolds number, volume fraction, SA topology-optimization machinery, and dissipation objective $J_D$. This pressure-outlet variant is treated as the primary diffuser result because the outlet velocity distribution is then a consequence of the optimized geometry rather than a Dirichlet constraint.
+The diffuser benchmark follows the third numerical example of Yoon~\cite{Yoon2016}. It is used here to test two sensitivities that do not appear in the bend cases: the downstream boundary condition and the turbulence closure used after geometry extraction. A velocity-outlet baseline follows the published setup, while the primary result replaces the prescribed outlet velocity profile with a pressure outlet so that the outlet velocity distribution is solved rather than imposed.
 
 \subsection{Velocity-Outlet Boundary-Condition Sensitivity}
 \label{subsec:yoon_diffuser_velocity_outlet}
-The diffuser was first run with the velocity-outlet formulation used by Yoon~\cite{Yoon2016}, where parabolic velocity profiles are prescribed at both the full-height inlet and the center-third outlet. That baseline produces a more strongly diverging channel near the outlet. Because the outlet profile is prescribed, this widening is interpreted as partly boundary-condition-driven rather than purely geometry-optimal. The detailed velocity-outlet geometry, FEniCS topology, velocity field, and Ansys diagnostic contour are therefore reported in Appendix~\ref{app:C_topology_optimization_benchmarks}. Replacing the outlet Dirichlet velocity profile by a pressure outlet partly removes this outlet widening, so the pressure-outlet variant is used as the primary diffuser result below.
+The velocity-outlet baseline prescribes parabolic velocity profiles at both the full-height inlet and the center-third outlet. It produces a more strongly diverging channel near the outlet, which is interpreted as partly boundary-condition-driven. Its geometry, FEniCS fields, and Ansys diagnostic contour are reported in Appendix~\ref{app:C_topology_optimization_benchmarks}; the pressure-outlet variant is used as the primary diffuser result below.
 
 \subsection{Pressure-Outlet Setup and Optimization Results}
 \label{subsec:yoon_diffuser_pressure_setup}
@@ -371,7 +357,7 @@ The pressure-outlet variant changes only the downstream boundary treatment relat
 	\label{fig:yoon_diffuser_pressure_setup}
 \end{figure}
 
-Figure~\ref{fig:yoon_diffuser_pressure_fenics_results} reports the pressure-outlet FEniCS-SA topology and velocity field. Compared with Figure~\ref{fig:yoon_diffuser_velout_fenics_results}, the outlet region is less strongly widened. The pressure-outlet result therefore supports the interpretation that the outlet expansion in the velocity-outlet baseline was at least partly caused by the imposed outflow profile rather than by the diffuser geometry alone. The optimized pressure-outlet objective is also lower than the velocity-outlet objective, decreasing from $J_D=3.1164\times10^5~\mathrm{W/m}$ to $J_D=2.7664\times10^5~\mathrm{W/m}$, or by about $11.2\%$. This reduction is not interpreted as a direct performance ranking between two equivalent designs, because the boundary-value problem has changed. Both cases were run for $1150$ MMA iterations, so the comparison uses the same optimization budget, but the changed outlet condition also changes the state solution, adjoint sensitivities, and local optimization path. The objective difference may therefore contain both boundary-condition effects and local-path effects. The main conclusion is that removing the outlet Dirichlet velocity constraint gives the optimizer a less restrictive outlet treatment: the flow no longer has to be redistributed to match a prescribed parabolic outlet profile, so less loss is required to satisfy the downstream boundary condition.
+Figure~\ref{fig:yoon_diffuser_pressure_fenics_results} reports the pressure-outlet FEniCS-SA topology and velocity field. Compared with the velocity-outlet result in Appendix~\ref{app:C_topology_optimization_benchmarks}, the outlet region is less strongly widened. The optimized pressure-outlet objective is also lower, decreasing from $J_D=3.1164\times10^5~\mathrm{W/m}$ to $J_D=2.7664\times10^5~\mathrm{W/m}$, or by about $11.2\%$. This is not a direct performance ranking between equivalent designs, because the boundary-value problem has changed. The conclusion is narrower: removing the outlet Dirichlet velocity profile reduces the amount of geometry change required near the outlet and gives a less forced diffuser design.
 
 \begin{figure}[!ht]
 	\centering
@@ -404,20 +390,20 @@ The extracted pressure-outlet topology is validated with the same sharp-geometry
 	\caption{CFD validation metrics for the extracted pressure-outlet diffuser topology.}
 	\label{tab:yoon_diffuser_validation_metrics}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c X}
+		\begin{tabularx}{\textwidth}{l c c >{\raggedright\arraybackslash}X}
 		\hline
 		\textbf{Evaluation} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p_s$ [Pa]} & \textbf{Interpretation} \\
 		\hline
 		FEniCS-SA diffuse topology & $2.6307\times10^5$ & $2.6022\times10^5$ & Diffuse-domain diagnostic; total objective $J_D=2.7664\times10^5~\mathrm{W/m}$ \\
-		Ansys-SA sharp geometry & $1.1885\times10^5$ & $1.1541\times10^5$ & Sharp-wall re-analysis with the optimization closure family \\
+		Ansys-SA sharp geometry & $1.1885\times10^5$ & $1.1541\times10^5$ & Sharp-wall validation with the optimization closure family \\
 		Ansys-SST $k-\omega$ sharp geometry & $1.2834\times10^4$ & $5.0006\times10^4$ & Independent closure check; much lower modeled dissipation \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-The FEniCS-SA values in Table~\ref{tab:yoon_diffuser_validation_metrics} are approximately $2.21$ times larger in $\Phi_D$ and $2.25$ times larger in $\Delta p_s$ than the Ansys-SA sharp-geometry values. This discrepancy is too large to claim quantitative cross-code agreement. It is interpreted as a transfer limitation of this diffuser case: the FEniCS result is a diffuse Brinkman-domain optimization diagnostic, whereas the Ansys result is a sharp-wall re-analysis of an extracted boundary. The mismatch is amplified by the pressure-outlet diffuser's separated or recovering downstream flow. The final hydraulic performance is therefore judged from the Ansys re-analyses, while the FEniCS values document the optimization objective reached by the design loop.
+The FEniCS-SA values in Table~\ref{tab:yoon_diffuser_validation_metrics} are approximately $2.21$ times larger in $\Phi_D$ and $2.25$ times larger in $\Delta p_s$ than the Ansys-SA sharp-geometry values. This discrepancy is too large to claim quantitative cross-code agreement. It is interpreted as a transfer limitation of this diffuser case: the FEniCS result is a diffuse Brinkman-domain optimization diagnostic, whereas the Ansys result is a sharp-wall validation of an extracted boundary. The mismatch is amplified by the pressure-outlet diffuser's separated or recovering downstream flow. The final hydraulic performance is therefore judged from the Ansys validation solves, while the FEniCS values document the optimization objective reached by the design loop.
 
-The Ansys-SA loss is also substantially larger than the SST $k-\omega$ loss. For the turbulent pressure-outlet design, the SA pressure drop is $2.31$ times the SST $k-\omega$ value, and the SA dissipation is $9.26$ times the SST $k-\omega$ value. Figure~\ref{fig:yoon_diffuser_pressure_closure_diagnostics} explains this split. The velocity-magnitude fields are qualitatively similar, but the turbulent-viscosity-ratio fields are not: SA predicts a much larger effective-viscosity level than SST $k-\omega$ in this diffuser. Since the validation dissipation integrand is $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$ through Eq.~\ref{eq:ch6_validation_dissipation}, this directly increases both the integrated dissipation and the pressure loss. The result should therefore be read as closure sensitivity, not as evidence that one closure is categorically unreliable.
+The Ansys-SA loss is also substantially larger than the SST $k-\omega$ loss. For the turbulent pressure-outlet design, the SA pressure drop is $2.31$ times the SST $k-\omega$ value, and the SA dissipation is $9.26$ times the SST $k-\omega$ value. The velocity-magnitude fields in Figure~\ref{fig:yoon_diffuser_pressure_closure_diagnostics} are qualitatively similar, so the split cannot be explained by a clearly different bulk flow path. It is instead interpreted from the scalar metrics as turbulence-closure sensitivity in a separated or recovering diffuser flow. Since the validation dissipation integrand is $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$ through Eq.~\ref{eq:ch6_validation_dissipation}, differences in modeled eddy viscosity can strongly affect the integrated dissipation even when velocity contours look similar. Pointwise turbulent-viscosity-ratio contours were therefore not used as the main evidence for this conclusion, because localized spikes and interpolation-sensitive patches can be overinterpreted visually.
 
 \begin{figure}[!htbp]
 	\centering
@@ -434,31 +420,17 @@ The Ansys-SA loss is also substantially larger than the SST $k-\omega$ loss. For
 		\caption{Ansys-SST $k-\omega$ velocity magnitude.}
 		\label{fig:yoon_diffuser_pressure_velocity_sst}
 	\end{subfigure}
-	\vspace{0.5em}
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{Diffuser-Turbulent-TurbViscRatio-PreOut-SA}
-		\caption{Ansys-SA turbulent-viscosity ratio.}
-		\label{fig:yoon_diffuser_pressure_turb_diag_sa}
-	\end{subfigure}
-	\hfill
-	\begin{subfigure}[b]{0.47\textwidth}
-		\centering
-		\includegraphics[width=\textwidth]{Diffuser-Turbulent-TurbViscRatio-PreOut-SSTkomega}
-		\caption{Ansys-SST $k-\omega$ turbulent-viscosity ratio.}
-		\label{fig:yoon_diffuser_pressure_turb_diag_sst}
-	\end{subfigure}
-	\caption{Closure diagnostics for the pressure-outlet turbulent diffuser. The velocity contours are similar enough that repeated full-domain velocity plots are not the main evidence; the turbulent-viscosity-ratio contours show the mechanism behind the much larger SA loss prediction.}
+	\caption{Velocity diagnostics for the pressure-outlet turbulent diffuser.}
 	\label{fig:yoon_diffuser_pressure_closure_diagnostics}
 \end{figure}
 
-Local dissipation-density contours were also inspected, but they are not retained as a main figure because the field is dominated by the inlet contraction edges and does not clearly identify the downstream separation or recovery behavior. This is physically consistent with the form of the dissipation density, $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$: it peaks where strain rates are largest, which in these diffuser designs occurs mainly where the full-height inlet flow is accelerated into the narrow channel. The widened or recovering downstream region can still be important for outlet sensitivity and turbulence-model dependence, but a separated low-speed region does not necessarily create a large local dissipation-density peak if the local strain rate is modest. For this diffuser, the more useful visual diagnostics are therefore the topology, velocity field, and turbulent-viscosity ratio, while the integrated dissipation remains a scalar validation metric.
+Local dissipation-density contours were also inspected, but they are not retained as a main figure because the field is dominated by the inlet contraction edges and does not clearly identify the downstream separation or recovery behavior. This is physically consistent with the form of the dissipation density, $2\mu_{\mathrm{eff}}\mathbf{S}:\mathbf{S}$: it peaks where strain rates are largest, which in these diffuser designs occurs mainly where the full-height inlet flow is accelerated into the narrow channel. The widened or recovering downstream region can still be important for outlet sensitivity and turbulence-model dependence, but a separated low-speed region does not necessarily create a large local dissipation-density peak if the local strain rate is modest. For this diffuser, the main visual diagnostics are therefore the topology and velocity field, while integrated dissipation and pressure drop remain the scalar validation metrics.
 
 \subsection{Pressure-Outlet Laminar-Design Comparison}
 \label{subsec:yoon_diffuser_pressure_laminar}
 The laminar reference for the final diffuser comparison uses the same pressure-outlet boundary treatment, objective type, and volume fraction, but it is optimized at $Re=1$ without the SA turbulence model. The extracted laminar and turbulent pressure-outlet layouts are then evaluated under the same target turbulent operating conditions. This comparison isolates whether the SA-optimized pressure-outlet design remains beneficial when the final sharp geometry is re-solved with the same closure and with SST $k-\omega$.
 
-Table~\ref{tab:yoon_diffuser_pressure_laminar_perf} compares the extracted laminar and turbulent pressure-outlet diffuser topologies under identical turbulent operating conditions. The topology and velocity fields were inspected, but they do not by themselves reveal the performance ranking clearly enough to justify a separate figure. Because the diffuser is optimized with $J_D$, lower $\Phi_D$ is the primary performance indicator, while the static pressure drop remains the most direct hydraulic interpretation of the extracted sharp geometry. Both SA and SST $k-\omega$ re-analyses are included because the diffuser benchmark is expected to remain turbulence-model-sensitive when separation is present.
+Table~\ref{tab:yoon_diffuser_pressure_laminar_perf} compares the extracted laminar and turbulent pressure-outlet diffuser topologies under identical turbulent operating conditions. The topology and velocity fields were inspected, but they do not by themselves reveal the performance ranking clearly enough to justify a separate figure. Because the diffuser is optimized with $J_D$, lower $\Phi_D$ is the primary performance indicator, while the static pressure drop remains the most direct hydraulic interpretation of the extracted sharp geometry. Both SA and SST $k-\omega$ validation solves are included because the diffuser benchmark is expected to remain turbulence-model-sensitive when separation is present.
 
 \begin{table}[!ht]
 	\centering
@@ -466,7 +438,7 @@ Table~\ref{tab:yoon_diffuser_pressure_laminar_perf} compares the extracted lamin
 	\caption{Performance comparison of the extracted pressure-outlet diffuser topologies under identical turbulent operating conditions.}
 	\label{tab:yoon_diffuser_pressure_laminar_perf}
 	\renewcommand{\arraystretch}{1.2}
-	\begin{tabularx}{\textwidth}{l c c X}
+		\begin{tabularx}{\textwidth}{l c c >{\raggedright\arraybackslash}X}
 		\hline
 		\textbf{Evaluation} & \textbf{$\Phi_D$ [W/m]} & \textbf{$\Delta p_s$ [Pa]} & \textbf{Relative performance} \\
 		\hline
@@ -478,10 +450,10 @@ Table~\ref{tab:yoon_diffuser_pressure_laminar_perf} compares the extracted lamin
 	\end{tabularx}
 \end{table}
 
-The SA re-analysis gives the positive turbulent-TO result sought in this benchmark: the SA-optimized turbulent topology reduces the pressure drop by $17.4\%$ and the viscous dissipation by $11.9\%$ relative to the pressure-outlet laminar topology. Under SST $k-\omega$, however, the ranking reverses. The turbulent topology gives a $30.5\%$ higher pressure drop and a $13.7\%$ higher dissipation than the laminar topology. This is not reported as a failure of the SA topology optimizer, because the optimizer did improve the design under the closure used in the design loop. It is instead reported as a closure-sensitive diffuser result: in this separated pressure-outlet case, the design ranking depends on whether the final sharp geometry is evaluated with SA or SST $k-\omega$.
+The SA validation gives the positive turbulent-TO result sought in this benchmark: the SA-optimized turbulent topology reduces the pressure drop by $17.4\%$ and the viscous dissipation by $11.9\%$ relative to the pressure-outlet laminar topology. Under SST $k-\omega$, however, the ranking reverses. The turbulent topology gives a $30.5\%$ higher pressure drop and a $13.7\%$ higher dissipation than the laminar topology. This is not reported as a failure of the SA topology optimizer, because the optimizer did improve the design under the closure used in the design loop. It is instead reported as a closure-sensitive diffuser result: in this separated pressure-outlet case, the design ranking depends on whether the final sharp geometry is evaluated with SA or SST $k-\omega$.
 
 \section{Conclusion}
 \label{sec:ch6_conclusion}
-This chapter answers the third research question by evaluating whether the turbulent topology optimization framework produces designs that remain credible after independent CFD re-analysis. The pipe-bend result provides the strongest completed evidence: the Appendix~\ref{app:C_topology_optimization_benchmarks} frozen-sensitivity checks confirm the derivative supplied to MMA for $J_p$, and the extracted design remains robust when re-solved in Ansys Fluent with both SA and SST $k-\omega$.
+This chapter answers the third research question by evaluating whether the turbulent topology optimization framework produces designs that remain credible after independent CFD validation. The pipe-bend result provides the strongest completed evidence: the Appendix~\ref{app:C_topology_optimization_benchmarks} frozen-sensitivity checks confirm the derivative supplied to MMA for $J_p$, and the extracted design remains robust when validated in Ansys Fluent with both SA and SST $k-\omega$.
 
 For the pipe bend, changing the Ansys closure from SA to SST $k-\omega$ increases the validated pressure drop by only about $4.5\%$ and the viscous dissipation by about $8.5\%$, indicating that the optimized geometry is not narrowly tuned to the SA model. Under identical SST $k-\omega$ operating conditions, the turbulent design also reduces the pressure drop and viscous dissipation relative to the laminar-optimized design, supporting the claim that high-Reynolds turbulence physics should be included directly in the design loop. The diffuser is treated more cautiously. The velocity-outlet baseline shows that a prescribed outlet profile can influence the optimized outlet geometry, so the pressure-outlet variant is used as the primary diffuser result. For this pressure-outlet diffuser, the turbulent SA design improves on the laminar design under Ansys-SA, reducing $\Delta p_s$ by $17.4\%$ and $\Phi_D$ by $11.9\%$. The same two geometries evaluated with SST $k-\omega$ give the opposite ranking, with the turbulent design increasing $\Delta p_s$ by $30.5\%$ and $\Phi_D$ by $13.7\%$. The diffuser therefore supports the value of turbulence-aware TO within the SA design model, but it does not support a closure-independent performance claim. It is retained as a closure-sensitivity result for separated diffuser flow. The U-bend remains the main incomplete high-Reynolds benchmark and should be judged by the same validation standard once its remaining metrics are replaced.

@@ -140,36 +140,7 @@ For convection-dominated internal-flow cases, the implementation may augment the
 where $\mathcal{R}_{\tilde{\nu}}$ is the strong residual corresponding to Eq.~\ref{eq:sa_picard_weak}: the pointwise advection, diffusion, wall-destruction reaction, and explicit production and cross-diffusion sources are collected on one side before being projected along the streamline test direction. When Eq.~\ref{eq:sa_pseudo_time} is active, its pseudo-time contribution is included in the same residual. The coefficient $C_{\mathrm{SUPG}}$ is a user-selected stabilization factor. In the verification benchmarks and in the turbulent topology-optimization runs, Eq.~\ref{eq:sa_supg} is used to suppress element-scale oscillations in $\tilde{\nu}$ while preserving the same underlying SA closure.
 
 \subsection{Closure Terms and Calibration Constants}
-The Spalart-Allmaras model relies on several interconnected closure functions to accurately capture boundary layer physics. The production term relies on a modified vorticity magnitude, $\tilde{S}$, which prevents the destruction of turbulence in regions where the vorticity goes to zero, while maintaining correct scaling near the wall \cite{Spalart1994}. The implementation uses the vorticity-based SA definition. First,
-\begin{equation}
-	S = \sqrt{2\Omega_{ij}\Omega_{ij}}
-	\quad \text{and} \quad
-	\bar{S} = \frac{\tilde{\nu}}{\kappa^2 y^2} f_{v2}.
-\end{equation}
-Here $S$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Karman constant, and $y$ is the distance to the nearest wall. During nonlinear iterations, the code evaluates the standard protected form of $\tilde{S}$ recommended in the SA reference implementation \cite{NasaTurb} so that the production term remains well defined when $S+\bar{S}$ becomes small. Small numerical floors are added in the implementation to prevent division by zero. The function $f_{v2}$ is a near-wall modifier:
-\begin{equation}
-	f_{v2} = 1 - \frac{\chi}{1 + \chi f_{v1}} \quad \text{where} \quad \chi = \frac{\tilde{\nu}}{\nu} \quad \text{and} \quad f_{v1} = \frac{\chi^3}{\chi^3 + c_{v1}^3}.
-\end{equation}
-
-Similarly, the wall destruction term is modulated by the non-dimensional function $f_w$, which accelerates the decay of turbulent viscosity inside the viscous sublayer:
-\begin{equation}
-	f_w = g \left( \frac{1 + c_{w3}^6}{g^6 + c_{w3}^6} \right)^{1/6}
-\end{equation}
-where the intermediate variables $g$ and $r$ are evaluated as:
-\begin{equation}
-	g = r + c_{w2}(r^6 - r) \quad \text{and} \quad r = \min \left( \frac{\tilde{\nu}}{\tilde{S} \kappa^2 y^2}, 10 \right).
-\end{equation}
-The upper bound of $10$ on $r$ ensures numerical stability during solver initialization when $\tilde{S}$ may momentarily approach zero.
-
-The original formulation by Spalart and Allmaras \cite{Spalart1994} includes additional geometric trip functions ($f_{t1}$ and $f_{t2}$) designed to manually trigger the transition from laminar to turbulent flow at specific user-defined coordinates. Following the topology optimization methodology established by Yoon \cite{Yoon2016}, these transition functions are omitted from this thesis. Because the topological boundaries are unknown a priori and evolve during optimization, tracking discrete trip points is mathematically infeasible; therefore, the model assumes a fully turbulent flow regime.
-
-To close the system, the standard empirical calibration constants formulated by Spalart and Allmaras are utilized throughout the FEniCS implementation \cite{NasaTurb}:
-\begin{align*}
-	c_{b1} &= 0.1355 & \sigma &= 2/3 & c_{b2} &= 0.622 \\
-	\kappa &= 0.41 & c_{w2} &= 0.3 & c_{w3} &= 2.0 \\
-	c_{v1} &= 7.1 & c_{v2} &= 0.7 & c_{v3} &= 0.9 \\
-	c_{w1} &= \frac{c_{b1}}{\kappa^2} + \frac{1 + c_{b2}}{\sigma}.
-\end{align*}
+The FEniCS implementation uses the standard vorticity-based SA closure functions and calibration constants from the reference model \cite{Spalart1994,NasaTurb}. These functions define the modified vorticity $\tilde{S}$, the near-wall damping functions, the wall-destruction term, and the empirical constants used in Eq.~\ref{eq:sa_picard_weak}. The full list of closure expressions is moved to Appendix~\ref{app:sa_closure_terms}, because it is standard model-definition material rather than a thesis-specific derivation. The only thesis-specific modeling choice in this part is that the geometric trip functions are omitted, following the topology-optimization convention of Yoon~\cite{Yoon2016}, because the solid-fluid boundary is not known a priori during optimization.
 
 \subsection{Wall-Distance Calculation via the Relaxed Eikonal Equation}
 A major computational challenge in the SA model is the calculation of the wall distance $y$. In a standard static CFD simulation, $y$ is purely geometric and can be pre-computed. However, to ensure this verification solver translates into the topology optimization code, where solid boundaries evolve continuously, the implementation uses a PDE-based approach.
@@ -198,7 +169,7 @@ The solver coupling is independent of the particular verification geometry, so t
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.95\textwidth]{Picard-IPCS-Coupling}
-	\caption{Nested Picard-IPCS coupling used by the FEniCS RANS-SA solver. The eddy viscosity $\nu_t$ is assembled from the previous SA working variable $\tilde{\nu}$, the velocity-pressure pair is advanced by the IPCS weak problems, and the updated velocity then drives the next SA transport solve.}
+	\caption{Nested Picard-IPCS coupling workflow.}
 	\label{fig:picard_ipcs_coupling}
 \end{figure}
 

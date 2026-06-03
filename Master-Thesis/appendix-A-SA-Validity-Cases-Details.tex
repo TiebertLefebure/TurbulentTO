@@ -1,24 +1,24 @@
-\chapter{Chapter 2 Ansys Fluent Benchmark Support}
+\chapter{Spalart-Allmaras Validity Benchmark Support}
 \label{app:A_backstep_benchmark}
 
 This appendix supports the turbulence-modeling discussion in Chapter~\ref{ch:turbulence_modeling}. It contains the common Ansys Fluent convergence-monitor definitions for the Chapter~\ref{ch:turbulence_modeling} benchmark runs and the backward-facing-step material that is useful as separated-flow model-sensitivity evidence. The backward-facing-step case is secondary to the main Chapter~\ref{ch:turbulence_modeling} argument based on the Driver--Seegmiller/NASA literature comparison and is not used as a FEniCS solver-verification benchmark.
 
 Unless stated otherwise, all grid-sensitivity relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
 
-\section{Fluent Benchmark Convergence Monitors}
+\section{Ansys Fluent Benchmark Convergence Monitors}
 \label{sec:app_A_ch2_fluent_convergence}
 
-For the Fluent benchmark runs in Section~\ref{sec:ansys_benchmarks}, convergence was assessed using Fluent report monitors. Three physical monitors were tracked in addition to the solver residuals: the inlet-to-outlet static pressure drop, the domain-integrated viscous dissipation, and the relative mass imbalance. The pressure-drop monitor was defined from area-weighted static pressures,
+For the Ansys Fluent benchmark runs in Section~\ref{sec:ansys_benchmarks}, convergence was assessed using Ansys Fluent report monitors. Three physical monitors were tracked in addition to the solver residuals: the inlet-to-outlet static pressure drop, the domain-integrated viscous dissipation, and the relative mass imbalance. The pressure-drop monitor was defined from area-weighted static pressures,
 \begin{equation}
 	\Delta p = \bar{p}_{\mathrm{in}} - \bar{p}_{\mathrm{out}},
 	\label{eq:ch2_fluent_pressure_drop_monitor}
 \end{equation}
-while the viscous-dissipation monitor used a Fluent custom field function,
+while the viscous-dissipation monitor used an Ansys Fluent custom field function,
 \begin{equation}
 	\Phi_D = \int_{\Omega} \mu_{\mathrm{eff}}\dot{\gamma}^{2} \, d\Omega ,
 	\label{eq:ch2_fluent_viscous_dissipation_monitor}
 \end{equation}
-where the custom field function \texttt{viscous-dissipation-density} was defined as $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ using Fluent's \texttt{effective-viscosity} and \texttt{strain-rate-magnitude} variables. Here $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent runs and $\dot{\gamma}$ is Fluent's scalar strain-rate magnitude. For a monitored scalar $q$, the final-window change over $N$ iterations was evaluated as
+where the custom field function \texttt{viscous-dissipation-density} was defined as $\mu_{\mathrm{eff}}\dot{\gamma}^{2}$ using the Ansys Fluent \texttt{effective-viscosity} and \texttt{strain-rate-magnitude} variables. Here $\mu_{\mathrm{eff}}=\mu+\mu_t$ for turbulent runs and $\dot{\gamma}$ is the Ansys Fluent scalar strain-rate magnitude. For a monitored scalar $q$, the final-window change over $N$ iterations was evaluated as
 \begin{equation}
 	\delta_N(q) =
 	\frac{\left|q^{(k)} - q^{(k-N)}\right|}
@@ -32,12 +32,12 @@ The relative mass imbalance was computed from the signed inlet and outlet mass-f
 	{\left|\dot{m}_{\mathrm{out}}\right|},
 	\label{eq:ch2_fluent_mass_imbalance}
 \end{equation}
-where $\dot{m}_{\mathrm{out}}<0$ under Fluent's boundary-normal sign convention for these cases.
+where $\dot{m}_{\mathrm{out}}<0$ under the Ansys Fluent boundary-normal sign convention for these cases.
 
 \begin{table}[!ht]
 	\centering
 	\scriptsize
-	\caption{Convergence metrics used for the Ansys Fluent benchmark runs in Section~\ref{sec:ansys_benchmarks}. The residual criterion refers to all Fluent-scaled residuals, including continuity, momentum, and turbulence-transport equations.}
+	\caption{Convergence metrics used for the Ansys Fluent benchmark runs in Section~\ref{sec:ansys_benchmarks}. The residual criterion refers to all Ansys Fluent scaled residuals, including continuity, momentum, and turbulence-transport equations.}
 	\label{tab:ch2_ansys_convergence_metrics}
 	\renewcommand{\arraystretch}{1.2}
 	\begin{tabularx}{\textwidth}{X c c c c c}
@@ -71,7 +71,7 @@ because backward-facing-step results are conventionally compared using the step 
 	\label{fig:backstep_geometry_bcs}
 \end{figure}
 
-The Fluent setup mirrors the wall-resolved SA assumptions used throughout this thesis. The inlet velocity is prescribed as $\mathbf{u}=(25,0)$ m/s, the outlet pressure is fixed at $p=0$ Pa, and the no-slip walls enforce $\tilde{\nu}=0$. The inlet modified turbulent viscosity is set to $\tilde{\nu}=0.18449$ m$^2$/s, corresponding to the eddy-viscosity level used in the FEniCS backstep configuration. The important comparison quantity is the reattachment length $x_r/h$, obtained from the downstream lower-wall shear stress changing sign from negative to positive. Secondary diagnostics are the size of the recirculation zone, the pressure recovery, and the near-wall skin-friction distribution.
+The Ansys Fluent setup mirrors the wall-resolved SA assumptions used throughout this thesis. The inlet velocity is prescribed as $\mathbf{u}=(25,0)$ m/s, the outlet pressure is fixed at $p=0$ Pa, and the no-slip walls enforce $\tilde{\nu}=0$. The inlet modified turbulent viscosity is set to $\tilde{\nu}=0.18449$ m$^2$/s, corresponding to the eddy-viscosity level used in the FEniCS backstep configuration. The important comparison quantity is the reattachment length $x_r/h$, obtained from the downstream lower-wall shear stress changing sign from negative to positive. Secondary diagnostics are the size of the recirculation zone, the pressure recovery, and the near-wall skin-friction distribution.
 
 \subsection{Wall-Resolved Ansys Grid-Sensitivity Study}
 \label{subsec:app_A_backstep_mesh_ansys}
@@ -127,7 +127,7 @@ The primary grid-sensitivity metric is the normalized reattachment length $x_r/h
 
 \FloatBarrier
 
-The contour plots below should therefore be read as a model-form comparison on the same local backward-facing-step geometry, not as a new validation against the NASA Driver-Seegmiller geometry. The streamwise-velocity fields identify the separated low-speed region and the downstream recovery, while the turbulent-viscosity ratio shows how each closure supplies the modeled momentum diffusion that controls this recovery. The velocity contours use the exported range of each Fluent solution, whereas the turbulent-viscosity plots use a common color scale.
+The contour plots below should therefore be read as a model-form comparison on the same local backward-facing-step geometry, not as a new validation against the NASA Driver-Seegmiller geometry. The streamwise-velocity fields identify the separated low-speed region and the downstream recovery, while the turbulent-viscosity ratio shows how each closure supplies the modeled momentum diffusion that controls this recovery. The velocity contours use the exported range of each Ansys Fluent solution, whereas the turbulent-viscosity plots use a common color scale.
 
 \begin{figure}[htpb]
 	\centering
@@ -206,6 +206,6 @@ The turbulent-viscosity contours in Figure~\ref{fig:ansys_backstep_mut_mu} expla
 
 Figures~\ref{fig:ansys_backstep_velocity_contours} and~\ref{fig:ansys_backstep_mut_mu} provide the full-field contour comparison, while Figure~\ref{fig:backstep_velocity_profiles} shows why this benchmark was included even though it is not a direct experimental validation. The purpose is to compare SA and SST $k-\omega$ on the same separated-flow geometry and determine how strongly the modeled mean recirculation and recovery depend on the selected RANS closure. Near the step, at $x/h=1$ and $x/h=4$, both models produce a low-speed or reversed-flow region close to the lower wall, which is consistent with a modeled recirculation bubble generated by the sudden expansion. However, the velocity profiles in this separated region are visibly model dependent, especially near the lower wall and in the developing shear layer. Farther downstream, at $x/h=6$ and especially $x/h=10$, the near-wall streamwise velocity becomes positive and the two profiles move closer together, consistent with modeled reattachment and redevelopment of the boundary layer.
 
-This case is therefore interpreted as a model-sensitivity study rather than as a validation case. Without a direct comparison to the Driver-Seegmiller experimental data for the exact mesh, inlet condition, and domain definition used here, the Fluent results cannot determine which of the two closures is more accurate for this specific setup. The experimental comparison in Figure~\ref{fig:backstep_sa_sst_tmr} already shows the broader trend: in separated backward-facing-step flow, SST $k-\omega$ gives better local velocity-profile agreement than SA, even though both models may predict a reasonable reattachment length. The present Fluent comparison extends that lesson to the geometry used later in the thesis. It shows that the separated region and recovery are sensitive to the turbulence model, so an SA-based optimization result containing separation cannot be interpreted as quantitatively reliable on its own. This limitation is fundamental to linear eddy-viscosity RANS closures: the Boussinesq approximation represents turbulent stresses through a scalar eddy viscosity and cannot fully represent stress anisotropy, non-local turbulence transport, or unsteady coherent structures in separated shear layers. The conclusion is therefore deliberately limited and more conservative than ``SA captures separation'': SA can generate a plausible RANS mean recirculation pattern, but the separated-flow prediction is model dependent and must be checked with an independent closure such as SST $k-\omega$, and ideally with experimental or higher-fidelity validation.
+This case is therefore interpreted as a model-sensitivity study rather than as a validation case. Without a direct comparison to the Driver-Seegmiller experimental data for the exact mesh, inlet condition, and domain definition used here, the Ansys Fluent results cannot determine which of the two closures is more accurate for this specific setup. The experimental comparison in Figure~\ref{fig:backstep_sa_sst_tmr} already shows the broader trend: in separated backward-facing-step flow, SST $k-\omega$ gives better local velocity-profile agreement than SA, even though both models may predict a reasonable reattachment length. The present Ansys Fluent comparison extends that lesson to the geometry used later in the thesis. It shows that the separated region and recovery are sensitive to the turbulence model, so an SA-based optimization result containing separation cannot be interpreted as quantitatively reliable on its own. This limitation is fundamental to linear eddy-viscosity RANS closures: the Boussinesq approximation represents turbulent stresses through a scalar eddy viscosity and cannot fully represent stress anisotropy, non-local turbulence transport, or unsteady coherent structures in separated shear layers. The conclusion is therefore deliberately limited and more conservative than ``SA captures separation'': SA can generate a plausible RANS mean recirculation pattern, but the separated-flow prediction is model dependent and must be checked with an independent closure such as SST $k-\omega$, and ideally with experimental or higher-fidelity validation.
 
 \FloatBarrier

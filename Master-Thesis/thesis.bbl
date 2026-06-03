@@ -43,10 +43,17 @@ Altair Engineering, Inc.
   \url{https://2024.help.altair.com/2024.1/hwcfdsolvers/acusolve/topics/acusolve/training_manual/near_wall_modeling_r.htm};
   accessed 25 May 2026.
 
+\bibitem{AnsysFluentUserGuide2024R2}
+ANSYS, Inc.
+\newblock {\em Ansys Fluent User's Guide, Release 2024 R2}, 2024.
+\newblock Available online:
+  \url{https://ansyshelp.ansys.com/public/Views/Secured/corp/v242/en/flu_ug/flu_ug.html};
+  accessed 3 June 2026.
+
 \bibitem{AnsysVerification2024}
 ANSYS, Inc., Canonsburg, PA.
-\newblock {\em Ansys Fluid Dynamics Verification Manual, Release 2024 R1},
-  January 2024.
+\newblock {\em Ansys Fluid Dynamics Verification Manual, Release 2024 R2}, July
+  2024.
 
 \bibitem{Apalowo2022}
 R.~K. Apalowo.
@@ -158,25 +165,12 @@ A.~Gersborg-Hansen, M.~P. Bends{\o}e, and O.~Sigmund.
 \newblock {\em Structural and multidisciplinary optimization}, 30(3):181--192,
   2005.
 
-\bibitem{Geuzaine2009}
-C.~Geuzaine and J.-F. Remacle.
-\newblock Gmsh: A 3-d finite element mesh generator with built-in pre-and
-  post-processing facilities.
-\newblock {\em International journal for numerical methods in engineering},
-  79(11):1309--1331, 2009.
-
 \bibitem{Guest2004}
 J.~K. Guest, J.~H. Pr{\'e}vost, and T.~Belytschko.
 \newblock Achieving minimum length scale in topology optimization using nodal
   independent density variables and projection functions.
 \newblock {\em International journal for numerical methods in engineering},
   61(2):238--254, 2004.
-
-\bibitem{Hesthaven2007}
-J.~S. Hesthaven and T.~Warburton.
-\newblock {\em Nodal Discontinuous Galerkin Methods: Algorithms, Analysis, and
-  Applications}.
-\newblock Springer Science \& Business Media, New York, NY, 2007.
 
 \bibitem{Andreasen2020}
 L.~C. H{\o}gh{\o}j, D.~R. N{\o}rhave, J.~Alexandersen, O.~Sigmund, and C.~S.
@@ -253,12 +247,6 @@ L.~No\"{e}l and K.~Maute.
   n.d.
 \newblock Accessed: 2026-05-25.
 
-\bibitem{Ooms2024}
-T.~Ooms, G.~Vantyghem, T.~Thienpont, R.~Van~Coile, and W.~De~Corte.
-\newblock Thermoelastic topology optimization of structural components at
-  elevated temperatures considering transient heat conduction.
-\newblock {\em Engineering with Computers}, 40(4):2183--2207, 2024.
-
 \bibitem{Othmer2014}
 C.~Othmer.
 \newblock Adjoint methods for car aerodynamics.
@@ -294,12 +282,6 @@ C.~L. Rumsey, T.~B. Gatski, W.~K. Anderson, and E.~J. Nielsen.
 C.~L. Rumsey, T.~B. Gatski, and J.~H. Morrison.
 \newblock Turbulence model predictions of strongly curved flow in a {U-Duct}.
 \newblock {\em AIAA Journal}, 38(8):1394--1402, 2000.
-
-\bibitem{Schramm2018}
-M.~Schramm, B.~Stoevesandt, and J.~Peinke.
-\newblock Optimization of airfoils using the adjoint approach and the influence
-  of adjoint turbulent viscosity.
-\newblock {\em Computation}, 6(1):10, 2018.
 
 \bibitem{Spalart1992}
 P.~Spalart and S.~Allmaras.
@@ -347,12 +329,6 @@ R.~Temam.
   par la m{\'e}thode des pas fractionnaires (i).
 \newblock {\em Archive for Rational Mechanics and Analysis}, 32(2):135--153,
   1969.
-
-\bibitem{Tucker2003}
-P.~Tucker.
-\newblock Differential equation-based wall distance computation for des and
-  rans.
-\newblock {\em Journal of Computational Physics}, 190(1):229--248, 2003.
 
 \bibitem{Versteeg2007}
 H.~K. Versteeg and W.~Malalasekera.

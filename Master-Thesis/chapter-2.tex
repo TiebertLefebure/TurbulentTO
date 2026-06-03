@@ -2,13 +2,13 @@
 \label{ch:turbulence_modeling}
 
 \section{Introduction to Fluid Dynamics and Turbulence}
-Fluid dynamics is governed by the Navier-Stokes equations, which describe the conservation of mass and momentum for a viscous continuum fluid \cite{White2006}. In this introductory text, these equations are presented using index notation to clearly illustrate the individual tensor components. The indices $i$ and $j$ represent the three spatial dimensions, and a repeated index within a term implies summation over all spatial directions. In subsequent chapters dealing with finite element implementation, this notation shifts to standard vector calculus to align with the FEniCS Unified Form Language syntax.
+Fluid dynamics is governed by the Navier-Stokes equations, which describe the conservation of mass and momentum for a viscous continuum fluid \cite{White2006}. In this introductory section, these equations are presented using index notation to clearly illustrate the individual tensor components. The indices $i$ and $j$ represent the three spatial dimensions, and a repeated index within a term implies summation over all spatial directions. In subsequent chapters dealing with finite element implementation, this notation shifts to standard vector calculus to align with the FEniCS Unified Form Language syntax.
 
 The fundamental principle of mass conservation is expressed by the continuity equation. For a general compressible fluid, this is defined as:
 \begin{equation}
 	\frac{\partial \rho}{\partial t} + \frac{\partial (\rho u_i)}{\partial x_i} = 0
 \end{equation}
-where $\rho$ is the fluid density. For most liquid cooling applications and low-speed fluid manifolds, the fluid can be assumed incompressible. Under this assumption, $\rho$ is constant in space and time, and the continuity equation reduces to
+where $\rho$ is the fluid density. For most liquid cooling applications and low-speed internal-flow components, the fluid can be assumed incompressible. Under this assumption, $\rho$ is constant in space and time, and the continuity equation reduces to
 \begin{equation}
 	\frac{\partial u_i}{\partial x_i} = 0 .
 	\label{eq:continuity}
@@ -19,7 +19,7 @@ For an incompressible Newtonian fluid with constant dynamic viscosity $\mu$, the
 	\rho \left( \frac{\partial u_i}{\partial t} + u_j \frac{\partial u_i}{\partial x_j} \right) = -\frac{\partial p}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial u_i}{\partial x_j} \right)
 	\label{eq:navier_stokes}
 \end{equation}
-where $p$ represents the static pressure. In principle, solving Equation~\ref{eq:navier_stokes} directly yields the exact flow field. This approach is known as Direct Numerical Simulation (DNS). However, as the Reynolds number ($Re$) increases, the flow transitions into a chaotic turbulent state characterized by a broad spectrum of spatial and temporal scales \cite{Pope2000}. Resolving the smallest turbulent eddies requires extremely fine spatial grids. For industrial applications, including electronics cooling manifolds, DNS is computationally prohibitive. Engineers therefore rely on turbulence modeling to predict the averaged effects of these fluctuations without resolving the full turbulent spectrum \cite{Versteeg2007, Altair}.
+where $p$ represents the static pressure. In principle, solving Equation~\ref{eq:navier_stokes} directly yields the exact flow field. This approach is known as Direct Numerical Simulation (DNS). However, as the Reynolds number ($Re$) increases, the flow transitions into a chaotic turbulent state characterized by a broad spectrum of spatial and temporal scales \cite{Pope2000}. Resolving the smallest turbulent eddies requires extremely fine spatial grids. For industrial applications, including electronics cooling hardware, DNS is computationally prohibitive. Engineers therefore rely on turbulence modeling to predict the averaged effects of these fluctuations without resolving the full turbulent spectrum \cite{Versteeg2007, Altair}.
 
 \section{Reynolds-Averaged Navier-Stokes (RANS) Equations}
 The most common approach to turbulence modeling in engineering is the Reynolds-Averaged Navier-Stokes (RANS) framework, based on the theories originally introduced by Osborne Reynolds \cite{Pope2000}. The core principle of RANS is the Reynolds decomposition, which separates instantaneous flow variables into a time-averaged mean component ($\bar{u}_i$, $\bar{p}$) and a fluctuating component ($u'_i$, $p'$):
@@ -27,12 +27,12 @@ The most common approach to turbulence modeling in engineering is the Reynolds-A
 	u_i = \bar{u}_i + u'_i \quad \text{and} \quad p = \bar{p} + p' .
 \end{equation}
 
-Figure~\ref{fig:reynolds_decomposition} illustrates this separation for velocity and pressure signals measured at a fixed point in a turbulent flow. The instantaneous signal contains rapid turbulent fluctuations, while the dashed mean line represents the slowly varying quantity retained by the RANS equations. By construction, the mean of the fluctuating component is zero, but products of fluctuations, such as $\overline{u'_i u'_j}$, remain non-zero and generate the Reynolds-stress terms.
+Figure~\ref{fig:reynolds_decomposition} illustrates this separation for velocity and pressure signals measured at a fixed point in a turbulent flow. The instantaneous signal contains rapid turbulent fluctuations, while the dashed mean line represents the slowly varying quantity retained by the RANS equations. By construction, the mean of the fluctuating component is zero, but products of fluctuations, such as $\overline{u'_i u'_j}$, remain non-zero and generate the Reynolds-stress terms. The schematic is adapted from the Fluid Mechanics on the Web Chapter 6 material based on White's viscous-flow treatment \cite{OnlineFlowCalculatorWhiteCh6}.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.95\textwidth]{Reynolds-decomposition}
-	\caption{Reynolds decomposition of velocity and pressure signals into mean and fluctuating components. Adapted from the Fluid Mechanics on the Web Chapter 6 material based on White's viscous-flow treatment \cite{OnlineFlowCalculatorWhiteCh6}.}
+	\caption{Reynolds decomposition of velocity and pressure signals. Adapted from \cite{OnlineFlowCalculatorWhiteCh6}.}
 	\label{fig:reynolds_decomposition}
 \end{figure}
 
@@ -60,12 +60,12 @@ Before selecting a specific turbulence equation to calculate $\mu_t$, the physic
 \end{equation}
 where $y$ is the distance from the wall, $\nu$ is the kinematic viscosity, and $u_\tau = \sqrt{\tau_w/\rho}$ is the friction velocity derived from the wall shear stress ($\tau_w$) \cite{Pope2000}.
 
-Figure~\ref{fig:near_wall_treatment} summarizes the wall-unit regions used when discussing RANS wall treatment. The important point for this thesis is not that one near-wall strategy is universally required for topology optimization, but that the chosen turbulence closure and wall treatment must remain stable while the solid-fluid boundary evolves.
+Figure~\ref{fig:near_wall_treatment}, adapted from Altair's AcuSolve near-wall modeling documentation \cite{AltairNearWall2024}, summarizes the wall-unit regions used when discussing RANS wall treatment. The important point for this thesis is not that one near-wall strategy is universally required for topology optimization, but that the chosen turbulence closure and wall treatment must remain stable while the solid-fluid boundary evolves.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.82\textwidth]{Near-wall-treatment}
-	\caption{Near-wall turbulent boundary-layer regions in wall units. Adapted from Altair's AcuSolve near-wall modeling documentation \cite{AltairNearWall2024}.}
+	\caption{Near-wall boundary-layer regions. Adapted from \cite{AltairNearWall2024}.}
 	\label{fig:near_wall_treatment}
 \end{figure}
 
@@ -99,14 +99,14 @@ When fluid passes through a bend, centrifugal forces induce secondary motion per
 \end{equation}
 where $d$ is the characteristic length of the cross-section, such as the pipe diameter $D$ or hydraulic diameter $D_h$, $R_c$ is the radius of curvature, and $Re_d$ is the bulk Reynolds number based on that same characteristic length \cite{Dean1927}. A higher Dean number indicates a stronger cross-sectional influence of centrifugal forces.
 
-The Dean number is academically relevant here because it separates curvature severity from Reynolds number alone. However, it should not be interpreted as a universal threshold for SA validity. The breakdown of an eddy-viscosity model depends on geometry, separation, mesh resolution, boundary conditions, and the validation quantity being compared. In this thesis, the Dean number is used only as a rough physical descriptor of the bend cases; the final judgment still comes from profile comparisons and independent CFD re-analysis.
+The Dean number is academically relevant here because it separates curvature severity from Reynolds number alone. However, it should not be interpreted as a universal threshold for SA validity. The breakdown of an eddy-viscosity model depends on geometry, separation, mesh resolution, boundary conditions, and the validation quantity being compared. In this thesis, the Dean number is used only as a rough physical descriptor of the bend cases; the final judgment still comes from profile comparisons and independent CFD validation.
 
 For mildly curved flows, the SA model can perform relatively well. Apalowo \cite{Apalowo2022} evaluated a $90^\circ$ circular pipe bend with a Dean number of $De \approx 9,000$ at $Re_D \approx 34,000$. Under these moderate conditions, where $R_c=7D$, the SA result in the bottom panel of Figure~\ref{fig:apalowo_profiles} follows the measured streamwise-velocity profile about as well as the two $k$-$\epsilon$ variants. This can be seen from the similar profile shape and from the reported error values, which are slightly lower for the SA panel than for the two panels above it. The comparison is therefore used as evidence that mild curvature does not automatically invalidate SA.
 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.8\textwidth]{Apalowo-SA-performance}
-	\caption{Streamwise velocity profiles in a $90^\circ$ pipe bend ($R_c = 7D$, $Re_D \approx 34,000$, $De \approx 9,000$). The SA model is the bottom panel; its profile shape and reported error values are comparable to the two $k$-$\epsilon$ panels above it. Reprinted from Apalowo \cite{Apalowo2022}.}
+	\caption{Streamwise velocity profiles in a mildly curved pipe bend. Reprinted from Apalowo~\cite{Apalowo2022}.}
 	\label{fig:apalowo_profiles}
 \end{figure}
 
@@ -115,7 +115,7 @@ At stronger bend curvature and higher Dean number, the limitations of the isotro
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=0.7\textwidth]{Abuhatira-SA-failing.png}
-	\caption{Turbulence model predictions just outside the $90^\circ$ bend, at the beginning of the straight outlet section ($R_c = 2.0D$, $Re_D = 60,000$, $De \approx 30,000$). The SA result is the yellow curve and deviates most strongly from the experimental data, although the other RANS closures are also imperfect. Adapted from Abuhatira et al. \cite{Abuhatira2021}.}
+	\caption{Turbulence-model predictions downstream of a strongly curved pipe bend. Adapted from Abuhatira et al.~\cite{Abuhatira2021}.}
 	\label{fig:abuhatira_bend}
 \end{figure}
 
@@ -123,7 +123,7 @@ The literature therefore provides useful rough-scale evidence: SA can be accepta
 
 \section{Separated Flow Without Curvature}
 \label{sec:separated_flow_without_curvature}
-Curvature is not the only mechanism that can expose the limitations of a scalar eddy-viscosity model. A fully developed channel is an attached wall-bounded flow and is therefore not treated as a model-limitation case in this chapter; it is used later as an implementation-verification benchmark. A backward-facing step is more relevant here because it removes bend curvature while introducing a sudden expansion, separated shear layer, recirculation region, and downstream reattachment \cite{EatonJohnston1981,KimKlineJohnston1980}. This resembles the local separation that can occur in topology-optimized manifolds and diffuser-like designs even when the geometry is not dominated by pipe-bend curvature. Because there is no curvature radius, the Dean number is not meaningful for this case; the standard integral metric is the normalized reattachment length $x_r/h$, with $h$ the step height.
+Curvature is not the only mechanism that can expose the limitations of a scalar eddy-viscosity model. A fully developed channel is an attached wall-bounded flow and is therefore not treated as a model-limitation case in this chapter; it is used later as an implementation-verification benchmark. A backward-facing step is more relevant here because it removes bend curvature while introducing a sudden expansion, separated shear layer, recirculation region, and downstream reattachment \cite{EatonJohnston1981,KimKlineJohnston1980}. This resembles the local separation that can occur in topology-optimized internal-flow paths and diffuser-like designs even when the geometry is not dominated by pipe-bend curvature. Because there is no curvature radius, the Dean number is not meaningful for this case; the standard integral metric is the normalized reattachment length $x_r/h$, with $h$ the step height.
 
 The modeling difficulty is that separation breaks the near-wall local-equilibrium picture on which simple wall-resolved closures often behave well. Turbulence generated in the detached shear layer is transported downstream before it affects the mean flow, and reattachment depends on shear-layer growth, entrainment, pressure recovery, and stress redistribution. Linear eddy-viscosity models such as SA and SST $k-\omega$ can represent extra turbulent mixing through an effective scalar viscosity, but they cannot fully represent stress anisotropy or coherent unsteadiness during reattachment \cite{Pope2000,Versteeg2007}. For topology optimization, this matters because a locally separated design may appear favorable if the chosen closure overpredicts reattachment or underpredicts separation losses.
 
@@ -156,16 +156,16 @@ The modeling difficulty is that separation breaks the near-wall local-equilibriu
 		\caption{SST $k-\omega$ velocity profiles.}
 		\label{fig:backstep_sst_u_tmr}
 	\end{subfigure}
-	\caption{NASA Turbulence Modeling Resource comparison of SA and SST $k-\omega$ predictions with the Driver-Seegmiller backward-facing-step experiment at $Re_H \approx 36{,}000$ \cite{DriverSeegmiller1985,NasaBackstepTMR}. The velocity-profile comparison indicates better separated-flow recovery for SST $k-\omega$ than for SA.}
+	\caption{NASA TMR comparison for the Driver--Seegmiller backward-facing-step experiment \cite{DriverSeegmiller1985,NasaBackstepTMR}.}
 	\label{fig:backstep_sa_sst_tmr}
 \end{figure}
 
-The Driver and Seegmiller backward-facing-step experiment is a canonical validation case for separated internal flow \cite{DriverSeegmiller1985}. In the NASA Turbulence Modeling Resource comparison shown in Figure~\ref{fig:backstep_sa_sst_tmr}, the experimental reattachment length is $x_r/h = 6.26 \pm 0.10$. Representative SA computations predict reattachment near $x_r/h \approx 6.1$, while the SST $k-\omega$ results reported by NASA as SSTm predict reattachment near $x_r/h \approx 6.5$ \cite{NasaBackstepTMR}. Judged only by this integral metric, SA does not simply fail. The velocity profiles in panels~(c) and~(d), however, show the more relevant limitation: SST $k-\omega$ follows the measured separated-flow recovery more closely than SA. Since topology optimization is sensitive to local velocity recovery, wall shear, and loss generation, the backward-facing-step evidence supports a cautious conclusion: separated internal flows are strongly turbulence-model dependent, and SA-based predictions should be checked with an independent closure when local separation is present.
+The Driver and Seegmiller backward-facing-step experiment is a canonical validation case for separated internal flow \cite{DriverSeegmiller1985}. In the NASA Turbulence Modeling Resource comparison shown in Figure~\ref{fig:backstep_sa_sst_tmr}, the experimental reattachment length is $x_r/h = 6.26 \pm 0.10$ at $Re_H \approx 36{,}000$. Representative SA computations predict reattachment near $x_r/h \approx 6.1$, while the SST $k-\omega$ results reported by NASA as SSTm predict reattachment near $x_r/h \approx 6.5$ \cite{NasaBackstepTMR}. Judged only by this integral metric, SA does not simply fail. The velocity profiles in panels~(c) and~(d), however, show the more relevant limitation: SST $k-\omega$ follows the measured separated-flow recovery more closely than SA. Since topology optimization is sensitive to local velocity recovery, wall shear, and loss generation, the backward-facing-step evidence supports a cautious conclusion: separated internal flows are strongly turbulence-model dependent, and SA-based predictions should be checked with an independent closure when local separation is present.
 
 \section{Benchmark Studies in Ansys Fluent}
 \label{sec:ansys_benchmarks}
-To investigate where the SA model's accuracy deteriorates for the present study, benchmark simulations were performed using \textbf{Ansys Fluent}. Three internal-flow benchmarks were considered. The first two are fully three-dimensional curved-flow cases: a $180^\circ$ U-bend and a tighter $90^\circ$ pipe bend. To ensure a standardized numerical baseline for these curved cases, the computational meshes, fluid properties, and boundary conditions were adopted from the official Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}. Specifically, the 3D $90^\circ$ bend corresponds to verification case VMFL030, while the 3D U-bend corresponds to case VMFL048. The third benchmark, the backward-facing step, is treated differently: it is not used as a new validation case, because the literature-supported validation evidence is already given in Section~\ref{sec:separated_flow_without_curvature}. It is instead used as a separated-flow model-sensitivity benchmark in Appendix~\ref{app:A_backstep_benchmark}, comparing SA against SST $k-\omega$ \cite{Menter1994} on the local backward-facing-step geometry used in the repository and in the corresponding thesis work \cite{Marcibal2024}.
-The Fluent convergence monitors and final-window criteria are reported in Appendix~\ref{sec:app_A_ch2_fluent_convergence}, so the main chapter can focus on the physical comparison between SA and SST $k-\omega$.
+To investigate where the SA model's accuracy deteriorates for the present study, benchmark simulations were performed using \textbf{Ansys Fluent} 2024 R2 \cite{AnsysFluentUserGuide2024R2}. Three internal-flow benchmarks were considered. The first two are fully three-dimensional curved-flow cases: a $180^\circ$ U-bend and a tighter $90^\circ$ pipe bend. To ensure a standardized numerical baseline for these curved cases, the computational meshes, fluid properties, and boundary conditions were adopted from the official Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}. Specifically, the 3D $90^\circ$ bend corresponds to verification case VMFL030, while the 3D U-bend corresponds to case VMFL048. The third benchmark, the backward-facing step, is treated differently: it is not used as a new validation case, because the literature-supported validation evidence is already given in Section~\ref{sec:separated_flow_without_curvature}. It is instead used as a separated-flow model-sensitivity benchmark in Appendix~\ref{app:A_backstep_benchmark}, comparing SA against SST $k-\omega$ \cite{Menter1994} on the local backward-facing-step geometry used in the repository and in the corresponding thesis work \cite{Marcibal2024}.
+The Ansys Fluent convergence monitors and final-window criteria are reported in Appendix~\ref{sec:app_A_ch2_fluent_convergence}, so the main chapter can focus on the physical comparison between SA and SST $k-\omega$.
 
 \begin{figure}[!htbp]
 	\centering
@@ -182,51 +182,51 @@ The Fluent convergence monitors and final-window criteria are reported in Append
 		\caption{VMFL030 3D $90^\circ$ bend.}
 		\label{fig:vmfl030_geometry_bcs}
 	\end{subfigure}
-	\caption{Geometry and boundary conditions of the two Ansys Fluent curved-flow benchmark cases adopted from the Ansys Fluid Dynamics Verification Manual \cite{AnsysVerification2024}.}
+	\caption{Ansys Fluent curved-flow benchmark geometries from the verification manual \cite{AnsysVerification2024}.}
 	\label{fig:ch2_curved_benchmark_setups}
 \end{figure}
 
 \subsection{Mild Curvature: The U-Bend Case}
 
-The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$. The Fluent setup is summarized in Figure~\ref{fig:vmfl048_geometry_bcs}: the VMFL048 case uses a velocity-profile inlet, a zero-gauge pressure outlet, no-slip pipe walls, and a symmetry boundary on one side of the 3D domain. Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$.
+The first benchmark evaluated a 3D U-bend geometry characterized by a moderate curvature ratio of $R_c \approx 4.46D$. The Ansys Fluent setup is summarized in Figure~\ref{fig:vmfl048_geometry_bcs}: the VMFL048 case uses a velocity-profile inlet, a zero-gauge pressure outlet, no-slip pipe walls, and a symmetry boundary on one side of the 3D domain. Operating at a bulk Reynolds number of $Re_D \approx 44,700$, this geometry resulted in a Dean number of $De \approx 15,000$. The comparison below combines velocity contours, the bend-exit velocity profile, and turbulent-viscosity-ratio contours so that both the mean-flow prediction and the modeled turbulent diffusion can be assessed.
 
 \begin{figure}[!htbp]
 	\centering
-	\begin{subfigure}[b]{0.33\textwidth}
+	\begin{subfigure}[b]{0.30\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL048-Velocity-Magnitude-SSTkomega}
 		\caption{Velocity, SST $k-\omega$}
 		\label{fig:ubend_komega}
 	\end{subfigure}
 	\qquad
-		\begin{subfigure}[b]{0.33\textwidth}
+		\begin{subfigure}[b]{0.30\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL048-Velocity-Magnitude-SA}
 			\caption{Velocity, SA}
 			\label{fig:ubend_sa}
 		\end{subfigure}
 		\\[0.03cm]
-		\begin{subfigure}[b]{0.66\textwidth}
+		\begin{subfigure}[b]{0.58\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL048-Velocity-SA-vs-SST}
-			\caption{Velocity profiles extracted at the bend exit}
+			\caption{Bend-exit velocity profiles}
 			\label{fig:ch2_ubend_profiles}
 		\end{subfigure}
 		\\[0.03cm]
-		\begin{subfigure}[b]{0.33\textwidth}
+		\begin{subfigure}[b]{0.30\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL048-Turbulent-Viscosity-Ratio-SSTkomega}
 		\caption{$\mu_t/\mu$, SST $k-\omega$}
 		\label{fig:ubend_mut_mu_komega}
 	\end{subfigure}
 	\qquad
-	\begin{subfigure}[b]{0.33\textwidth}
+	\begin{subfigure}[b]{0.30\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL048-Turbulent-Viscosity-Ratio-SA}
 		\caption{$\mu_t/\mu$, SA}
 		\label{fig:ubend_mut_mu_sa}
 	\end{subfigure}
-	\caption{VMFL048 U-bend RANS comparison: velocity contours, extracted velocity profile, and turbulent-viscosity ratio contours.}
+	\caption{VMFL048 U-bend RANS comparison.}
 	\label{fig:ansys_ubend_comparison}
 	\label{fig:ansys_ubend_mut_mu}
 \end{figure}
@@ -239,45 +239,45 @@ The turbulent-viscosity panels in Figure~\ref{fig:ansys_ubend_mut_mu} clarify wh
 
 
 \subsection{Strong Curvature: The $90^\circ$ Bend Case}
-The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by $R_c = 2.8D$. The corresponding VMFL030 setup is shown in Figure~\ref{fig:vmfl030_geometry_bcs}, including the fully developed turbulent inlet profile, pressure outlet, no-slip pipe walls, half-domain symmetry, and the $75^\circ$ velocity-profile plane used for comparison. Despite operating at a similar bulk Reynolds number of $Re_D \approx 43,000$, this tighter bend radius pushed the Dean number to $De \approx 18,000$. Because the Reynolds numbers are similar between the two benchmark cases, the comparison isolates the geometric effect of streamline curvature more clearly than a Reynolds-number-only comparison.
+The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by $R_c = 2.8D$. The corresponding VMFL030 setup is shown in Figure~\ref{fig:vmfl030_geometry_bcs}, including the fully developed turbulent inlet profile, pressure outlet, no-slip pipe walls, half-domain symmetry, and the $75^\circ$ velocity-profile plane used for comparison. Despite operating at a similar bulk Reynolds number of $Re_D \approx 43,000$, this tighter bend radius pushed the Dean number to $De \approx 18,000$. Because the Reynolds numbers are similar between the two benchmark cases, the comparison isolates the geometric effect of streamline curvature more clearly than a Reynolds-number-only comparison. As for VMFL048, the figure combines velocity contours, the extracted profile, and turbulent-viscosity-ratio contours.
 
 \begin{figure}[!htbp]
 	\centering
-	\begin{subfigure}[b]{0.33\textwidth}
+	\begin{subfigure}[b]{0.30\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL030-Velocity-Magnitude-SSTkomega}
 		\caption{Velocity, SST $k-\omega$}
 		\label{fig:90bend_komega}
 	\end{subfigure}
 	\qquad
-		\begin{subfigure}[b]{0.33\textwidth}
+		\begin{subfigure}[b]{0.30\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL030-Velocity-Magnitude-SA}
 			\caption{Velocity, SA}
 			\label{fig:90bend_sa}
 		\end{subfigure}
 		\\[0.03cm]
-		\begin{subfigure}[b]{0.66\textwidth}
+		\begin{subfigure}[b]{0.58\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL030-Velocity-SA-vs-SST}
-			\caption{Velocity profiles extracted at $75^\circ$ along the bend}
+			\caption{$75^\circ$ velocity profiles}
 			\label{fig:90bend_profiles}
 		\end{subfigure}
 		\\[0.03cm]
-		\begin{subfigure}[b]{0.33\textwidth}
+		\begin{subfigure}[b]{0.30\textwidth}
 			\centering
 			\includegraphics[width=\textwidth]{VMFL030-Turbulent-Viscosity-Ratio-SSTkomega}
 		\caption{$\mu_t/\mu$, SST $k-\omega$}
 		\label{fig:90bend_mut_mu_komega}
 	\end{subfigure}
 	\qquad
-	\begin{subfigure}[b]{0.33\textwidth}
+	\begin{subfigure}[b]{0.30\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{VMFL030-Turbulent-Viscosity-Ratio-SA}
 		\caption{$\mu_t/\mu$, SA}
 		\label{fig:90bend_mut_mu_sa}
 	\end{subfigure}
-	\caption{VMFL030 $90^\circ$ pipe-bend RANS comparison: velocity contours, extracted velocity profile, and turbulent-viscosity ratio contours.}
+	\caption{VMFL030 $90^\circ$ pipe-bend RANS comparison.}
 	\label{fig:ansys_90bend_comparison}
 	\label{fig:ansys_90bend_mut_mu}
 \end{figure}
@@ -289,11 +289,11 @@ As shown in Figure~\ref{fig:ansys_90bend_comparison}, the velocity profile at th
 The turbulent-viscosity panels in Figure~\ref{fig:ansys_90bend_mut_mu} explain the poorer SA velocity prediction in the tighter bend. The SST $k-\omega$ result keeps the high $\mu_t/\mu$ region more localized, with a low-viscosity core where the curvature-induced redistribution is not simply equivalent to local shear production. The SA result instead produces a broad high-viscosity region with a peak several times larger than the SST $k-\omega$ scale. Physically, the strong bend curvature drives secondary motion and Reynolds-stress anisotropy, while the standard SA closure still represents turbulence through a scalar eddy viscosity based on wall distance and a modified vorticity scale. In this case SA assigns too much eddy viscosity to too much of the bend cross-section, so the modeled turbulent diffusion smooths velocity gradients that remain visible in both the SST $k-\omega$ result and the experiment. This behavior is much more severe than in VMFL048: in the U-bend the SA overprediction is moderate and spatially consistent with the SST $k-\omega$ field, whereas in VMFL030 the eddy-viscosity magnitude and distribution are both wrong enough to wash out the measured velocity-gradient structure.
 
 \subsection{Sudden Expansion: The Backward-Facing Step Case}
-The backward-facing-step benchmark is retained as a separated-flow model-sensitivity check. Its setup, mesh-sensitivity table, Ansys contours, and downstream profiles are reported in Appendix~\ref{app:A_backstep_benchmark}. The main argument relies on the literature comparison in Figure~\ref{fig:backstep_sa_sst_tmr}: SA can predict a plausible reattachment length, but SST $k-\omega$ follows the local velocity recovery more closely. The thesis-specific Fluent backstep results support the same caution without being treated as a separate experimental validation case.
+The backward-facing-step benchmark is retained as a separated-flow model-sensitivity check. Its setup, mesh-sensitivity table, Ansys Fluent contours, and downstream profiles are reported in Appendix~\ref{app:A_backstep_benchmark}. The main argument relies on the literature comparison in Figure~\ref{fig:backstep_sa_sst_tmr}: SA can predict a plausible reattachment length, but SST $k-\omega$ follows the local velocity recovery more closely. The thesis-specific Ansys Fluent backstep results support the same caution without being treated as a separate experimental validation case.
 
 \section{Conclusion}
-This chapter answers the first research question regarding the predictive capabilities and physical limitations of the Spalart-Allmaras model for internal turbulent flows relevant to topology optimization. The SA model is attractive because it is a one-equation, wall-resolved closure that avoids empirical wall functions and remains substantially easier to stabilize than two-equation alternatives. The channel-like and mildly curved evidence supports its use as a practical forward model for wall-resolved internal-flow topology optimization.
+This chapter answers the first research question regarding the predictive capabilities and physical limitations of the Spalart-Allmaras model for internal turbulent flows relevant to topology optimization. The SA model is attractive because it is a one-equation, wall-resolved closure that avoids empirical wall functions and remains substantially easier to stabilize than two-equation alternatives. The channel-like and mildly curved evidence supports its use as a practical forward model for wall-resolved internal-flow topology optimization. This is especially relevant for optimization problems where the objective function or design goal is aligned with the simplified SA response: even if SA is not closure-independent truth, it can still guide useful hydraulic improvements that are later checked by independent validation. This statement is not only an assumption of the present thesis. Yoon~\cite{Yoon2016} used the SA model directly inside turbulent-flow topology optimization, and Dilgen et al.~\cite{Dilgen2018} likewise showed that RANS-based turbulent topology optimization can produce improved flow layouts. These papers are best read as evidence that SA/RANS closures can be productive optimization models, not as proof that their predicted final performance is independent of the turbulence closure.
 
 The limitation is not simply high Reynolds number. The main issue is curvature- and separation-driven Reynolds-stress anisotropy under a scalar eddy-viscosity closure. Literature cases at $De \approx 9,000$ and $De \approx 30,000$ provide useful supporting evidence, while the thesis-specific Ansys comparisons give a rough operating scale for the present bend cases: the U-bend case at $De \approx 15,000$ remains credible, whereas the tighter $90^\circ$ bend at $De \approx 18,000$ already shows clear SA deterioration for the selected profile comparison. The separated-flow evidence points in the same direction. In the Driver-Seegmiller validation data, SST $k-\omega$ follows the measured backward-facing-step velocity profiles more closely than SA, and the thesis-specific backward-facing-step case confirms that the predicted recirculation and recovery are visibly model dependent. These diagnostics are therefore treated as case-specific evidence of model sensitivity, not as universal thresholds.
 
-Consequently, using SA as the turbulence model inside the FEniCS topology optimization loop is defensible for this thesis because of its numerical simplicity and compatibility with wall-resolved optimization. The resulting layouts should be interpreted as SA-optimized design candidates, not as closure-independent predictions by themselves. For attached or mildly curved cases, independent sharp-geometry re-analysis can show whether the SA-optimized layout remains robust. For designs containing strong curvature or local separation, quantitative performance claims must be conditioned on an independent closure check, such as SST $k-\omega$, because the separated-flow losses may be strongly model dependent.
+Consequently, using SA as the turbulence model inside the FEniCS topology optimization loop is defensible for this thesis because of its numerical simplicity and compatibility with wall-resolved optimization. The resulting layouts should be interpreted as SA-optimized design candidates, not as closure-independent predictions by themselves. For attached or mildly curved cases, independent sharp-geometry validation can show whether the SA-optimized layout remains robust. For designs containing strong curvature or local separation, quantitative performance claims must be conditioned on an independent closure check, such as SST $k-\omega$, because the separated-flow losses may be strongly model dependent.

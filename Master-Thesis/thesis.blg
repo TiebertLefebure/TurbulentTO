@@ -8,50 +8,52 @@ A level-1 auxiliary file: chapter-4.aux
 A level-1 auxiliary file: chapter-5.aux
 A level-1 auxiliary file: chapter-6-results.aux
 A level-1 auxiliary file: chapter-7-conclusion.aux
-A level-1 auxiliary file: appendix-A-SA-Verification-Cases.aux
-A level-1 auxiliary file: appendix-B-TO-Benchmarks.aux
-A level-1 auxiliary file: appendix-C-Laminar-TO-Comparison.aux
+A level-1 auxiliary file: appendix-A-SA-Validity-Cases-Details.aux
+A level-1 auxiliary file: appendix-B-SA-FEniCS-Solver-Support.aux
+A level-1 auxiliary file: appendix-B-SA-Verification-Benchmarks-Details.aux
+A level-1 auxiliary file: appendix-C-TO-Methodology-Support.aux
+A level-1 auxiliary file: appendix-D-TO-Benchmarks-Details.aux
 The style file: abbrv.bst
 A level-1 auxiliary file: CoC.aux
 Database file #1: references.bib
-You've used 67 entries,
+You've used 63 entries,
             2118 wiz_defined-function locations,
-            969 strings with 16181 characters,
-and the built_in function-call counts, 21457 in all, are:
-= -- 2132
-> -- 1029
+            943 strings with 15551 characters,
+and the built_in function-call counts, 19961 in all, are:
+= -- 1987
+> -- 951
 < -- 3
-+ -- 418
-- -- 340
-* -- 1600
-:= -- 3650
-add.period$ -- 205
-call.type$ -- 67
-change.case$ -- 365
++ -- 388
+- -- 314
+* -- 1478
+:= -- 3392
+add.period$ -- 193
+call.type$ -- 63
+change.case$ -- 341
 chr.to.int$ -- 0
-cite$ -- 67
-duplicate$ -- 722
-empty$ -- 1660
-format.name$ -- 340
-if$ -- 4357
+cite$ -- 63
+duplicate$ -- 674
+empty$ -- 1548
+format.name$ -- 314
+if$ -- 4058
 int.to.chr$ -- 0
-int.to.str$ -- 67
-missing$ -- 65
-newline$ -- 341
-num.names$ -- 128
-pop$ -- 322
+int.to.str$ -- 63
+missing$ -- 59
+newline$ -- 321
+num.names$ -- 118
+pop$ -- 301
 preamble$ -- 1
-purify$ -- 306
+purify$ -- 286
 quote$ -- 0
-skip$ -- 480
+skip$ -- 449
 stack$ -- 0
-substring$ -- 1441
-swap$ -- 76
+substring$ -- 1329
+swap$ -- 72
 text.length$ -- 3
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 254
+type$ -- 240
 warning$ -- 0
-while$ -- 213
-width$ -- 69
-write$ -- 736
+while$ -- 196
+width$ -- 65
+write$ -- 691

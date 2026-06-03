@@ -48,9 +48,10 @@
   {$R_c=0.125$ m} (\xc,{\cy-\r});
 \fill[black] (bendCenter) circle (1.15pt);
 
-% Pipe diameter, shown near the outlet leg to avoid the straight-leg dimension.
-\draw[dim] (\xr-\w,5.55) -- node[below, fill=white, inner sep=1pt]
-  {$D=0.028$ m} (\xr+\w,5.55);
+% Pipe diameter, with the label outside the pipe so it does not cover the geometry.
+\draw[dim] (\xr-\w,5.55) -- (\xr+\w,5.55);
+\node[anchor=west, fill=white, inner sep=1pt] at (\xr+\w+0.12,5.55)
+  {$D=0.028$ m};
 
 % Extraction line at the start of the outlet straight section.
 \draw[black!65, dashed, line width=0.8pt] (\xr-\w,\cy) -- (\xr+\w,\cy);
@@ -71,9 +72,6 @@
 
 \draw[dim] (\xl-0.92,\ytop) -- node[midway, rotate=90, above, fill=white, inner sep=1pt]
   {shortened straight leg, $L=30D$} (\xl-0.92,\cy);
-
-\node[anchor=west, text=black!65, font=\sffamily\footnotesize] at (0.15,-0.42)
-  {Flow enters at the top left, turns through the lower bend, and exits at the top right.};
 
 \end{tikzpicture}
 \end{document}

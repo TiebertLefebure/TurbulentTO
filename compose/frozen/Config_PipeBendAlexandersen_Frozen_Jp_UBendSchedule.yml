@@ -15,4 +15,4 @@ services:
     command:
       - FluidTO/TurbulentTO_Frozen.py
       - --config
-      - FluidTO/Configs_Frozen/Config_PipeBendAlexandersen_Frozen_Jp_UBendSchedule.py
+      - FluidTO/Configs_Frozen/Config_PipeBendAlexandersen_Frozen.py

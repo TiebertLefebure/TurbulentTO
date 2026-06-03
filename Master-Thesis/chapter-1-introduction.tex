@@ -2,56 +2,59 @@
 \label{cha:intro}
 
 \section{Background and Motivation}
-Energy systems increasingly rely on compact flow devices that must move heat, mass, or working fluids through limited space with minimal loss. Examples include liquid-cooled electronics, battery and power-electronics thermal management, fuel-cell and electrolyzer flow fields, compact heat exchangers, and coolant manifolds in automotive and aerospace applications. In these systems, the thermal design is often constrained before any heat-transfer equation is considered: the fluid must first be distributed, collected, redirected, or expanded without creating an excessive pressure drop. A cooling plate or heat exchanger with excellent local heat-transfer potential can still be impractical if the manifold requires too much pumping power or if the flow distribution is poor.
+Energy systems increasingly rely on compact flow devices that must move heat, mass, or working fluids through limited space with minimal loss. Examples include liquid-cooled electronics, battery and power-electronics thermal management, fuel-cell and electrolyzer flow fields, compact heat exchangers, and coolant distribution hardware in automotive and aerospace applications. In these systems, the thermal design is often constrained before any heat-transfer equation is considered: the fluid must first be distributed, collected, redirected, or expanded without creating an excessive pressure drop. A cooling plate or heat exchanger with excellent local heat-transfer potential can still be impractical if the hydraulic routing requires too much pumping power or if the flow distribution is poor.
 
-This thesis is positioned within that broader energy and thermal-management context, but its actual framework is deliberately narrower. It does not solve the energy equation, does not perform conjugate heat-transfer optimization, and does not optimize temperature directly. Instead, it studies the flow-only configurations that make those applications possible: manifolds, bends, U-bends, collectors, and diffusers whose performance is governed by pressure loss, viscous dissipation, separation, and turbulence-model behavior. These flow configurations are a necessary stepping stone toward turbulent heat-transfer optimization because reliable thermal design requires a credible and stable prediction of the hydraulic losses first.
+This thesis is positioned within that broader energy and thermal-management context, but its actual framework is deliberately narrower. It does not solve the energy equation, does not perform conjugate heat-transfer optimization, and does not optimize temperature directly. Instead, it studies representative flow-only configurations: bends, U-bends, and diffusers whose performance is governed by pressure loss, viscous dissipation, separation, and turbulence-model behavior. These flow configurations are a necessary stepping stone toward turbulent heat-transfer optimization because reliable thermal design requires a credible and stable prediction of the hydraulic losses first.
 
 Mathematical optimization offers a way to design such internal-flow layouts without prescribing the final channel topology in advance. Among these strategies, topology optimization has emerged as a powerful computational design tool for fluid and thermal-management problems \cite{Fawaz2022}. In a fully coupled thermal problem, the eventual objective may involve heat-transfer rate, maximum temperature, or thermal resistance. In the flow-only problem treated here, the relevant objectives are instead pressure drop and dissipated mechanical energy. This restriction is not merely a simplification for convenience: turbulent density-based topology optimization remains challenging even before the energy equation is added, because the flow solver, turbulence model, wall treatment, geometry representation, and adjoint sensitivity calculation all interact with the evolving topology.
 
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=\textwidth]{Heat-Sink-TO}
-	\caption{Topology-optimized heat sink from Barroca et al.~\cite{Barroca2023}, showing the optimized fin layout with velocity magnitude (left) and temperature (right).}
+	\caption{Topology-optimized heat sink from Barroca et al.~\cite{Barroca2023}.}
 	\label{fig:barroca_heat_sink}
 \end{figure}
 
-The central gap addressed in this thesis is therefore that density-based fluid topology optimization is far more mature for laminar flows than for turbulent internal flows. Laminar assumptions are attractive because they simplify both the governing equations and the associated adjoint sensitivities, but they are often not representative of compact engineering flow paths operating at industrial Reynolds numbers. In turbulent internal flows, the chosen Reynolds-Averaged Navier-Stokes (RANS) closure, near-wall treatment, and response to curvature or separation can influence the optimized topology itself. Before turbulent conjugate heat-transfer optimization can be treated as a reliable design tool, the underlying turbulent flow-only optimization problem must first be stabilized, verified, validated, and interpreted critically.
+The heat-sink example in Figure~\ref{fig:barroca_heat_sink} illustrates the type of hydraulic layout that motivates the present work: the optimized fin structure guides the velocity field while the thermal field responds to that flow distribution. The central gap addressed in this thesis is therefore that density-based fluid topology optimization is far more mature for laminar flows than for turbulent internal flows. Laminar assumptions are attractive because they simplify both the governing equations and the associated adjoint sensitivities, but they are often not representative of compact engineering flow paths operating at industrial Reynolds numbers. In turbulent internal flows, the chosen Reynolds-Averaged Navier-Stokes (RANS) closure, near-wall treatment, and response to curvature or separation can influence the optimized topology itself. Before turbulent conjugate heat-transfer optimization can be treated as a reliable design tool, the underlying turbulent flow-only optimization problem must first be stabilized, verified, validated, and interpreted critically.
 
 \section{Conceptual Overview of Density-Based Topology Optimization}
 To understand the challenges of applying optimization to turbulent fluids, it is first necessary to distinguish topology optimization from traditional design methodologies. Historically, computational design relied on size optimization, which changes the thickness of predefined components, or shape optimization, which moves the boundary nodes of a predefined geometry. While effective, these methods are inherently limited by their starting topology. A shape optimization algorithm cannot spontaneously create a new hole or split a single fluid channel into two.
 
 Density-based topology optimization, pioneered by Bendsoe and Kikuchi in 1988 for solid mechanics \cite{Bendsoe1988}, approaches the problem differently. Instead of moving boundaries, the design space is discretized into a fixed grid of finite elements. The algorithm then determines the optimal distribution of material across this grid. In fluid problems, this is achieved by assigning a continuous design variable, $\gamma \in [0, 1]$, to every element in the domain. In the convention adopted for this thesis, $\gamma = 1$ represents a pure fluid channel, while $\gamma = 0$ represents a solid, impermeable structure.
 
-Because gradient-based optimizers require continuous and differentiable functions, this binary choice is mathematically relaxed. The design variable is allowed to take intermediate ``gray'' values between 0 and 1. To give physical meaning to these intermediate states, the fluid equations are modified using a fictitious porous medium approach, where intermediate densities correspond to varying levels of flow permeability. The optimization algorithm iteratively updates the design field to minimize a specific objective function, such as pressure loss or dissipated power, while satisfying constraints such as a maximum allowable fluid volume fraction. In the conceptual figures in Figure~\ref{fig:to_iterative_process}, the displayed field should be interpreted as the physical, projected density used by the flow equations. Chapter~\ref{ch:topology_optimization_methodology} distinguishes this field from the raw optimizer variable and the filtered density.
+Because gradient-based optimizers require continuous and differentiable functions, this binary choice is mathematically relaxed. The design variable is allowed to take intermediate ``gray'' values between 0 and 1. To give physical meaning to these intermediate states, the fluid equations are modified through porous-medium Brinkman penalization, where intermediate densities correspond to varying levels of flow permeability. The optimization algorithm iteratively updates the design field to minimize a specific objective function, such as pressure loss or dissipated power, while satisfying constraints such as a maximum allowable fluid volume fraction. Figure~\ref{fig:to_iterative_process} summarizes this evolution: the optimizer starts from a uniform density field, passes through a smooth intermediate distribution, and converges toward a discrete fluid topology. In this introductory figure, the displayed density should be interpreted as the physical projected density used by the flow equations. Chapter~\ref{ch:topology_optimization_methodology} later distinguishes this field from the raw optimizer variable and the filtered density.
 
 \begin{figure}[htpb]
 	\centering
-	\begin{subfigure}[b]{0.28\textwidth}
+	\begin{subfigure}[t]{0.28\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Initial-Density-Field}
-		\caption{Initial projected field}
+		\vspace{0pt}
+		\includegraphics[height=0.13\textheight,keepaspectratio]{Initial-Density-Field}
+		\caption{Initial uniform density}
 		\label{fig:to_initial}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.28\textwidth}
+	\begin{subfigure}[t]{0.28\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Intermediate-Density-Field}
+		\vspace{0pt}
+		\includegraphics[height=0.13\textheight,keepaspectratio]{Intermediate-Density-Field}
 		\caption{Continuous distribution}
 		\label{fig:to_intermediate}
 	\end{subfigure}
 	\hfill
-	\begin{subfigure}[b]{0.40\textwidth}
+	\begin{subfigure}[t]{0.38\textwidth}
 		\centering
-		\includegraphics[width=\textwidth]{Final-Density-Field}
+		\vspace{0pt}
+		\includegraphics[height=0.13\textheight,keepaspectratio]{Final-Density-Field}
 		\caption{Discrete topology}
 		\label{fig:to_final}
 	\end{subfigure}
-	\caption{Iterative density-based topology optimization process: initialization with a uniform projected density field, intermediate continuous material distribution, and final discrete fluid topology. The full raw-filtered-projected density chain is introduced in Chapter~\ref{ch:topology_optimization_methodology}.}
+	\caption{Density-field evolution during topology optimization.}
 	\label{fig:to_iterative_process}
 \end{figure}
 
-\section{The Evolution of Fluid Topology Optimization}
-While density-based topology optimization became a standard tool in structural engineering in the late 1990s, its application to fluid dynamics is relatively recent. The optimization of fluid manifolds remains an active and highly challenging area of research \cite{Fawaz2022}. The genesis of fluid topology optimization is widely attributed to Borrvall and Petersson (2003), who successfully applied the technique to minimize power dissipation in creeping Stokes flow \cite{Borrvall2003}. This was quickly followed by Gersborg-Hansen et al. (2005), who extended the framework to steady, laminar Navier-Stokes flows \cite{Gersborg2005}. Over the past decade, the literature surrounding laminar flow optimization expanded extensively, adapting the methodology to standard incompressible Navier-Stokes equations \cite{Deng2013, Alexandersen2020, Zhou2017}.
+\section{From Laminar to Turbulent Fluid Topology Optimization}
+While density-based topology optimization became a standard tool in structural engineering in the late 1990s, its application to fluid dynamics is relatively recent. The optimization of internal-flow layouts remains an active and highly challenging area of research \cite{Fawaz2022}. The genesis of fluid topology optimization is widely attributed to Borrvall and Petersson (2003), who successfully applied the technique to minimize power dissipation in creeping Stokes flow \cite{Borrvall2003}. This was quickly followed by Gersborg-Hansen et al. (2005), who extended the framework to steady, laminar Navier-Stokes flows \cite{Gersborg2005}. Over the past decade, the literature surrounding laminar flow optimization expanded extensively, adapting the methodology to standard incompressible Navier-Stokes equations \cite{Deng2013, Alexandersen2020, Zhou2017}.
 
 However, the assumption of laminar flow significantly simplifies both the governing equations and the derivation of adjoint sensitivities required for gradient-based optimization. Unfortunately, this assumption prevents the application of these methodologies to many industrial and high-performance applications, where flow velocities are high and turbulence dominates the flow physics. Only recently has the computational mechanics community begun to tackle the severe non-linearities and numerical instabilities associated with optimizing geometries directly in the turbulent regime \cite{Yoon2016, Dilgen2018, Zhao2021}.
 
@@ -66,20 +69,20 @@ Extending topology optimization to the turbulent regime is highly non-trivial. I
 	\begin{minipage}[c]{0.60\textwidth}
 		\includegraphics[width=\textwidth]{Manifold-TO-solution}
 	\end{minipage}
-	\caption{Topology optimized manifolds with turbulent flow. Adapted from Dilgen et al. \cite{Dilgen2018}.}
+		\caption{Turbulent-flow topology optimization example. Adapted from Dilgen et al.~\cite{Dilgen2018}.}
 	\label{fig:dilgen_composite}
 \end{figure}
 
-Pioneering works by Yoon (2016) \cite{Yoon2016} and Dilgen et al. (2018) \cite{Dilgen2018} have pushed the boundaries of turbulent frameworks. As seen in Figure~\ref{fig:dilgen_composite}, integrating turbulence models allows the optimizer to generate complex fluid manifolds tailored to guide turbulent flow distributions efficiently.
+Pioneering works by Yoon (2016) \cite{Yoon2016} and Dilgen et al. (2018) \cite{Dilgen2018} have pushed the boundaries of turbulent frameworks. As seen in Figure~\ref{fig:dilgen_composite}, integrating turbulence models allows the optimizer to generate complex internal-flow layouts tailored to guide turbulent flow distributions efficiently.
 
 \section{Objectives and Research Questions}
-The main objective of this Master's thesis is to extend density-based topology optimization to internal flow configurations operating in the turbulent regime. The phrase ``flow configurations'' in the title is intentional: the work targets the hydraulic part of energy and thermal-management devices, not the complete heat-transfer device. To achieve this goal, the thesis investigates the coupling of incompressible flow, RANS turbulence modeling, Brinkman topology penalization, and gradient-based optimization within an automated finite-element framework. By isolating the fluid mechanics from heat-transfer calculations, the thesis bounds its scope to establish a stable and verifiable baseline for future turbulent thermal design.
+The main objective of this Master's thesis is to extend density-based topology optimization to internal flow configurations operating in the turbulent regime. The phrase ``flow configurations'' in the title is intentional: the work targets the hydraulic part of energy and thermal-management devices, not the complete heat-transfer device. To answer the research questions below, the thesis couples incompressible flow, RANS turbulence modeling, Brinkman topology penalization, and gradient-based optimization within a finite-element framework. By isolating the fluid mechanics from heat-transfer calculations, the thesis bounds its scope to establish a stable and verifiable baseline for future turbulent thermal design.
 
 Rather than relying solely on black-box commercial CFD software, the core framework is implemented in \textbf{FEniCS}, an open-source computing platform for solving partial differential equations \cite{Alnaes2015}. FEniCS and UFL provide the mathematical flexibility required to write finite-element weak forms directly, verify the one-equation Spalart-Allmaras (SA) turbulence model, and assemble the residual derivatives used by the frozen-turbulence adjoint.
 
-At this stage, it is important to distinguish two different comparisons that appear later in the thesis. A comparison between laminar-optimized and turbulent-optimized layouts is useful as supporting design context, because it shows how inertia and turbulence alter the preferred topology. However, this comparison is not treated as the principal CFD validation step. The decisive assessment instead consists of re-analyzing the final SA-optimized geometries in Ansys Fluent, first with the same SA model and then with the SST $k-\omega$ closure.
+At this stage, it is important to distinguish two different comparisons that appear later in the thesis. A comparison between laminar-optimized and turbulent-optimized layouts is useful as supporting design context, because it shows how inertia and turbulence alter the preferred topology. However, this comparison is not treated as the principal CFD validation step. The decisive assessment instead consists of validating the final SA-optimized geometries in Ansys Fluent, first with the same SA model and then with the SST $k-\omega$ closure.
 
-Based on this methodology, this thesis seeks to answer the following research questions:
+The study is organized around the following research questions:
 \begin{enumerate}
 	\item \textbf{How accurately does the Spalart-Allmaras turbulence model predict curved and separated internal turbulent flows, and where do its physical limitations appear?}
 
@@ -89,9 +92,9 @@ Based on this methodology, this thesis seeks to answer the following research qu
 
 	Chapters~\ref{ch:fenics_implementation} and~\ref{ch:sa_verification} answer this question by presenting the weak forms, implementing the standalone SA solver, and comparing it against Ansys Fluent on a turbulent channel and a U-bend benchmark.
 
-	\item \textbf{To what extent do SA-driven topology optimizations produce final designs whose predicted performance remains consistent under independent Ansys re-analysis with SA and SST $k-\omega$, and how do they compare with laminar-optimized designs under identical turbulent operating conditions?}
+	\item \textbf{To what extent do SA-driven topology optimizations produce final designs whose predicted performance remains consistent under independent Ansys Fluent validation with SA and SST $k-\omega$, and how do they compare with laminar-optimized designs under identical turbulent operating conditions?}
 
-	Chapter~\ref{ch:benchmark_results} answers this question using the pipe-bend, U-bend, and diffuser benchmarks. It reports the FEniCS optimizations, sharp-geometry Ansys-SA validation, SST $k-\omega$ re-analysis, and laminar-versus-turbulent design comparisons. Appendix~\ref{app:C_topology_optimization_benchmarks} contains the supporting frozen-sensitivity verification.
+	Chapter~\ref{ch:benchmark_results} answers this question using the pipe-bend, U-bend, and diffuser benchmarks. It reports the FEniCS optimizations, sharp-geometry Ansys-SA validation, SST $k-\omega$ validation, and laminar-versus-turbulent design comparisons. Appendix~\ref{app:C_topology_optimization_benchmarks} contains the supporting frozen-sensitivity verification.
 \end{enumerate}
 
 \section{Outline of the Thesis}

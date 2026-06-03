@@ -49,9 +49,9 @@ MESHES = {
         "growth": 1.30,
     },
     "Fine_WallResolved": {
-        "bulk": 8.0e-4,
-        "layers": 18,
-        "growth": 1.25,
+        "bulk": 1.0e-3,
+        "layers": 16,
+        "growth": 1.27,
     },
 }
 

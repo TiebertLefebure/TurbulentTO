@@ -2,9 +2,9 @@
 \setup{
   title={Topology Optimization of Flow Configurations Operating in the Turbulent Regime},
   author={Tiebert Lefebure},
-  promotor={Prof. Niels Horsten\and Prof. Maarten Blommaert},
-  assessor={Prof. Elke Deckers\and Olivier Renders},
-  assistant={Esteban Foronda Obando}}
+  promotor={Prof. Dr. Ir. Niels Horsten\and Prof. Dr. Ir. Maarten Blommaert},
+  assessor={Prof. Dr. Ir. Elke Deckers\and Ir. Olivier Renders},
+  assistant={Ir. Esteban Foronda Obando}}
 % Remove the "%" on the next line for generating the cover page
 %\setup{coverpageonly}
 % Remove the "%" before the next "\setup" to generate only the first pages
@@ -99,9 +99,9 @@
 
 This thesis marks the culmination of my Master of Science in Mechanical Engineering at KU Leuven. The journey of exploring computational fluid dynamics and mathematical optimization has been both intensely challenging and deeply rewarding. Bridging the gap between theoretical mathematics and practical engineering applications required countless hours of coding, debugging, and analyzing flow fields, but seeing the optimizer successfully carve out organic, aerodynamic fluid channels made the entire process worthwhile. 
 
-I would like to express my sincere gratitude to my supervisors, Prof. Niels Horsten and Prof. Maarten Blommaert, for providing me with the opportunity to work on this fascinating topic. Their academic guidance, critical insights, and continuous support were instrumental in shaping the direction and rigor of this research. A very special thanks goes to my assistant-supervisor, Esteban Foronda Obando, for his day-to-day patience, technical expertise, and willingness to help me navigate the complex numerical hurdles within FEniCS.
+I would like to express my sincere gratitude to my supervisors, Prof. Dr. Ir. Niels Horsten and Prof. Dr. Ir. Maarten Blommaert, for providing me with the opportunity to work on this fascinating topic. Their academic guidance, critical insights, and continuous support were instrumental in shaping the direction and rigor of this research. A very special thanks goes to my assistant-supervisor, Ir. Esteban Foronda Obando, for his day-to-day patience, technical expertise, and willingness to help me navigate the complex numerical hurdles within FEniCS.
 
-Furthermore, I would like to thank the assessors, Prof. Elke Deckers and Olivier Renders, for their time and valuable feedback in evaluating this work. 
+Furthermore, I would like to thank the assessors, Prof. Dr. Ir. Elke Deckers and Ir. Olivier Renders, for their time and valuable feedback in evaluating this work. 
 
 Finally, I want to thank my family and friends for their unwavering encouragement, patience, and perspective throughout the course of my studies. 
 
@@ -111,13 +111,13 @@ Finally, I want to thank my family and friends for their unwavering encouragemen
 
 \begin{abstract}
 
-As compact electronic, automotive, and energy systems become more power-dense, thermal-management hardware increasingly depends on low-loss internal-flow paths. This thesis addresses the hydraulic part of that problem: turbulent flow-only topology optimization for manifolds, bends, U-bends, and diffusers before conjugate heat transfer is added. A density-based FEniCS framework is developed using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward solve but fixed during sensitivity assembly.
+As compact electronic, automotive, and energy systems become more power-dense, thermal-management hardware increasingly depends on low-loss internal-flow paths. This thesis addresses the hydraulic part of that problem: turbulent flow-only topology optimization for bends, U-bends, and diffusers before conjugate heat transfer is added. A density-based FEniCS framework is developed using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward solve but fixed during sensitivity assembly.
 
 The work first defines the modeling limits of SA for curved and separated internal flows, then verifies the custom FEniCS-SA solver against Ansys Fluent for a periodic turbulent channel and a two-dimensional U-bend. These cases show qualitative and profile-level agreement sufficient for use as the forward solver in the optimization framework, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
 
-The framework is then evaluated on turbulent pipe-bend, U-bend, and diffuser benchmarks. For the completed pipe-bend verification, frozen sensitivities agree with central finite differences to a maximum coordinate discrepancy of $5.92\times10^{-5}$, and the directional Taylor check shows approximately second-order remainder convergence. Ansys re-analysis of the extracted pipe-bend design shows moderate closure sensitivity: replacing Ansys-SA by SST $k-\omega$ increases pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$. Under identical SST $k-\omega$ operating conditions, the turbulent design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference. The U-bend is retained as the companion $180^\circ$ return-flow benchmark and is interpreted using the same validation standard. The pressure-outlet diffuser gives a more cautionary result: the turbulent SA design improves on the laminar reference under Ansys-SA, but the ranking reverses under SST $k-\omega$, showing that separated diffuser performance is strongly closure-sensitive.
+The framework is then evaluated on turbulent pipe-bend, U-bend, and diffuser benchmarks. For the completed pipe-bend verification, frozen sensitivities agree with central finite differences to a maximum coordinate discrepancy of $5.92\times10^{-5}$, and the directional Taylor check shows approximately second-order remainder convergence. Ansys Fluent validation of the extracted pipe-bend design shows moderate closure sensitivity: replacing Ansys-SA by SST $k-\omega$ increases pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$. Under identical SST $k-\omega$ operating conditions, the turbulent design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference. The U-bend is retained as the companion $180^\circ$ return-flow benchmark and is interpreted using the same validation standard. The pressure-outlet diffuser gives a more cautionary result: the turbulent SA design improves on the laminar reference under Ansys-SA, but the ranking reverses under SST $k-\omega$, showing that separated diffuser performance is strongly closure-sensitive.
 
-The main conclusion is that frozen-SA topology optimization can produce credible low-loss turbulent internal-flow designs when its assumptions are explicit and final geometries are independently re-analyzed. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction.
+The main conclusion is that frozen-SA topology optimization can produce credible low-loss turbulent internal-flow designs when its assumptions are explicit and final geometries are independently validated. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction.
 
 \end{abstract}
 
@@ -130,11 +130,13 @@ The main conclusion is that frozen-SA topology optimization can produce credible
 
 % The list of symbols is also optional.
 % This list must be created manually, e.g. as follows:
+\raggedbottom
 \chapter{List of Abbreviations and Symbols}
 
 \section*{Abbreviations}
 \begin{flushleft}
-	\renewcommand{\arraystretch}{1.1}
+	\small
+	\renewcommand{\arraystretch}{1.0}
 	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
 		AMG & Algebraic Multigrid \\
 		BiCGSTAB & Bi-Conjugate Gradient Stabilized method \\
@@ -214,7 +216,7 @@ The main conclusion is that frozen-SA topology optimization can produce credible
 		\end{tabularx}
 	\end{flushleft}
 
-\subsection*{Numerical Implementation (FEniCS)}
+\subsection*{Numerical Implementation of the Spalart-Allmaras Model}
 \begin{flushleft}
 	\renewcommand{\arraystretch}{1.1}
 	\begin{tabularx}{\textwidth}{@{}p{35mm}X@{}}
@@ -278,6 +280,7 @@ The main conclusion is that frozen-SA topology optimization can produce credible
 
 
 % Now comes the main text
+\flushbottom
 \mainmatter
 
 \include{chapter-1-introduction}
@@ -292,10 +295,12 @@ The main conclusion is that frozen-SA topology optimization can produce credible
 % If you have appendices:
 \appendixpage*          % if wanted
 \appendix
-\include{appendix-A-SA-Verification-Cases}
+\include{appendix-A-SA-Validity-Cases-Details}
 % ... and so on until
-\include{appendix-B-TO-Benchmarks}
-\include{appendix-C-Laminar-TO-Comparison}
+\include{appendix-B-SA-FEniCS-Solver-Support}
+\include{appendix-B-SA-Verification-Benchmarks-Details}
+\include{appendix-C-TO-Methodology-Support}
+\include{appendix-D-TO-Benchmarks-Details}
 \backmatter
 % The bibliography comes after the appendices.
 % You can replace the standard "abbrv" bibliography style by another one.

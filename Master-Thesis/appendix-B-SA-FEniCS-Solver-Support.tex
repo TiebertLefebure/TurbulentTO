@@ -1,0 +1,37 @@
+\chapter{Spalart-Allmaras FEniCS Solver Support}
+\label{app:sa_fenics_solver_support}
+
+This appendix supports Chapter~\ref{ch:fenics_implementation}. It collects standard Spalart--Allmaras closure definitions used by the FEniCS implementation, while keeping the main chapter focused on the weak forms, Picard coupling, and solver structure.
+
+\section{SA Closure Functions and Calibration Constants}
+\label{app:sa_closure_terms}
+The FEniCS implementation uses the vorticity-based Spalart--Allmaras closure definition. The production term relies on a modified vorticity magnitude $\tilde{S}$ that maintains correct near-wall scaling while avoiding loss of production when the local vorticity becomes small \cite{Spalart1994,NasaTurb}. First,
+\begin{equation}
+	S = \sqrt{2\Omega_{ij}\Omega_{ij}}
+	\quad \text{and} \quad
+	\bar{S} = \frac{\tilde{\nu}}{\kappa^2 y^2} f_{v2}.
+\end{equation}
+Here $S$ is the scalar magnitude of the vorticity tensor, $\kappa$ is the von Karman constant, and $y$ is the distance to the nearest wall. During nonlinear iterations, the code evaluates the protected form of $\tilde{S}$ recommended in the SA reference implementation \cite{NasaTurb} so that the production term remains well defined when $S+\bar{S}$ becomes small. Small numerical floors are added in the implementation to prevent division by zero. The function $f_{v2}$ is a near-wall modifier:
+\begin{equation}
+	f_{v2} = 1 - \frac{\chi}{1 + \chi f_{v1}} \quad \text{where} \quad \chi = \frac{\tilde{\nu}}{\nu} \quad \text{and} \quad f_{v1} = \frac{\chi^3}{\chi^3 + c_{v1}^3}.
+\end{equation}
+
+The wall-destruction term is modulated by the non-dimensional function $f_w$,
+\begin{equation}
+	f_w = g \left( \frac{1 + c_{w3}^6}{g^6 + c_{w3}^6} \right)^{1/6},
+\end{equation}
+where
+\begin{equation}
+	g = r + c_{w2}(r^6 - r) \quad \text{and} \quad r = \min \left( \frac{\tilde{\nu}}{\tilde{S} \kappa^2 y^2}, 10 \right).
+\end{equation}
+The upper bound of $10$ on $r$ improves numerical stability during solver initialization when $\tilde{S}$ may momentarily approach zero.
+
+The original formulation by Spalart and Allmaras \cite{Spalart1994} includes additional geometric trip functions ($f_{t1}$ and $f_{t2}$) designed to trigger transition from laminar to turbulent flow at prescribed coordinates. Following the topology-optimization methodology of Yoon~\cite{Yoon2016}, these transition functions are omitted here because the topological boundaries are unknown a priori and evolve during optimization.
+
+The empirical calibration constants are
+\begin{align*}
+	c_{b1} &= 0.1355 & \sigma &= 2/3 & c_{b2} &= 0.622 \\
+	\kappa &= 0.41 & c_{w2} &= 0.3 & c_{w3} &= 2.0 \\
+	c_{v1} &= 7.1 & c_{v2} &= 0.7 & c_{v3} &= 0.9 \\
+	c_{w1} &= \frac{c_{b1}}{\kappa^2} + \frac{1 + c_{b2}}{\sigma}.
+\end{align*}
