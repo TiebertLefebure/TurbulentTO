@@ -1,0 +1,19 @@
+TurbulentTO thesis defense deck v4 QA
+
+Output:
+- turbulentto-defense-v4.pptx
+
+Build:
+- 25 slides exported.
+- 25 speaker-note files present.
+- PowerPoint package zip test: ok.
+- Layout checker: 0 errors before cleanup; remaining warnings were tight title boxes, manually aligned table headers, and compact method labels.
+
+Visual review:
+- Final contact sheet reviewed after rebuild.
+- Full-size spot checks: slides 01, 04, 11, 12, 14, 22, 25.
+- Deck rebuilt as a presentation-first academic defense deck: KU Leuven logo, fixed thesis rail, figure-led evidence slides, compact metrics, and clearly separated backup/Q&A slides.
+
+Content note:
+- No additional solver cases were run during deck creation.
+- Compute recommendation in the deck: continue U-bend Jp; rerun U-bend sensitivity at final endpoint; only polish pipe bend if the objective stabilizes quickly.
