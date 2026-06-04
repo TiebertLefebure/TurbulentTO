@@ -805,26 +805,6 @@ def pressure_drop_between_boundaries(pressure, boundary_measure, inlet_markers, 
     return inlet_pressure - outlet_pressure
 
 
-def area_weighted_internal_facet_average(field, facet_measure, markers, area_floor=1.0e-14):
-    marker_list = as_list(markers)
-    one = Constant(1.0)
-    weighted_integral = 0.0
-    boundary_area = 0.0
-    for marker in marker_list:
-        weighted_integral += assemble(avg(field) * facet_measure(marker))
-        boundary_area += assemble(avg(one) * facet_measure(marker))
-    boundary_area = float(boundary_area)
-    if boundary_area <= area_floor:
-        return float("nan")
-    return float(weighted_integral) / boundary_area
-
-
-def pressure_drop_between_internal_facets(pressure, facet_measure, inlet_markers, outlet_markers):
-    inlet_pressure = area_weighted_internal_facet_average(pressure, facet_measure, inlet_markers)
-    outlet_pressure = area_weighted_internal_facet_average(pressure, facet_measure, outlet_markers)
-    return inlet_pressure - outlet_pressure
-
-
 def area_weighted_design_facet_average(
     field,
     interior_facet_measure,
@@ -861,57 +841,6 @@ def pressure_drop_between_design_facets(
         pressure, interior_facet_measure, boundary_measure, outlet_markers,
     )
     return inlet_pressure - outlet_pressure
-
-
-def design_facet_average_functional(
-    field,
-    interior_facet_measure,
-    boundary_measure,
-    markers,
-    area_floor=1.0e-14,
-):
-    marker_list = as_list(markers)
-    one = Constant(1.0)
-    average_functional = None
-    facet_area = 0.0
-    for marker in marker_list:
-        internal_term = avg(field) * interior_facet_measure(marker)
-        boundary_term = field * boundary_measure(marker)
-        term = internal_term + boundary_term
-        average_functional = (
-            term if average_functional is None else average_functional + term
-        )
-        facet_area += assemble(avg(one) * interior_facet_measure(marker))
-        facet_area += assemble(one * boundary_measure(marker))
-    facet_area = float(facet_area)
-    if average_functional is None or facet_area <= area_floor:
-        raise ValueError("Design facet average needs a non-empty facet set.")
-    return Constant(1.0 / facet_area) * average_functional, facet_area
-
-
-def pressure_drop_design_facet_functional(
-    pressure,
-    interior_facet_measure,
-    boundary_measure,
-    inlet_markers,
-    outlet_markers,
-    area_floor=1.0e-14,
-):
-    inlet_pressure_functional, inlet_area = design_facet_average_functional(
-        pressure,
-        interior_facet_measure,
-        boundary_measure,
-        inlet_markers,
-        area_floor=area_floor,
-    )
-    outlet_pressure_functional, outlet_area = design_facet_average_functional(
-        pressure,
-        interior_facet_measure,
-        boundary_measure,
-        outlet_markers,
-        area_floor=area_floor,
-    )
-    return inlet_pressure_functional - outlet_pressure_functional, inlet_area, outlet_area
 
 
 class _PlaneSegmentSubDomain(SubDomain):

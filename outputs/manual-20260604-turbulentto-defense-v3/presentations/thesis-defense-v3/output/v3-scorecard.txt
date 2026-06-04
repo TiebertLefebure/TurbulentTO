@@ -1,0 +1,19 @@
+TurbulentTO thesis defense deck v3 QA
+
+Output:
+- turbulentto-defense-v3.pptx
+
+Build:
+- 25 slides exported.
+- 25 speaker-note files present.
+- PowerPoint package zip test: ok.
+- Layout checker: 0 errors before cleanup; remaining warnings were tight numerical labels, manually aligned table headers, and compact backup labels.
+
+Visual review:
+- Contact sheet reviewed after final rebuild.
+- Full-size spot checks: slides 01, 04, 10, 11, 12, 14, 15, 16, 19, 20, 21, 22, 24.
+- Styling was rebuilt around a cleaner white/blue engineering thesis layout, larger figures, lighter tables, and fewer framed blocks.
+
+Content note:
+- No additional solver cases were run during deck creation.
+- The recommendation remains: continue U-bend Jp, rerun U-bend sensitivity at the final endpoint, and only polish pipe bend if objective oscillation can be stabilized quickly.

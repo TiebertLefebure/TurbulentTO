@@ -1,0 +1,59 @@
+This is BibTeX, Version 0.99d (TeX Live 2025)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: Master-Thesis-Annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-1-introduction-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-2-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-3-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-4-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-5-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-6-results-annotations.aux
+A level-1 auxiliary file: DefensePrep/chapter-7-conclusion-annotations.aux
+A level-1 auxiliary file: DefensePrep/appendix-A-SA-Validity-Cases-Details-annotations.aux
+A level-1 auxiliary file: DefensePrep/appendix-B-SA-FEniCS-Solver-Support-annotations.aux
+A level-1 auxiliary file: DefensePrep/appendix-B-SA-Verification-Benchmarks-Details-annotations.aux
+A level-1 auxiliary file: DefensePrep/appendix-C-TO-Methodology-Support-annotations.aux
+A level-1 auxiliary file: DefensePrep/appendix-D-TO-Benchmarks-Details-annotations.aux
+The style file: abbrv.bst
+A level-1 auxiliary file: CoC.aux
+Database file #1: references.bib
+You've used 65 entries,
+            2118 wiz_defined-function locations,
+            953 strings with 16102 characters,
+and the built_in function-call counts, 20393 in all, are:
+= -- 2030
+> -- 965
+< -- 3
++ -- 395
+- -- 318
+* -- 1489
+:= -- 3465
+add.period$ -- 201
+call.type$ -- 65
+change.case$ -- 349
+chr.to.int$ -- 0
+cite$ -- 65
+duplicate$ -- 688
+empty$ -- 1592
+format.name$ -- 318
+if$ -- 4153
+int.to.chr$ -- 0
+int.to.str$ -- 65
+missing$ -- 59
+newline$ -- 333
+num.names$ -- 122
+pop$ -- 319
+preamble$ -- 1
+purify$ -- 292
+quote$ -- 0
+skip$ -- 460
+stack$ -- 0
+substring$ -- 1340
+swap$ -- 74
+text.length$ -- 3
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 248
+warning$ -- 0
+while$ -- 200
+width$ -- 67
+write$ -- 714
