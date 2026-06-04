@@ -11,7 +11,7 @@ This chapter keeps the essential benchmark definitions in the main text: geometr
 \label{sec:sa_channel_verification}
 To verify the fundamental correctness of the custom fluid and turbulence solvers, the code was first tested on a standard 2D turbulent channel flow. To cleanly isolate turbulence production, wall damping, and Picard coupling without the artifacts of a developing boundary layer, this benchmark was formulated as a pressure-driven periodic channel rather than a conventional inlet-outlet duct.
 
-Because the SA formulation is used here as a low-Reynolds wall-resolved model, the mesh must resolve the viscous sublayer instead of relying on empirical wall functions. The channel and U-bend verification meshes are therefore designed for approximately $y^+=1$ at the no-slip walls, and grid-independence checks are documented in Appendix~\ref{app:B_sa_solver_verification}.
+Because the SA formulation is used here as a low-Reynolds wall-resolved model, the mesh must resolve the viscous sublayer instead of relying on empirical wall functions. The channel and U-bend verification meshes are therefore designed for approximately $y^+=1$ at the no-slip walls. Appendix~\ref{app:B_sa_solver_verification} documents the channel mesh-independence checks, the selected FEniCS U-bend mesh, and the Ansys U-bend grid-independence baseline.
 
 The same finite-element implementation choices are used for both verification benchmarks: the momentum equation is assembled with the symmetric effective-viscosity stress form, while SUPG stabilization is restricted to the SA working-variable transport equation.
 
@@ -22,7 +22,7 @@ The velocity field ($\mathbf{u}$) and Spalart-Allmaras working variable ($\tilde
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.88\textwidth]{Channel-Geometry-BCs}
-	\caption{Pressure-driven periodic channel setup.}
+	\caption{Pressure-driven periodic channel setup \ChatGPTFigureRef.}
 	\label{fig:channel_geometry_bcs}
 \end{figure}
 
@@ -135,38 +135,40 @@ The verification used a 2D geometry corresponding to the symmetry mid-plane of t
 
 To drive the flow, a uniform prescribed velocity ($\mathbf{u}_{in} = 1.42$ m/s) was imposed at the inlet alongside a fully turbulent boundary value ($\tilde{\nu}_{in} = 9.34 \times 10^{-5}$ m$^2$/s), while a zero relative static pressure ($p=0$ Pa) was assigned to the outlet. While the computational domain is 2D, the 3D physical pipe diameter ($D = 0.028$ m) and radius of curvature ($R_c = 0.125$ m) were retained as the characteristic length scales. This gives the same nominal Reynolds number ($Re_D \approx 44{,}700$) and reference Dean number ($De \approx 15{,}000$) as the 3D VMFL048 operating point. The detailed setup is listed in Appendix~\ref{app:B_sa_solver_verification}.
 
-As in the channel benchmark, the U-bend mesh must be wall resolved because the SA model is integrated to the wall rather than coupled to wall functions. The mesh hierarchy and grid-independence information are kept in Appendix~\ref{app:B_sa_solver_verification}.
+As in the channel benchmark, the U-bend mesh must be wall resolved because the SA model is integrated to the wall rather than coupled to wall functions. The selected FEniCS verification mesh and the Ansys grid-independence information are kept in Appendix~\ref{app:B_sa_solver_verification}.
 
 The U-bend is significantly more convection dominated than the periodic channel benchmark, but it uses the same SA-transport SUPG stabilization described in Chapter~\ref{ch:fenics_implementation}. This stabilization is applied only to the transported working variable $\tilde{\nu}$; no additional SUPG term is introduced in the momentum equation.
 
 \begin{figure}[!ht]
 	\centering
 	\includegraphics[width=0.86\textwidth]{UBend-Geometry-BCs}
-	\caption{Shortened 2D U-bend verification setup.}
+	\caption{Shortened 2D U-bend verification setup \ChatGPTFigureRef.}
 	\label{fig:ubend_geometry_bcs}
 \end{figure}
 
 \subsection{Validation Against Ansys Fluent}
 \label{subsec:sa_ubend_ansys_comparison}
-The U-bend was simulated on the shortened 2D domain in both FEniCS and Ansys Fluent. The setup is based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}, and the profile line $\Gamma_D$ in Figure~\ref{fig:ubend_geometry_bcs} is used for the bend-exit velocity comparison. The Ansys baseline was checked for grid independence, and the corresponding mesh information is documented together with the FEniCS mesh hierarchy in Appendix~\ref{app:B_sa_solver_verification}. The side-by-side velocity contour panels below are cropped and scaled to the same geometry window while retaining the original color scales, so the visual comparison is not driven by unequal image canvases.
+The U-bend was simulated on the shortened 2D domain in both FEniCS and Ansys Fluent. The setup is based on the VMFL048 operating point from the Ansys verification manual \cite{AnsysVerification2024}, and the profile line $\Gamma_D$ in Figure~\ref{fig:ubend_geometry_bcs} is used for the bend-exit velocity comparison. The Ansys baseline was checked for grid independence, and the corresponding mesh information is documented together with the selected FEniCS medium mesh in Appendix~\ref{app:B_sa_solver_verification}. The side-by-side velocity contour panels below are cropped and scaled to the same geometry window while retaining the original color scales, so the visual comparison is not driven by unequal image canvases.
+
+The FEniCS--Ansys comparison is therefore made on the selected \texttt{Medium\_FEniCS} mesh. The Ansys baseline is supported by a separate grid-independence check, but no full coarse--medium--fine FEniCS mesh-convergence study is claimed for this U-bend case. The reported agreement should be interpreted as cross-code verification on the selected wall-resolved FEniCS mesh, not as a FEniCS mesh-independent result.
 
 \begin{figure}[!htbp]
 	\centering
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[height=0.20\textheight,keepaspectratio]{UBend-Ansys-Velocity-Magnitude-Crop-Colorbar}
-		\caption{Ansys Fluent: $u$}
+		\includegraphics[height=0.225\textheight,keepaspectratio]{UBend-Ansys-Velocity-Magnitude-Crop-Colorbar}
+		\caption{Ansys Fluent: velocity magnitude $u$ in m/s}
 		\label{fig:ubend_ansys}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[height=0.20\textheight,keepaspectratio]{UBend-FEniCS-VelocityMagnitude-Crop-Colorbar}
-		\caption{FEniCS: $u$}
+		\includegraphics[height=0.225\textheight,keepaspectratio]{UBend-FEniCS-VelocityMagnitude-Crop-Colorbar}
+		\caption{FEniCS: velocity magnitude $u$ in m/s}
 		\label{fig:ubend_fenics}
 	\end{subfigure}
 	\vspace{0.25cm}
-	\begin{subfigure}[b]{0.86\textwidth}
+	\begin{subfigure}[b]{0.70\textwidth}
 		\centering
 		\includegraphics[width=\textwidth]{UBend-Verification-Velocity}
 		\caption{Bend-exit profile}
@@ -178,17 +180,18 @@ The U-bend was simulated on the shortened 2D domain in both FEniCS and Ansys Flu
 
 \begin{figure}[!htbp]
 	\centering
+	\captionsetup[subfigure]{skip=7pt}
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[height=0.20\textheight,keepaspectratio]{UBend-Ansys-NuTilde-Crop-Colorbar}
-		\caption{Ansys Fluent: $\tilde{\nu}$}
+		\includegraphics[height=0.225\textheight,keepaspectratio]{UBend-Ansys-NuTilde-Crop-Colorbar}
+		\caption{Ansys Fluent: $\tilde{\nu}$ in m$^2$/s}
 		\label{fig:ubend_ansys_nutilde}
 	\end{subfigure}
 	\hfill
 	\begin{subfigure}[b]{0.48\textwidth}
 		\centering
-		\includegraphics[height=0.20\textheight,keepaspectratio]{UBend-FEniCS-NuTilde-Crop-Colorbar}
-		\caption{FEniCS: $\tilde{\nu}$}
+		\includegraphics[height=0.225\textheight,keepaspectratio]{UBend-FEniCS-NuTilde-Crop-Colorbar}
+		\caption{FEniCS: $\tilde{\nu}$ in m$^2$/s}
 		\label{fig:ubend_fenics_nutilde}
 	\end{subfigure}
 	\caption{U-bend modified turbulent viscosity.}

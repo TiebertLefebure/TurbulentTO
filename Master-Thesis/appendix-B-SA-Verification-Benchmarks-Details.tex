@@ -1,7 +1,7 @@
 \chapter{Spalart-Allmaras Solver Verification Details}
 \label{app:B_sa_solver_verification}
 
-This appendix supports Chapter~\ref{ch:sa_verification}. It contains the full FEniCS configuration tables and the FEniCS/Ansys mesh-independence studies for the channel and U-bend verification cases. The backward-facing-step material is placed in Appendix~\ref{app:A_backstep_benchmark}, because it supports the Chapter~\ref{ch:turbulence_modeling} turbulence-model discussion rather than the Chapter~\ref{ch:sa_verification} forward-solver verification.
+This appendix supports Chapter~\ref{ch:sa_verification}. It contains concise FEniCS setup tables, the mesh-independence studies used for the channel benchmark, and the selected FEniCS and Ansys mesh information used for the U-bend verification case. For traceability, the active configuration file is named once near each FEniCS setup; the tables retain only the governing geometry, boundary-condition, and solver settings rather than duplicating the full Python configuration. The backward-facing-step material is placed in Appendix~\ref{app:A_backstep_benchmark}, because it supports the Chapter~\ref{ch:turbulence_modeling} turbulence-model discussion rather than the Chapter~\ref{ch:sa_verification} forward-solver verification.
 
 Unless stated otherwise, all grid-independence relative differences in this appendix are reported as positive percentage magnitudes. For a mesh-dependent metric $\phi$, the coarse--medium difference is computed as $|\phi_{\mathrm{coarse}}-\phi_{\mathrm{medium}}|/|\phi_{\mathrm{coarse}}|\times100\%$, while the medium--fine difference is computed as $|\phi_{\mathrm{medium}}-\phi_{\mathrm{fine}}|/|\phi_{\mathrm{fine}}|\times100\%$.
 
@@ -10,7 +10,7 @@ Unless stated otherwise, all grid-independence relative differences in this appe
 
 \subsection{Physical and Geometric Parameters}
 \label{subsec:app_A_channel_physical}
-The first verification benchmark consists of a pressure-driven periodic 2D channel. To align with fundamental turbulence research conventions, the characteristic length is defined as the full channel height ($H$), and the Reynolds number ($Re_H$) is computed strictly based on this geometric parameter rather than the hydraulic diameter. The complete physical setup is detailed in Table~\ref{tab:app_A_channel_physical}.
+The first verification benchmark consists of a pressure-driven periodic 2D channel. To align with fundamental turbulence research conventions, the characteristic length is defined as the full channel height ($H$), and the Reynolds number ($Re_H$) is computed strictly based on this geometric parameter rather than the hydraulic diameter. The active FEniCS setup is summarized from \texttt{ConfigChannel\_SpalartAllmaras\_Steady.py}, and the key physical setup is detailed in Table~\ref{tab:app_A_channel_physical}.
 
 \begin{table}[htbp]
 	\centering
@@ -41,7 +41,7 @@ The first verification benchmark consists of a pressure-driven periodic 2D chann
 
 \subsection{Numerical Simulation Parameters}
 \label{subsec:app_A_channel_numerical}
-The channel flow was resolved using an Incremental Pressure Correction Scheme (IPCS) embedded within a Picard fixed-point iteration loop. The exact numerical solver configurations, convergence tolerances, and relaxation factors utilized in FEniCS are summarized in Table~\ref{tab:app_A_channel_numerical}.
+The channel flow was resolved using an Incremental Pressure Correction Scheme (IPCS) embedded within a Picard fixed-point iteration loop. The key numerical solver settings, convergence tolerances, and relaxation factors used in FEniCS are summarized in Table~\ref{tab:app_A_channel_numerical}.
 
 \begin{table}[htbp]
 	\centering
@@ -86,7 +86,7 @@ To guarantee that the numerical results were independent of the spatial discreti
 \begin{table}[htbp]
 	\centering
 	\footnotesize
-	\caption{Wall-resolved channel mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the streamwise resolution, wall-normal resolution, and inflation-layer resolution are refined.}
+	\caption{Wall-resolved channel mesh hierarchy for the FEniCS grid-independence study.}
 	\label{tab:app_A_channel_meshes}
 	\renewcommand{\arraystretch}{1.2}
 	\setlength{\tabcolsep}{5pt}
@@ -121,7 +121,7 @@ Visual confirmation of this spatial convergence is provided by the wall-normal v
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=\textwidth]{Channel-FEniCS-Mesh-Independence}
-	\caption{FEniCS wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the periodic channel flow benchmark. The overlapping profiles demonstrate asymptotic spatial convergence.}
+	\caption{FEniCS wall-normal velocity profiles at $x=0.5L$ for the Coarse, Medium, and Fine grids.}
 	\label{fig:app_A_channel_mesh_independence}
 \end{figure}
 
@@ -163,7 +163,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=\textwidth]{Channel-Ansys-Mesh-Independence}
-	\caption{Wall-normal velocity profiles extracted at $x=0.5L$ for the Coarse, Medium, and Fine grids in the Ansys periodic channel flow benchmark, demonstrating spatial convergence of the baseline data.}
+	\caption{Ansys wall-normal velocity profiles at $x=0.5L$ for the Coarse, Medium, and Fine grids.}
 	\label{fig:app_A_channel_mesh_indep_ansys}
 \end{figure}
 
@@ -174,7 +174,7 @@ Furthermore, to ensure a rigorous cross-code validation, an equivalent grid inde
 
 \subsection{Physical and Geometric Parameters}
 \label{subsec:app_A_ubend_physical}
-The second verification benchmark evaluates a highly convective U-bend. Because this FEniCS domain is a 2D planar approximation of the symmetry mid-plane of the 3D Ansys VMFL048 case, the 3D physical pipe diameter ($D$) is explicitly retained as the characteristic length scale. This ensures the Reynolds ($Re_D$) and Dean ($De$) numbers remain non-dimensionally consistent with the commercial baseline. The straight inlet and outlet legs are shorter than in the original VMFL048 Ansys mesh to reduce meshing and computational effort; both the FEniCS and Ansys runs use this same short-leg U-bend geometry. The configuration is detailed in Table~\ref{tab:app_A_ubend_physical}.
+The second verification benchmark evaluates a highly convective U-bend. Because this FEniCS domain is a 2D planar approximation of the symmetry mid-plane of the 3D Ansys VMFL048 case, the 3D physical pipe diameter ($D$) is explicitly retained as the characteristic length scale. This ensures the Reynolds ($Re_D$) and Dean ($De$) numbers remain non-dimensionally consistent with the commercial baseline. The straight inlet and outlet legs are shorter than in the original VMFL048 Ansys mesh to reduce meshing and computational effort; both the FEniCS and Ansys runs use this same short-leg U-bend geometry. The active FEniCS setup is summarized from \texttt{ConfigUBend\_SpalartAllmaras\_Steady.py}, and the configuration is detailed in Table~\ref{tab:app_A_ubend_physical}.
 
 \begin{table}[htbp]
 	\centering
@@ -199,7 +199,7 @@ The second verification benchmark evaluates a highly convective U-bend. Because 
 		Pressure boundary conditions & $p=0$ Pa at outlet; pressure left free at inlet and walls \\
 		SA boundary conditions & $\tilde{\nu}_{in}=9.34 \times 10^{-5}$ m$^2$/s at inlet; $\tilde{\nu}=0$ at walls; natural condition at outlet \\
 			Initial fields & $\mathbf{u}_0=(0,-1.42)$ m/s, $p_0=0$ Pa, $\tilde{\nu}_0=\tilde{\nu}_{in}$ \\
-		Verification mesh & \texttt{Medium\_FEniCS}; first layer $\Delta y_1 = 1.20 \times 10^{-5}$ m \\
+			Verification mesh & \texttt{Medium\_WallResolved}; first layer $\Delta y_1 = 1.20 \times 10^{-5}$ m \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -222,13 +222,13 @@ Due to the adverse pressure gradients and secondary flow separation induced by t
 		Pressure space & $p$ & Scalar CG1 \\
 		SA working-variable space & $\tilde{\nu}$ & Scalar CG1 \\
 		Quadrature degree & -- & $4$ \\
-		Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $180$ \\
+			Maximum outer Picard steps & $N_{\mathrm{Picard,max}}$ & $1000$ \\
 		SA solves per Picard step & -- & $1$ \\
 		Outer velocity tolerance & $\epsilon_{\mathbf{u}}$ & $1.0 \times 10^{-4}$ \\
 		Outer pressure tolerance & $\epsilon_p$ & $1.0 \times 10^{-4}$ \\
 		Outer SA tolerance & $\epsilon_{\tilde{\nu}}$ & $1.0 \times 10^{-6}$ \\
 			IPCS pseudo-time step & $\Delta t$ & $1.0 \times 10^{-4}$ s \\
-			Maximum IPCS steps per Picard step & -- & $180$ \\
+				Maximum IPCS steps per Picard step & -- & $200$ \\
 			Maximum IPCS steps for final flow & -- & $600$ \\
 			IPCS velocity tolerance & -- & $1.0 \times 10^{-4}$ \\
 			IPCS pressure tolerance & -- & $2.0 \times 10^{-3}$ \\
@@ -238,16 +238,17 @@ Due to the adverse pressure gradients and secondary flow separation induced by t
 			SA relaxation factor & $\alpha_{\tilde{\nu}}$ & $0.01$ \\
 			SA pseudo-time stabilization & -- & SA transport pseudo-time step $5.0\times10^{-2}$ s \\
 			SA lower bound & $\tilde{\nu}_{\min}$ & $1.0 \times 10^{-12}$ \\
-		Wall-distance equation & -- & Relaxed Eikonal, $\sigma_w=0.1$, $G_0=20$ \\
-		Wall-distance Newton settings & -- & Relative tolerance $1.0 \times 10^{-8}$; absolute tolerance $1.0 \times 10^{-10}$; maximum $80$ iterations; relaxation $0.5$ \\
-		Linear solver strategy & -- & IPCS blocks: GMRES with ILU velocity/correction preconditioning and Hypre-AMG pressure preconditioning; SA transport: default solver \\
+			Wall-distance equation & -- & Relaxed Eikonal, $\sigma_w=0.1$, $G_0=20$ \\
+			Wall-distance Newton settings & -- & Relative tolerance $1.0 \times 10^{-8}$; absolute tolerance $1.0 \times 10^{-10}$; maximum $80$ iterations; relaxation $0.5$ \\
+			Linear solver strategy & -- & IPCS blocks: GMRES with ILU velocity/correction preconditioning and Hypre-AMG pressure preconditioning; SA transport: default solver \\
+			Restart handling & -- & Restart from saved state enabled when checkpoint files are present; otherwise the configured initial fields are used \\
 		\hline
 	\end{tabularx}
 \end{table}
 
-\subsection{Spatial Verification and Grid Independence}
+\subsection{Selected FEniCS Mesh and Ansys Grid Independence}
 \label{subsec:app_A_ubend_mesh}
-Managing the highly stretched, non-orthogonal inflation layers around the curved arcs of the U-bend required custom mesh generation via Gmsh. A spatial grid independence study was conducted across three refined unstructured grids. The node counts, element densities, and inflation layer parameters for these generated meshes are explicitly documented in Table~\ref{tab:app_A_ubend_meshes}. Similar to the channel benchmark, the wall-adjacent element height was strictly maintained at $1.20 \times 10^{-5}$ m to satisfy the low-Reynolds SA wall constraints, while the internal element sizing was systematically refined.
+	Managing the highly stretched, non-orthogonal inflation layers around the curved arcs of the U-bend required custom mesh generation via Gmsh. The current FEniCS comparison setup points to the wall-resolved \texttt{Medium\_WallResolved} grid documented in Table~\ref{tab:app_A_ubend_meshes}. Similar to the channel benchmark, the wall-adjacent element height is kept at $1.20 \times 10^{-5}$ m to satisfy the low-Reynolds SA wall constraints. A separate coarse--medium--fine FEniCS mesh-convergence study is therefore not claimed for this U-bend verification case.
 
 The reported FEniCS static pressure-drop metric is computed from boundary-measure-weighted mean pressures over the inlet and outlet sections, rather than from local point samples. Let $\Gamma_{\mathrm{in}}$ and $\Gamma_{\mathrm{out}}$ denote the inlet and outlet boundaries, and let $p_k$ be the kinematic pressure solved in FEniCS. The physical static pressure drop reported in pascals is
 \begin{equation}
@@ -265,44 +266,25 @@ where $|\Gamma|=\int_{\Gamma}1\,\mathrm{d}\Gamma$ is the FEniCS boundary measure
 	\begin{table}[htbp]
 		\centering
 		\footnotesize
-		\caption{Wall-resolved U-bend mesh hierarchy used for the FEniCS grid-independence study. The first-layer height is kept fixed to maintain $y^+\approx1$, while the bulk element size and inflation-layer resolution are refined.}
+		\caption{Selected wall-resolved FEniCS U-bend mesh used for comparison with the Ansys Fluent verification baseline.}
 		\label{tab:app_A_ubend_meshes}
 		\renewcommand{\arraystretch}{1.2}
-		\setlength{\tabcolsep}{5pt}
-		\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccc@{}}
+		\begin{tabularx}{0.82\textwidth}{l X}
 			\hline
-			\textbf{Parameter} & \textbf{Coarse} & \textbf{Medium} & \textbf{Fine} \\
+				\textbf{Parameter} & \textbf{\texttt{Medium\_WallResolved} setting} \\
+				\hline
+				$h_{\mathrm{bulk}}$ [m] & $1.40 \times 10^{-3}$ \\
+				$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ \\
+				Inflation layers & $14$ \\
+				Growth ratio & $1.30$ \\
+				$t_{\mathrm{infl}}$ [m] & $1.53 \times 10^{-3}$ \\
+				Vertices & $73{,}978$ \\
+				Elements & $144{,}952$ \\
 			\hline
-			\multicolumn{4}{@{}l}{\textit{Mesh settings}} \\
-			$h_{\mathrm{bulk}}$ [m] & $2.80 \times 10^{-3}$ & $1.40 \times 10^{-3}$ & $8.00 \times 10^{-4}$ \\
-			$\Delta y_1$ [m] & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ & $1.20 \times 10^{-5}$ \\
-			Inflation layers & $10$ & $14$ & $18$ \\
-			Growth ratio & $1.45$ & $1.30$ & $1.25$ \\
-			$t_{\mathrm{infl}}$ [m] & $1.07 \times 10^{-3}$ & $1.53 \times 10^{-3}$ & $2.62 \times 10^{-3}$ \\
-				Vertices & $23{,}749$ & $73{,}978$ & $182{,}870$ \\
-				Elements & $45{,}994$ & $144{,}952$ & $360{,}486$ \\
-			\hline
-			\multicolumn{4}{@{}l}{\textit{Grid metric}} \\
-				Static pressure drop $\Delta p_s$ [Pa] & \multicolumn{3}{c}{\textit{No completed three-grid pressure-drop set is checked in}} \\
-				$\epsilon_{\mathrm{rel}}(\Delta p_s)$ [\%] & -- & \multicolumn{2}{c}{\textit{Not reported}} \\
-			\hline
-		\end{tabular*}
-		\vspace{2pt}
-		\begin{minipage}{0.98\textwidth}
-				\scriptsize \textit{Note.} For the $\epsilon_{\mathrm{rel}}$ row, the Medium column gives the Coarse--Medium change and the Fine column gives the Medium--Fine change. The checked-in U-bend pressure-drop residual files do not contain a completed coarse--medium--fine sequence, so no pressure-drop grid metric is reported for the FEniCS U-bend hierarchy.
-		\end{minipage}
+		\end{tabularx}
 	\end{table}
 
-The checked-in FEniCS U-bend mesh hierarchy is documented by the mesh parameters in Table~\ref{tab:app_A_ubend_meshes}. The repository does not currently include extracted Coarse--Medium--Fine bend-exit velocity-profile data for this FEniCS hierarchy, so Figure~\ref{fig:app_A_ubend_mesh_independence} records the data-availability status rather than a plotted convergence profile. The selected \texttt{Medium\_FEniCS} grid is therefore reported as the configured verification mesh, while the missing profile and incomplete pressure-drop sequence are not promoted to quantitative mesh-convergence evidence.
-
-\begin{figure}[htpb]
-	\centering
-	\fbox{\parbox[c][0.16\textheight][c]{0.72\textwidth}{\centering \small No checked-in FEniCS U-bend Coarse--Medium--Fine bend-exit velocity-profile data are available for this appendix figure.}}
-	\caption{Data-availability status for the FEniCS U-bend mesh-independence velocity-profile figure.}
-	\label{fig:app_A_ubend_mesh_independence}
-\end{figure}
-
-Similarly, to guarantee the integrity of the cross-code validation in this highly convective regime, an equivalent mesh independence study was executed for the Ansys Fluent baseline. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were checked for spatial convergence. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is retained as the commercial verification baseline, while the deliberately coarser \texttt{Coarse\_Ansys} level is selected to bracket the mesh-convergence trend.
+For the independent Ansys Fluent baseline, a separate mesh-independence study was executed in the same shortened U-bend geometry. Using a parallel unstructured meshing strategy with strict $y^+ \approx 1$ boundary layer inflation (documented in Table~\ref{tab:app_A_ubend_meshes_ansys}), the Ansys velocity profiles at the bend exit across the same pipe-diameter line, shown in Figure~\ref{fig:app_A_ubend_mesh_indep_ansys}, were checked for spatial convergence. For each Ansys solve, convergence was accepted only after the scaled continuity, momentum, and Spalart--Allmaras residuals reached $1.0\times10^{-6}$ and the monitored static pressure drop changed by less than a relative tolerance of $5.0\times10^{-4}$ over the final $100$ iterations. The inlet and outlet mass-flow rates were also compared for each grid to verify the global mass balance before accepting the pressure-drop values. The \texttt{Fine\_Ansys} grid is retained as the commercial verification baseline, while the deliberately coarser \texttt{Coarse\_Ansys} level is selected to bracket the mesh-convergence trend.
 
 \begin{table}[htbp]
 	\centering
@@ -341,7 +323,7 @@ Similarly, to guarantee the integrity of the cross-code validation in this highl
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=\textwidth]{UBend-Ansys-Mesh-Independence}
-	\caption{Velocity profiles at the U-bend exit, extracted across the pipe diameter $D=0.028$ m, for the Coarse, Medium, and Fine Ansys grids, demonstrating spatial convergence of the commercial baseline.}
+	\caption{Ansys U-bend exit velocity profiles across $D=0.028$ m for the Coarse, Medium, and Fine grids.}
 	\label{fig:app_A_ubend_mesh_indep_ansys}
 \end{figure}
 

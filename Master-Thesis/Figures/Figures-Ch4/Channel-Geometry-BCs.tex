@@ -1,25 +1,34 @@
-\documentclass[tikz,border=3mm]{standalone}
-\usetikzlibrary{arrows.meta,calc,positioning}
+\documentclass[tikz,border=4pt]{standalone}
+\usepackage{amsmath}
+\usetikzlibrary{arrows.meta,calc}
 \begin{document}
 \pagecolor{white}
 \begin{tikzpicture}[
+  >=Latex,
+  line cap=round,
+  line join=round,
   font=\sffamily\small,
-  flow/.style={-{Latex[length=2.8mm]}, line width=0.7pt, draw=blue!65!black},
-  dim/.style={<->, line width=0.45pt, draw=black!75},
-  wall/.style={line width=1.1pt, draw=black!80},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=2pt, align=center}
+  note/.style={draw=black!60, rounded corners=1.5pt, fill=white,
+               align=center, inner xsep=7pt, inner ysep=4pt},
+  flow/.style={blue!78!black, -{Latex[length=3.6mm,width=2.2mm]}, line width=0.9pt},
+  dim/.style={<->, black!70, line width=0.55pt, shorten <=1pt, shorten >=1pt},
+  wall/.style={black!82, line width=2.6pt, line cap=butt},
+  section/.style={red!75!black, line width=1.4pt, line cap=butt},
+  periodic/.style={black!60, dashed, line width=0.95pt},
+  profile/.style={black!55, dashed, line width=0.95pt},
+  dimlabel/.style={fill=white, inner sep=1pt, font=\sffamily\small}
 ]
 
 \def\L{7}
 \def\H{7}
 
-\fill[blue!5] (0,0) rectangle (\L,\H);
+\fill[blue!6] (0,0) rectangle (\L,\H);
+\draw[section] (0,0) -- (0,\H);
+\draw[section] (\L,0) -- (\L,\H);
+\draw[periodic] (0,0) -- (0,\H);
+\draw[periodic] (\L,0) -- (\L,\H);
 \draw[wall] (0,0) -- (\L,0);
 \draw[wall] (0,\H) -- (\L,\H);
-\draw[red!70!black, line width=1.0pt] (0,0) -- (0,\H);
-\draw[red!70!black, line width=1.0pt] (\L,0) -- (\L,\H);
-\draw[black!70, dashed, line width=0.75pt] (0,0) -- (0,\H);
-\draw[black!70, dashed, line width=0.75pt] (\L,0) -- (\L,\H);
 
 \foreach \y in {2.35,3.50,4.65} {
   \foreach \x in {0.90,2.35,3.80,5.25} {
@@ -27,20 +36,22 @@
   }
 }
 
-\node[bc, anchor=east, text width=27mm] at (-0.45,0.5*\H) {left periodic\\plane\\$p_k=2$ Pa};
-\node[bc, anchor=west, text width=27mm] at (\L+1.55,0.5*\H) {right periodic\\plane\\$p_k=0$ Pa};
+\node[note, anchor=east, text width=29mm] at (-0.45,0.5*\H) {left periodic\\plane\\$p_k=2$ Pa};
+\node[note, anchor=west, text width=29mm] at (\L+1.55,0.5*\H) {right periodic\\plane\\$p_k=0$ Pa};
 
-\node[bc] at (0.5*\L,\H+1.05) {top no-slip wall, $\tilde{\nu}=0$};
-\node[bc] at (0.5*\L,-0.75) {bottom no-slip wall, $\tilde{\nu}=0$};
-\draw[<->, line width=0.45pt, draw=red!70!black] (0,\H+0.32) -- node[above, fill=white, inner sep=1pt] {periodic pair in the streamwise direction} (\L,\H+0.32);
+\node[note] at (0.5*\L,\H+1.05) {top no-slip wall, $\tilde{\nu}=0$};
+\node[note] at (0.5*\L,-0.82) {bottom no-slip wall, $\tilde{\nu}=0$};
+\draw[<->, red!75!black, line width=0.55pt, shorten <=1pt, shorten >=1pt]
+  (0,\H+0.36) -- node[above, fill=white, inner sep=1pt, font=\sffamily\small]
+  {periodic pair in the streamwise direction} (\L,\H+0.36);
 
-\draw[black!60, dashed, line width=0.8pt] (0.5*\L,0) -- (0.5*\L,\H);
-\node[bc, anchor=west, text width=24mm] at (0.5*\L+0.18,1.05) {profile line\\$x=0.5L$};
+\draw[profile] (0.5*\L,0) -- (0.5*\L,\H);
+\node[note, anchor=west, text width=26mm] at (0.5*\L+0.22,1.05) {profile line\\$x=0.5L$};
 
-\draw[dim] (0,-1.85) -- node[below] {$L=2~\mathrm{m}$} (\L,-1.85);
-\draw[dim] (\L+0.55,0) -- node[pos=0.84, right] {$H=2~\mathrm{m}$} (\L+0.55,\H);
+\draw[dim] (0,-1.92) -- node[below, dimlabel] {$L=2~\mathrm{m}$} (\L,-1.92);
+\draw[dim] (\L+0.55,0) -- node[pos=0.84, right, dimlabel] {$H=2~\mathrm{m}$} (\L+0.55,\H);
 
-\node[bc, text width=42mm] at (0.5*\L,5.65) {pressure-driven periodic turbulent channel\\$Re_H\approx 20{,}300,\quad y^+\approx 1$};
+\node[note, text width=43mm] at (0.5*\L,5.65) {pressure-driven periodic\\turbulent channel\\$Re_H\approx 20{,}300,\quad y^+\approx 1$};
 
 \end{tikzpicture}
 \end{document}

@@ -2,27 +2,27 @@
 \label{ch:turbulence_modeling}
 
 \section{Introduction to Fluid Dynamics and Turbulence}
-Fluid dynamics is governed by the Navier-Stokes equations, which describe the conservation of mass and momentum for a viscous continuum fluid \cite{White2006}. In this introductory section, these equations are presented using index notation to clearly illustrate the individual tensor components. The indices $i$ and $j$ represent the three spatial dimensions, and a repeated index within a term implies summation over all spatial directions. In subsequent chapters dealing with finite element implementation, this notation shifts to standard vector calculus to align with the FEniCS Unified Form Language syntax.
+The starting point for the flow model is the conservation of mass and momentum for a viscous continuum fluid, written in Navier-Stokes form \cite{White2006}. This chapter first uses index notation because it makes the tensor components in the turbulence model explicit. The indices $i$ and $j$ refer to spatial directions, and repeated indices imply summation. Later chapters switch to vector notation, matching the FEniCS Unified Form Language expressions used in the implementation.
 
-The fundamental principle of mass conservation is expressed by the continuity equation. For a general compressible fluid, this is defined as:
+Mass conservation gives the continuity equation. For a compressible fluid, it is written as
 \begin{equation}
 	\frac{\partial \rho}{\partial t} + \frac{\partial (\rho u_i)}{\partial x_i} = 0
 \end{equation}
-where $\rho$ is the fluid density. For most liquid cooling applications and low-speed internal-flow components, the fluid can be assumed incompressible. Under this assumption, $\rho$ is constant in space and time, and the continuity equation reduces to
+where $\rho$ denotes density. The liquid and low-speed internal-flow cases considered in this thesis are modeled as incompressible, so $\rho$ is constant and the continuity equation becomes
 \begin{equation}
 	\frac{\partial u_i}{\partial x_i} = 0 .
 	\label{eq:continuity}
 \end{equation}
 
-For an incompressible Newtonian fluid with constant dynamic viscosity $\mu$, the conservation of momentum is expressed as:
+For a Newtonian fluid with constant dynamic viscosity $\mu$, momentum conservation reduces to
 \begin{equation}
 	\rho \left( \frac{\partial u_i}{\partial t} + u_j \frac{\partial u_i}{\partial x_j} \right) = -\frac{\partial p}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial u_i}{\partial x_j} \right)
 	\label{eq:navier_stokes}
 \end{equation}
-where $p$ represents the static pressure. In principle, solving Equation~\ref{eq:navier_stokes} directly yields the exact flow field. This approach is known as Direct Numerical Simulation (DNS). However, as the Reynolds number ($Re$) increases, the flow transitions into a chaotic turbulent state characterized by a broad spectrum of spatial and temporal scales \cite{Pope2000}. Resolving the smallest turbulent eddies requires extremely fine spatial grids. For industrial applications, including electronics cooling hardware, DNS is computationally prohibitive. Engineers therefore rely on turbulence modeling to predict the averaged effects of these fluctuations without resolving the full turbulent spectrum \cite{Versteeg2007, Altair}.
+where $p$ is the static pressure. Direct Numerical Simulation (DNS) would solve Eq.~\ref{eq:navier_stokes} without modeling the turbulent fluctuations, but that becomes impractical once the Reynolds number is high enough for a wide range of turbulent length and time scales to appear \cite{Pope2000}. The meshes and time steps needed to resolve the smallest eddies are far beyond what is reasonable for the design loops considered here. The thesis therefore uses turbulence modeling to represent the mean effect of the unresolved fluctuations \cite{Versteeg2007,Altair}.
 
 \section{Reynolds-Averaged Navier-Stokes (RANS) Equations}
-The most common approach to turbulence modeling in engineering is the Reynolds-Averaged Navier-Stokes (RANS) framework, based on the theories originally introduced by Osborne Reynolds \cite{Pope2000}. The core principle of RANS is the Reynolds decomposition, which separates instantaneous flow variables into a time-averaged mean component ($\bar{u}_i$, $\bar{p}$) and a fluctuating component ($u'_i$, $p'$):
+The Reynolds-Averaged Navier-Stokes (RANS) framework is the engineering turbulence model class used in this thesis. It follows the Reynolds decomposition: each instantaneous quantity is split into a mean part, $(\bar{u}_i,\bar{p})$, and a fluctuation, $(u'_i,p')$ \cite{Pope2000}:
 \begin{equation}
 	u_i = \bar{u}_i + u'_i \quad \text{and} \quad p = \bar{p} + p' .
 \end{equation}
@@ -41,24 +41,24 @@ Substituting these decomposed variables into the standard Navier-Stokes equation
 	\rho \left( \frac{\partial \bar{u}_i}{\partial t} + \bar{u}_j \frac{\partial \bar{u}_i}{\partial x_j} \right) = -\frac{\partial \bar{p}}{\partial x_i} + \frac{\partial}{\partial x_j} \left( \mu \frac{\partial \bar{u}_i}{\partial x_j} - \rho \overline{u'_i u'_j} \right) .
 	\label{eq:rans_momentum}
 \end{equation}
-The averaging process introduces a new term, $-\rho \overline{u'_i u'_j}$, known as the Reynolds stress tensor. This tensor represents the momentum transfer caused by turbulent fluctuations. The introduction of this term creates a mathematical closure problem because the RANS equations now contain more unknowns than available physical equations \cite{Versteeg2007}.
+The additional tensor $-\rho \overline{u'_i u'_j}$ is the Reynolds stress. It carries the effect of turbulent momentum transport on the mean flow. Because this tensor is not known from the mean velocity and pressure alone, Eq.~\ref{eq:rans_momentum} is not closed without an additional turbulence model \cite{Versteeg2007}.
 
 \subsection{The Boussinesq Hypothesis and the Isotropic Assumption}
-To close the system and solve for the mean flow, most RANS models rely on the Boussinesq eddy viscosity hypothesis \cite{Pope2000}. This hypothesis assumes that turbulent momentum transfer is analogous to molecular momentum transfer. It relates the Reynolds stresses linearly to the mean velocity gradients using a scalar turbulent eddy viscosity ($\mu_t$):
+Most RANS closures used in practical CFD adopt the Boussinesq eddy-viscosity hypothesis \cite{Pope2000}. The hypothesis models turbulent momentum transport by analogy with viscous diffusion and introduces a scalar turbulent viscosity $\mu_t$:
 \begin{equation}
 	-\rho \overline{u'_i u'_j} = \mu_t \left( \frac{\partial \bar{u}_i}{\partial x_j} + \frac{\partial \bar{u}_j}{\partial x_i} \right) - \frac{2}{3} \rho k \delta_{ij}
 	\label{eq:boussinesq}
 \end{equation}
-where $k$ is the turbulent kinetic energy and $\delta_{ij}$ is the Kronecker delta. The primary task of any Boussinesq-based turbulence model is to calculate this local eddy viscosity.
+where $k$ is the turbulent kinetic energy and $\delta_{ij}$ is the Kronecker delta. A Boussinesq-based model therefore mainly supplies a local value for $\mu_t$.
 
-It is crucial to highlight a fundamental physical limitation of Equation~\ref{eq:boussinesq}: the Boussinesq hypothesis assumes that $\mu_t$ is an isotropic scalar quantity. It maps all turbulence effects into one scalar multiplier aligned with the mean strain rate. While this assumption is often adequate for attached shear flows, it is less reliable when curvature, rotation, or separation create Reynolds-stress anisotropy. Curved ducts and bends are especially relevant here because centrifugal effects redistribute momentum across the cross-section and can create secondary motion that a scalar eddy-viscosity closure cannot represent exactly \cite{Rumsey2000,Rumsey2001}.
+Equation~\ref{eq:boussinesq} also defines an important limitation for the present work. Since $\mu_t$ is scalar, the modeled stress is aligned with the mean strain-rate tensor and cannot independently represent Reynolds-stress anisotropy. This is acceptable for many attached shear flows, but it becomes weaker for flows with strong curvature, rotation, or separation. Curved ducts and bends are therefore critical test cases because centrifugal effects redistribute momentum across the cross-section and can create secondary motion that a scalar eddy-viscosity closure cannot reproduce exactly \cite{Rumsey2000,Rumsey2001}.
 
 \section{Boundary Layer Theory and Near-Wall Treatment}
-Before selecting a specific turbulence equation to calculate $\mu_t$, the physical structure of a turbulent boundary layer must be considered. The boundary layer is traditionally divided into three regions based on the non-dimensional wall distance ($y^+$) and non-dimensional velocity ($u^+$):
+The wall treatment must be chosen together with the turbulence model, because $\mu_t$ depends strongly on the near-wall region. Wall-bounded turbulent flows are commonly discussed using the non-dimensional wall coordinate $y^+$ and velocity $u^+$:
 \begin{equation}
 	y^+ = \frac{y u_\tau}{\nu}, \quad u^+ = \frac{\bar{u}}{u_\tau}
 \end{equation}
-where $y$ is the distance from the wall, $\nu$ is the kinematic viscosity, and $u_\tau = \sqrt{\tau_w/\rho}$ is the friction velocity derived from the wall shear stress ($\tau_w$) \cite{Pope2000}.
+Here $y$ is the distance to the wall, $\nu$ is the kinematic viscosity, and $u_\tau=\sqrt{\tau_w/\rho}$ is the friction velocity defined from the wall shear stress $\tau_w$ \cite{Pope2000}.
 
 Figure~\ref{fig:near_wall_treatment}, adapted from Altair's AcuSolve near-wall modeling documentation \cite{AltairNearWall2024}, summarizes the wall-unit regions used when discussing RANS wall treatment. The important point for this thesis is not that one near-wall strategy is universally required for topology optimization, but that the chosen turbulence closure and wall treatment must remain stable while the solid-fluid boundary evolves.
 
@@ -78,14 +78,14 @@ Figure~\ref{fig:near_wall_treatment}, adapted from Altair's AcuSolve near-wall m
 High-Reynolds models, such as the standard $k-\epsilon$ model, use empirical wall functions to bridge the gap between the wall and the log-law region, typically requiring the first computational cell center to be placed at $y^+ > 30$. Wall functions are not fundamentally incompatible with turbulent topology optimization; Bayat et al.~\cite{Bayat2026}, for example, use a wall-function formulation with an implicit wall penalty. For this thesis, however, a wall-resolved $y^+\approx1$ strategy is more convenient because it avoids introducing a moving empirical wall-function interface into the FEniCS density-based formulation. The meshes used here are therefore generated as wall-resolved meshes, and the SA model is integrated through the viscous sublayer.
 
 \section{The Spalart-Allmaras One-Equation Model}
-While two-equation models such as $k-\epsilon$ or $k-\omega$ solve separate transport equations for turbulent kinetic energy and a turbulent length scale, they introduce highly non-linear source terms. These terms frequently cause numerical instabilities during the adjoint sensitivity analysis required for topology optimization. To achieve a trade-off between physical accuracy and computational efficiency, this thesis utilizes the Spalart-Allmaras (SA) model, originally developed in 1992 for aerodynamic flows with adverse pressure gradients \cite{Spalart1992}. The SA model solves a single transport equation for a working variable, $\tilde{\nu}$, which is subsequently linked to the turbulent kinematic eddy viscosity ($\nu_t=\mu_t/\rho$) \cite{Spalart1994}.
+Two-equation models such as $k-\epsilon$ and $k-\omega$ transport both a turbulence scale and a length- or frequency-scale variable. That extra physics is useful, but it also introduces nonlinear source terms that complicate robust sensitivity calculations in a topology-optimization loop. This thesis therefore uses the one-equation Spalart-Allmaras (SA) model, originally developed for aerodynamic flows with adverse pressure gradients \cite{Spalart1992}. The model transports a working variable $\tilde{\nu}$ and converts it algebraically to the turbulent kinematic eddy viscosity, $\nu_t=\mu_t/\rho$ \cite{Spalart1994}.
 
 The transport equation for the standard SA model is given by:
 \begin{equation}
 	\frac{\partial \tilde{\nu}}{\partial t} + \bar{u}_j \frac{\partial \tilde{\nu}}{\partial x_j} = c_{b1} \tilde{S} \tilde{\nu} - c_{w1} f_w \left( \frac{\tilde{\nu}}{d} \right)^2 + \frac{1}{\sigma} \left[ \frac{\partial}{\partial x_j} \left( (\nu + \tilde{\nu}) \frac{\partial \tilde{\nu}}{\partial x_j} \right) + c_{b2} \left( \frac{\partial \tilde{\nu}}{\partial x_j} \right)^2 \right] .
 	\label{eq:sa_transport}
 \end{equation}
-The terms on the right-hand side represent production, destruction, and diffusion of the turbulent working variable, respectively. The production term relies on a modified vorticity scalar, $\tilde{S}$, so turbulence generation in the SA model is fundamentally tied to shear. The destruction term is explicitly a function of $d$, the distance to the nearest wall. This makes the SA model a wall-resolved low-Reynolds model that integrates through the viscous sublayer without requiring empirical wall functions or a second length-scale equation \cite{NasaTurb}.
+The right-hand side contains production, wall destruction, and diffusion of the working variable. Production is controlled by the modified vorticity $\tilde{S}$, while destruction depends on the wall distance $d$. The model can therefore be run in a wall-resolved low-Reynolds-number mode, integrating through the viscous sublayer without introducing a separate empirical wall function or a second transported length-scale equation \cite{NasaTurb}.
 
 At this stage of the thesis, the SA model is treated as a turbulence closure rather than an implementation object. Therefore, Chapter~\ref{ch:turbulence_modeling} only states the main transport equation and its physical role. Detailed constants, damping functions, linearization choices, and weak forms are deferred to Chapter~\ref{ch:fenics_implementation}, where the FEniCS implementation is discussed.
 
@@ -182,7 +182,7 @@ The Ansys Fluent convergence monitors and final-window criteria are reported in 
 		\caption{VMFL030 3D $90^\circ$ bend.}
 		\label{fig:vmfl030_geometry_bcs}
 	\end{subfigure}
-	\caption{Ansys Fluent curved-flow benchmark geometries from the verification manual \cite{AnsysVerification2024}.}
+	\caption{Ansys Fluent curved-flow benchmark geometries from the verification manual \cite{AnsysVerification2024} \ChatGPTFigureRef.}
 	\label{fig:ch2_curved_benchmark_setups}
 \end{figure}
 
@@ -226,7 +226,7 @@ The first benchmark evaluated a 3D U-bend geometry characterized by a moderate c
 		\caption{$\mu_t/\mu$, SA}
 		\label{fig:ubend_mut_mu_sa}
 	\end{subfigure}
-	\caption{VMFL048 U-bend RANS comparison.}
+		\caption{VMFL048 U-bend RANS comparison. Panels~(d) and~(e) use the same color scale for $\mu_t/\mu$ because the SST $k-\omega$ and SA ranges are close, so the color intensity can be compared directly.}
 	\label{fig:ansys_ubend_comparison}
 	\label{fig:ansys_ubend_mut_mu}
 \end{figure}
@@ -277,7 +277,7 @@ The second benchmark evaluated a tighter $90^\circ$ pipe bend characterized by $
 		\caption{$\mu_t/\mu$, SA}
 		\label{fig:90bend_mut_mu_sa}
 	\end{subfigure}
-	\caption{VMFL030 $90^\circ$ pipe-bend RANS comparison.}
+		\caption{VMFL030 $90^\circ$ pipe-bend RANS comparison. Panels~(d) and~(e) use different color scales for $\mu_t/\mu$ because the SST $k-\omega$ and SA ranges differ strongly; the colorbar values should therefore be checked rather than comparing color intensity alone.}
 	\label{fig:ansys_90bend_comparison}
 	\label{fig:ansys_90bend_mut_mu}
 \end{figure}

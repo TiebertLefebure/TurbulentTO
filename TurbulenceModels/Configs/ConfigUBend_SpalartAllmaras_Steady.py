@@ -5,8 +5,8 @@ import os
 # Medium_WallResolved is the default wall-resolved SA validation mesh
 # (first layer gives y+ ~= 1). Use Coarse_WallResolved for quick diagnostics
 # or Fine_WallResolved for final refinement.
-MESH_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/mesh.xdmf"
-FACET_DIRECTORY = "Meshes/U-Bend/Coarse_WallResolved/facet.xdmf"
+MESH_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/mesh.xdmf"
+FACET_DIRECTORY = "Meshes/U-Bend/Medium_WallResolved/facet.xdmf"
 
 
 def infer_mesh_label_from_path(path):
@@ -31,7 +31,7 @@ BOUNDARY_MARKERS = {
 }
 # =================================
 
-RESTART_FROM_SAVED_STATE = False
+RESTART_FROM_SAVED_STATE = True
 
 # =================================
 

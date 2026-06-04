@@ -107,6 +107,12 @@ A.~N. Brooks and T.~J. Hughes.
 \newblock {\em Computer methods in applied mechanics and engineering},
   32(1-3):199--259, 1982.
 
+\bibitem{ChatGPT2026}
+{ChatGPT}.
+\newblock {ChatGPT}.
+\newblock \url{https://chatgpt.com/}, 2026.
+\newblock Generative AI tool used for AI-generated thesis figures.
+
 \bibitem{Chorin1968}
 A.~J. Chorin.
 \newblock Numerical solution of the navier-stokes equations.
@@ -153,6 +159,12 @@ M.~M. Enayet, M.~M. Gibson, A.~M. K.~P. Taylor, and M.~Yianneskis.
 A.~Fawaz, Y.~Hua, S.~Le~Corre, Y.~Fan, and L.~Luo.
 \newblock Topology optimization of heat exchangers: A review.
 \newblock {\em Energy}, 258:124053, 2022.
+
+\bibitem{fenics_website}
+{FEniCS Project}.
+\newblock The {FEniCS} computing platform.
+\newblock \url{https://fenicsproject.org/}.
+\newblock Accessed: 2026-06-04.
 
 \bibitem{Ferziger2012}
 J.~H. Ferziger, M.~Peri{\'c}, and R.~L. Street.

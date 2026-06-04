@@ -67,7 +67,7 @@ because backward-facing-step results are conventionally compared using the step 
 \begin{figure}[htpb]
 	\centering
 	\includegraphics[width=\textwidth]{BackStep-Geometry-BCs}
-	\caption{Backward-facing-step benchmark geometry and boundary conditions, based on the configuration used by Marcib\'{a}l and the associated code implementation \cite{Marcibal2024,joove_keps}. The first 5.0 m of the upper and lower boundaries are treated as symmetry/slip segments, while all remaining solid boundaries are no-slip walls. The streamwise dimension is compressed for readability.}
+	\caption{Backward-facing-step benchmark geometry and boundary conditions, adapted from Marcib\'{a}l and the associated code implementation \cite{Marcibal2024,joove_keps}. Streamwise dimension compressed for readability \protect\ChatGPTFigureRef.}
 	\label{fig:backstep_geometry_bcs}
 \end{figure}
 
@@ -81,7 +81,7 @@ The grid-sensitivity study uses the same backward-facing-step geometry and named
 \begin{table}[htbp]
 	\centering
 	\scriptsize
-	\caption{Wall-resolved backward-facing-step mesh hierarchy for the Ansys Fluent grid-sensitivity study. The first-layer height is fixed to maintain $y^+\approx1$, while the boundary-layer thickness and streamwise resolution are refined.}
+	\caption{Wall-resolved backward-facing-step mesh hierarchy for the Ansys Fluent grid-sensitivity study.}
 	\label{tab:app_A_backstep_meshes_ansys}
 	\renewcommand{\arraystretch}{1.2}
 	\setlength{\tabcolsep}{5pt}
@@ -104,8 +104,8 @@ The grid-sensitivity study uses the same backward-facing-step geometry and named
 			Elements & $86{,}371$ & $192{,}131$ & $454{,}431$ \\
 		\hline
 		\multicolumn{4}{@{}l}{\textit{Grid metrics: Spalart--Allmaras}} \\
-			$x_r/h$ & $5.92$ & $5.44$ & $5.69$ \\
-			$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & $8.11$ & $4.39$ \\
+			$x_r/h$ & $5.92$ & $5.83$ & $5.69$ \\
+			$\epsilon_{\mathrm{rel}}(x_r/h)$ [\%] & -- & $1.52$ & $2.46$ \\
 		Total pressure loss $\Delta p_t$ [Pa] & $46.743$ & $46.795$ & $46.531$ \\
 		$\epsilon_{\mathrm{rel}}(\Delta p_t)$ [\%] & -- & $0.11$ & $0.57$ \\
 		\multicolumn{4}{@{}l}{\textit{Grid metrics: SST $k-\omega$}} \\
@@ -144,7 +144,7 @@ The contour plots below should therefore be read as a model-form comparison on t
 		\caption{SA contour for $u_x$.}
 		\label{fig:backstep_velocity_sa}
 	\end{subfigure}
-	\caption{Streamwise-velocity contours for the backward-facing-step benchmark. Both closures predict a low-speed or reversed-flow region immediately downstream of the step and gradual recovery farther downstream, but the size and diffusion of this region are visibly model dependent.}
+	\caption{Streamwise-velocity contours for the backward-facing-step benchmark.}
 	\label{fig:ansys_backstep_velocity_contours}
 \end{figure}
 
@@ -165,7 +165,7 @@ Figure~\ref{fig:ansys_backstep_velocity_contours} shows that the two closures gi
 		\caption{SA contour for $\mu_t/\mu$.}
 		\label{fig:backstep_mut_mu_sa}
 	\end{subfigure}
-	\caption{Turbulent-viscosity-ratio contours for the backward-facing-step benchmark, plotted with a common color scale. SA produces a smoother, more moderate eddy-viscosity field, while SST $k-\omega$ gives a more stratified distribution with stronger variation between the near-wall/reverse-flow region and the outer shear-dominated flow.}
+	\caption{Turbulent-viscosity-ratio contours for the backward-facing-step benchmark, plotted with a common color scale.}
 	\label{fig:ansys_backstep_mut_mu}
 \end{figure}
 
@@ -200,7 +200,7 @@ The turbulent-viscosity contours in Figure~\ref{fig:ansys_backstep_mut_mu} expla
 		\caption{$x/h=10$}
 		\label{fig:backstep_velocity_xh10}
 	\end{subfigure}
-	\caption{Normalized streamwise velocity profiles for the backward-facing-step benchmark at four downstream stations. The comparison isolates model-form sensitivity by running SA and SST $k-\omega$ on the same local backward-facing-step geometry and boundary conditions.}
+	\caption{Normalized streamwise-velocity profiles for the backward-facing-step benchmark at four downstream stations.}
 	\label{fig:backstep_velocity_profiles}
 \end{figure}
 

@@ -29,6 +29,14 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{graphicx}
+\makeatletter
+\DeclareRobustCommand{\ChatGPTFigureRef}{%
+	\hyperlink{cite.ChatGPT2026}{(ChatGPT, 2026)}%
+	\if@filesw
+		\immediate\write\@auxout{\string\citation{ChatGPT2026}}%
+	\fi
+}
+\makeatother
 \graphicspath{%
 	{Figures/Figures-Ch1/}%
 	{Figures/Figures-Ch2/}%
@@ -97,28 +105,30 @@
 
 \begin{preface}
 
-This thesis marks the culmination of my Master of Science in Mechanical Engineering at KU Leuven. The journey of exploring computational fluid dynamics and mathematical optimization has been both intensely challenging and deeply rewarding. Bridging the gap between theoretical mathematics and practical engineering applications required countless hours of coding, debugging, and analyzing flow fields, but seeing the optimizer successfully carve out organic, aerodynamic fluid channels made the entire process worthwhile. 
+This thesis marks the completion of my Master of Science in Mechanical Engineering at KU Leuven. What began as a compact mathematical problem in turbulent-flow topology optimization quickly became a broader exercise in connecting models, numerical methods, and engineering judgment. The work moved between deriving weak forms, building FEniCS solvers, preparing wall-resolved meshes, running optimization cases, and checking the resulting geometries with independent CFD. Many of the most useful lessons came from failed runs, unexpected discrepancies, and the effort required to make each modeling assumption explicit.
 
-I would like to express my sincere gratitude to my supervisors, Prof. Dr. Ir. Niels Horsten and Prof. Dr. Ir. Maarten Blommaert, for providing me with the opportunity to work on this fascinating topic. Their academic guidance, critical insights, and continuous support were instrumental in shaping the direction and rigor of this research. A very special thanks goes to my assistant-supervisor, Ir. Esteban Foronda Obando, for his day-to-day patience, technical expertise, and willingness to help me navigate the complex numerical hurdles within FEniCS.
+I am sincerely grateful to my supervisors, Prof. Dr. Ir. Niels Horsten and Prof. Dr. Ir. Maarten Blommaert, for giving me the opportunity to work on this topic and for their guidance throughout the project. Their feedback helped keep the research direction focused and the conclusions grounded. I am especially thankful to my assistant-supervisor, Ir. Esteban Foronda Obando, for the frequent technical discussions, practical FEniCS advice, and patient support while working through difficult numerical issues.
 
-Furthermore, I would like to thank the assessors, Prof. Dr. Ir. Elke Deckers and Ir. Olivier Renders, for their time and valuable feedback in evaluating this work. 
+I would also like to thank the assessors, Prof. Dr. Ir. Elke Deckers and Ir. Olivier Renders, for taking the time to evaluate this work and provide feedback.
 
-Finally, I want to thank my family and friends for their unwavering encouragement, patience, and perspective throughout the course of my studies. 
+Finally, I thank my family and friends for their encouragement and perspective throughout my studies and during the final months of this thesis.
 
 \end{preface}
 
 \tableofcontents*
 
 \begin{abstract}
-
-As compact electronic, automotive, and energy systems become more power-dense, thermal-management hardware increasingly depends on low-loss internal-flow paths. This thesis addresses the hydraulic part of that problem: turbulent flow-only topology optimization for bends, U-bends, and diffusers before conjugate heat transfer is added. A density-based FEniCS framework is developed using Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence adjoint in which the eddy-viscosity and wall-distance fields are updated in the forward solve but fixed during sensitivity assembly.
-
-The work first defines the modeling limits of SA for curved and separated internal flows, then verifies the custom FEniCS-SA solver against Ansys Fluent for a periodic turbulent channel and a two-dimensional U-bend. These cases show qualitative and profile-level agreement sufficient for use as the forward solver in the optimization framework, while retaining the known limitations of a two-dimensional, one-equation eddy-viscosity model.
-
-The framework is then evaluated on turbulent pipe-bend, U-bend, and diffuser benchmarks. For the completed pipe-bend verification, frozen sensitivities agree with central finite differences to a maximum coordinate discrepancy of $5.92\times10^{-5}$, and the directional Taylor check shows approximately second-order remainder convergence. Ansys Fluent validation of the extracted pipe-bend design shows moderate closure sensitivity: replacing Ansys-SA by SST $k-\omega$ increases pressure drop by about $4.5\%$ and viscous dissipation by about $8.5\%$. Under identical SST $k-\omega$ operating conditions, the turbulent design reduces pressure drop by approximately $72\%$ and viscous dissipation by approximately $47\%$ relative to the laminar-optimized reference. The U-bend is retained as the companion $180^\circ$ return-flow benchmark and is interpreted using the same validation standard. The pressure-outlet diffuser gives a more cautionary result: the turbulent SA design improves on the laminar reference under Ansys-SA, but the ranking reverses under SST $k-\omega$, showing that separated diffuser performance is strongly closure-sensitive.
-
-The main conclusion is that frozen-SA topology optimization can produce credible low-loss turbulent internal-flow designs when its assumptions are explicit and final geometries are independently validated. The main remaining limitations are the frozen-adjoint approximation, two-dimensional suppression of secondary-flow physics, and sensitivity of final performance to geometry extraction.
-
+	
+	As compact electronic, automotive, and energy systems become more power-dense, thermal-management hardware increasingly depends on low-loss internal-flow paths. This thesis addresses the hydraulic part of that problem: turbulent flow-only topology optimization for bends, U-bends, and diffusers before conjugate heat transfer is added. A density-based FEniCS framework uses Brinkman penalization, wall-resolved Spalart-Allmaras (SA) turbulence modeling, a relaxed Eikonal wall-distance calculation, and a frozen-turbulence adjoint that fixes eddy-viscosity and wall-distance fields during sensitivity assembly.
+	
+	The work first defines the modeling limits of SA for curved and separated internal flows, demonstrating its viability for moderate curvature while acknowledging its deterioration in strongly curved or separated regimes. The custom FEniCS-SA solver is successfully verified against Ansys Fluent for a turbulent channel and a two-dimensional U-bend, showing excellent cross-code agreement in macroscopic pressure drop and local velocity profiles.
+	
+	When evaluated on turbulent benchmark geometries, the framework demonstrates that the reliability of an SA-optimized design depends fundamentally on the target flow physics. The pipe bend represents a highly successful transfer case for attached, moderately curved flow. The extracted turbulent geometry remains robust under independent Ansys CFD validation; replacing the SA closure with the more separation-sensitive SST $k-\omega$ model yields only modest variations in predicted losses. Under identical turbulent operating conditions, the turbulent-optimized pipe bend decisively outperforms a laminar-optimized reference, reducing pressure drop by $72.0\%$ and viscous dissipation by $47.0\%$.
+	
+	Conversely, the U-bend and diffuser benchmarks expose the physical limitations of relying on a one-equation closure for strongly separated flows. Rather than producing universally superior layouts, the optimizer heavily tunes these geometries to the SA model's specific, overly forgiving prediction of adverse pressure gradients and recirculation. Consequently, cross-examining these extracted designs with SST $k-\omega$ reveals significant performance deterioration and ranking reversals compared to laminar baselines.
+	
+	Overall, frozen-SA topology optimization yields credible, low-loss turbulent design candidates for attached or moderately curved flows, provided assumptions are explicit and final geometries are independently validated. Primary limitations remain the frozen adjoint formulation, two-dimensional constraints, diffuse-to-sharp geometry extraction, and strong closure sensitivity in separated regimes.
+	
 \end{abstract}
 
 % A list of figures and tables is optional

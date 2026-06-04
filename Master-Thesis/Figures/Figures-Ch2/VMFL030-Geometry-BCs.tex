@@ -17,7 +17,8 @@
     fluid/.style={blue!6, line width=22pt},
     bc/.style={red!75!black, line width=1.4pt},
     profile/.style={black!55, dashed, line width=0.95pt},
-    dim/.style={<->, black!70, line width=0.55pt}
+    dim/.style={<->, black!70, line width=0.55pt, shorten <=1pt, shorten >=1pt},
+    dimlabel/.style={fill=white, inner sep=1pt, font=\sffamily\small}
 ]
 
 \def\R{1.75}
@@ -59,10 +60,15 @@
 
 % Radius and diameter annotations.
 \fill[black] (bendCenter) circle (1.05pt);
-\draw[dim] (bendCenter) -- node[above, sloped, fill=white, inner sep=1pt]
-    {$R_c=2.8D$} ($(bendCenter)!0.72!(profMid)$);
-\draw[dim] ({\cx-\R-\a},0.12) -- node[below, fill=white, inner sep=1pt]
-    {$D=1~\mathrm{m}$} ({\cx-\R+\a},0.12);
+\coordinate (radiusPoint) at ({\cx+\R*cos(135)},{\cy+\R*sin(135)});
+\draw[dim] (bendCenter) -- (radiusPoint);
+\node[dimlabel, anchor=west] at ($(bendCenter)+(0.42,-0.17)$)
+    {$R_c=2.8D$};
+\draw[black!55, line width=0.45pt] ({\cx-\R-\a},0.35) -- ({\cx-\R-\a},-0.10);
+\draw[black!55, line width=0.45pt] ({\cx-\R+\a},0.35) -- ({\cx-\R+\a},-0.10);
+\draw[dim] ({\cx-\R-\a},-0.10) -- ({\cx-\R+\a},-0.10);
+\node[dimlabel, anchor=north east] at ({\cx-\R-\a-0.05},-0.18)
+    {$D=1~\mathrm{m}$};
 
 % Labels are kept outside the flow region to avoid overlaps.
 \node[note, anchor=east, text width=37mm] at (-0.55,0.70)

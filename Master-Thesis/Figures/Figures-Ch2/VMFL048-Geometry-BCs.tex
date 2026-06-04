@@ -3,12 +3,15 @@
 \begin{document}
 \pagecolor{white}
 \begin{tikzpicture}[
+  line cap=round,
+  line join=round,
   font=\sffamily\small,
   flow/.style={-{Latex[length=2.8mm]}, line width=0.75pt, draw=blue!65!black},
   dim/.style={<->, line width=0.45pt, draw=black!75, shorten <=1.5pt, shorten >=1.5pt},
   section/.style={draw=red!70!black, line width=1.1pt},
   profile/.style={draw=black!65, dashed, line width=0.85pt},
-  bc/.style={draw=black!70, fill=white, rounded corners=1pt, inner sep=3pt, align=center}
+  bc/.style={draw=black!60, fill=white, rounded corners=1.5pt, inner xsep=7pt, inner ysep=4pt, align=center},
+  dimlabel/.style={fill=white, inner sep=1pt, font=\sffamily\small}
 ]
 
 \def\r{1.25}
@@ -43,12 +46,13 @@
 \coordinate (bendcenter) at (\cx,\cy);
 \coordinate (radiuspoint) at ({\cx+\r*cos(48)},{\cy+\r*sin(48)});
 \draw[dim] (bendcenter) -- (radiuspoint);
-\node[fill=white, inner sep=1pt, anchor=east] at ($(bendcenter)!0.54!(radiuspoint)+(-0.16,0.18)$)
+\node[dimlabel, anchor=east] at ($(bendcenter)!0.54!(radiuspoint)+(-0.16,0.18)$)
   {$R_c=4.46D$};
 \fill[black] (bendcenter) circle (1.1pt);
 
-\draw[dim] (5.10,\ybot-\w) -- node[left, fill=white, inner sep=1pt]
-  {$D=28$ mm} (5.10,\ybot+\w);
+\draw[dim] (5.10,\ybot-\w) -- (5.10,\ybot+\w);
+\node[dimlabel, anchor=south] at (5.10,\ybot+\w+0.10)
+  {$D=28~\mathrm{mm}$};
 
 % Velocity-profile extraction line.
 \draw[profile] (\cx,\ybot-\w) -- (\cx,\ybot+\w);
