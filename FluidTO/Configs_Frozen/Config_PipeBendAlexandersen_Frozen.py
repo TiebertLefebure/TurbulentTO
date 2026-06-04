@@ -30,8 +30,8 @@ DESIGN_DOMAIN_TAG = 1
 NON_DESIGN_FLUID_TAG = 2
 
 
-# Resume from the reconstructed iteration-70 checkpoint by default.
-RESUME_OPTIMIZATION = True
+# Start clean unless explicitly resuming from an available checkpoint.
+RESUME_OPTIMIZATION = False
 
 
 def create_design_mesh():
@@ -432,7 +432,7 @@ if _USE_DISSIPATION_OBJECTIVE:
 elif _USE_PRESSURE_OBJECTIVE:
     RESULTS_ROOT_SUFFIX_BY_VARIANT = {
         "single_stage_500": "_Jp_Old",
-        "smooth_continuation": "_Jp_SmoothContinuation",
+        "smooth_continuation": "_Jp_SmoothContinuation_Rerun",
         "legacy_8fedc94": "_Jp_Legacy8fedc94",
     }
     RESULTS_ROOT_NAME = RESULTS_ROOT_BASE_NAME + RESULTS_ROOT_SUFFIX_BY_VARIANT[
