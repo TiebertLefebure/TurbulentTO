@@ -1,7 +1,36 @@
 import os
-from Runtime_Setup import configure_writable_runtime_environment
+import tempfile
 
-configure_writable_runtime_environment(base_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime"))
+
+def _configure_writable_runtime_environment():
+    runtime_root = os.environ.get("TURBULENTTO_RUNTIME_ROOT")
+    if runtime_root is None:
+        runtime_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime")
+        shared_roots = ("/home/fenics/shared", "/root/shared")
+        if any(runtime_root == root or runtime_root.startswith(root + os.sep) for root in shared_roots):
+            try:
+                user_id = os.getuid()
+            except AttributeError:
+                user_id = "user"
+            repo_name = os.path.basename(os.getcwd()) or "turbulentto"
+            runtime_root = os.path.join(tempfile.gettempdir(), "{}_runtime_{}".format(repo_name, user_id))
+
+    runtime_root = os.path.abspath(runtime_root)
+    tmp_dir = os.path.join(runtime_root, "tmp")
+    cache_root = os.path.join(runtime_root, "cache")
+    dijitso_cache_dir = os.path.join(cache_root, "dijitso")
+    instant_cache_dir = os.path.join(cache_root, "instant")
+    for path in (runtime_root, tmp_dir, cache_root, dijitso_cache_dir, instant_cache_dir):
+        os.makedirs(path, exist_ok=True)
+    for env_name in ("TMPDIR", "TMP", "TEMP"):
+        os.environ[env_name] = tmp_dir
+    os.environ["XDG_CACHE_HOME"] = cache_root
+    os.environ["DIJITSO_CACHE_DIR"] = dijitso_cache_dir
+    os.environ["INSTANT_CACHE_DIR"] = instant_cache_dir
+    tempfile.tempdir = tmp_dir
+
+
+_configure_writable_runtime_environment()
 
 from dolfin import *
 import numpy as np

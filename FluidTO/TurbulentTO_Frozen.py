@@ -1,7 +1,36 @@
 import os
-from Runtime_Setup import configure_writable_runtime_environment
+import tempfile
 
-configure_writable_runtime_environment(base_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime"))
+
+def _configure_writable_runtime_environment():
+    runtime_root = os.environ.get("TURBULENTTO_RUNTIME_ROOT")
+    if runtime_root is None:
+        runtime_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".runtime")
+        shared_roots = ("/home/fenics/shared", "/root/shared")
+        if any(runtime_root == root or runtime_root.startswith(root + os.sep) for root in shared_roots):
+            try:
+                user_id = os.getuid()
+            except AttributeError:
+                user_id = "user"
+            repo_name = os.path.basename(os.getcwd()) or "turbulentto"
+            runtime_root = os.path.join(tempfile.gettempdir(), "{}_runtime_{}".format(repo_name, user_id))
+
+    runtime_root = os.path.abspath(runtime_root)
+    tmp_dir = os.path.join(runtime_root, "tmp")
+    cache_root = os.path.join(runtime_root, "cache")
+    dijitso_cache_dir = os.path.join(cache_root, "dijitso")
+    instant_cache_dir = os.path.join(cache_root, "instant")
+    for path in (runtime_root, tmp_dir, cache_root, dijitso_cache_dir, instant_cache_dir):
+        os.makedirs(path, exist_ok=True)
+    for env_name in ("TMPDIR", "TMP", "TEMP"):
+        os.environ[env_name] = tmp_dir
+    os.environ["XDG_CACHE_HOME"] = cache_root
+    os.environ["DIJITSO_CACHE_DIR"] = dijitso_cache_dir
+    os.environ["INSTANT_CACHE_DIR"] = instant_cache_dir
+    tempfile.tempdir = tmp_dir
+
+
+_configure_writable_runtime_environment()
 
 from dolfin import *
 import numpy as np
@@ -39,14 +68,6 @@ from Utilities_SharedTO import (
     resume_vtk_series_path,
     ResilientVTKFile,
     save_optimization_checkpoint,
-)
-from Utilities_DilgenPostprocess import (
-    build_cell_area_normalized_field,
-    build_objective_normalized_field,
-    build_velocity_magnitude_field,
-    copy_scalar_field,
-    write_combined_dilgen_table2_if_available,
-    write_dilgen_paper_data,
 )
 from Utilities_TurbulentTO_Frozen import (
     build_penalized_wall_distance_solver,
@@ -2447,23 +2468,8 @@ def estimate_taylor_order(remainder, previous_remainder, epsilon, previous_epsil
     )
 
 
-def maybe_write_combined_dilgen_table2():
-    if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
-        return
-    if not IS_ROOT:
-        return
-    frozen_root = globals().get("DILGEN_FROZEN_RESULTS_ROOT_NAME")
-    semifrozen_root = globals().get("DILGEN_SEMIFROZEN_RESULTS_ROOT_NAME")
-    if not frozen_root or not semifrozen_root:
-        return
-    frozen_table = os.path.join(THIS_DIR, str(frozen_root), "SensitivityVerificationTable.tsv")
-    semifrozen_table = os.path.join(THIS_DIR, str(semifrozen_root), "SensitivityVerificationTable.tsv")
-    combined_path = os.path.join(results_root, "DilgenTable2_Combined.tsv")
-    write_combined_dilgen_table2_if_available(combined_path, frozen_table, semifrozen_table)
-
-
 def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_objective, objective_gradient_active):
-    """Optional Dilgen-style coordinate checks for the frozen-adjoint gradient."""
+    """Optional coordinate checks for the frozen-adjoint gradient."""
     if not bool(globals().get("RUN_FINITE_DIFFERENCE_CHECKS", False)):
         return
     if int(global_iter) not in finite_difference_check_iterations():
@@ -2824,7 +2830,6 @@ def run_finite_difference_checks(stage_idx, inner_iter, global_iter, base_object
                     ],
                 )
             run_taylor_check_for_mode(mode_name, update_turbulence)
-        maybe_write_combined_dilgen_table2()
     finally:
         restore_base_state(refresh_wall_distance=check_updated_turbulence)
 
@@ -3126,7 +3131,6 @@ results_root = os.path.join(THIS_DIR, globals().get("RESULTS_ROOT_NAME", "Result
 rho_dir = os.path.join(results_root, "rho")
 rho_p_dir = os.path.join(results_root, "rho_projected")
 u_dir = os.path.join(results_root, "u")
-u_magnitude_dir = os.path.join(results_root, "u_magnitude")
 p_dir = os.path.join(results_root, "p")
 nu_tilde_dir = os.path.join(results_root, "nu_tilde")
 j_d_dir = os.path.join(results_root, "J_D")
@@ -3137,13 +3141,9 @@ nu_tilde_clip_floor_dir = os.path.join(results_root, "nu_tilde_floor_clip_mask")
 nu_tilde_clip_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_clip_mask")
 nu_tilde_bound_floor_dir = os.path.join(results_root, "nu_tilde_floor_bound_mask")
 nu_tilde_bound_ceiling_dir = os.path.join(results_root, "nu_tilde_ceiling_bound_mask")
-df0dx_dir = os.path.join(results_root, "df0dx")
-df0dx_normalized_dir = os.path.join(results_root, "df0dx_normalized")
 df0dx_centered_dir = os.path.join(results_root, "df0dx_centered")
 design_dir = os.path.join(results_root, "design")
 ipcs_residual_dir = os.path.join(results_root, "ipcs_residuals")
-paper_data_dir = os.path.join(results_root, "paper_data")
-save_dilgen_paper_data = bool(globals().get("SAVE_DILGEN_PAPER_DATA", False))
 save_cellwise_dissipation_fields = config_truthy(
     globals().get("SAVE_CELLWISE_DISSIPATION_FIELDS", True)
 )
@@ -3181,8 +3181,6 @@ output_dirs = [
 ]
 if save_cellwise_dissipation_fields:
     output_dirs.extend([j_d_dir, viscous_dissipation_dir])
-if save_dilgen_paper_data:
-    output_dirs.extend([u_magnitude_dir, df0dx_dir, df0dx_normalized_dir, paper_data_dir])
 if save_sa_clipping_diagnostics:
     output_dirs.extend([
         nu_tilde_raw_dir,
@@ -3218,8 +3216,6 @@ def output_series_path(output_path):
 rho_out = ResilientVTKFile(output_series_path(os.path.join(rho_dir, "plot_rho.pvd")), COMM)
 rhop_out = ResilientVTKFile(output_series_path(os.path.join(rho_p_dir, "plot_rho_projected.pvd")), COMM)
 u_out = ResilientVTKFile(output_series_path(os.path.join(u_dir, "plot_u.pvd")), COMM)
-if save_dilgen_paper_data:
-    u_magnitude_out = ResilientVTKFile(output_series_path(os.path.join(u_magnitude_dir, "plot_u_magnitude.pvd")), COMM)
 p_out = ResilientVTKFile(output_series_path(os.path.join(p_dir, "plot_p.pvd")), COMM)
 nu_tilde_out = ResilientVTKFile(output_series_path(os.path.join(nu_tilde_dir, "plot_nu_tilde.pvd")), COMM)
 if save_cellwise_dissipation_fields:
@@ -3247,12 +3243,6 @@ if save_sa_clipping_diagnostics:
     nu_tilde_ceiling_bound_mask_out = ResilientVTKFile(
         output_series_path(os.path.join(nu_tilde_bound_ceiling_dir, "plot_nu_tilde_ceiling_bound_mask.pvd")), COMM
     )
-if save_dilgen_paper_data:
-    df0dx_out = ResilientVTKFile(output_series_path(os.path.join(df0dx_dir, "plot_df0dx.pvd")), COMM)
-    df0dx_normalized_out = ResilientVTKFile(
-        output_series_path(os.path.join(df0dx_normalized_dir, "plot_df0dx_normalized.pvd")),
-        COMM,
-    )
 df0dx_centered_out = ResilientVTKFile(output_series_path(os.path.join(df0dx_centered_dir, "plot_df0dx_centered.pvd")), COMM)
 
 log_path = os.path.join(results_root, "OptimizationLog.txt")
@@ -3267,34 +3257,12 @@ optimization_log_quantity_columns = (
     "dP_nondesign_Pa",
     "dP_design_Pa",
 )
-optimization_log_extra_columns = (
-    ("VolumeConstraint_Dilgen", "Objective_Normalized_Dilgen")
-    if bool(globals().get("LOG_DILGEN_FIG8_COLUMNS", False))
-    else ()
-)
-dilgen_volume_constraint_log_path = os.path.join(results_root, "VolumeConstraint_Dilgen.txt")
-dilgen_objective_normalized_log_path = os.path.join(results_root, "Objective_Normalized_Dilgen.txt")
-
-
-def initialize_dilgen_fig8_metric_logs():
-    if not optimization_log_extra_columns:
-        return
-    if IS_ROOT:
-        with open(dilgen_volume_constraint_log_path, "w") as handle:
-            handle.write("VolumeConstraint_Dilgen\tGlobalIter\n")
-        with open(dilgen_objective_normalized_log_path, "w") as handle:
-            handle.write("Objective_Normalized_Dilgen\tGlobalIter\n")
-    MPI.barrier(COMM)
-
-
 if not resume_from_checkpoint:
     initialize_optimization_log(
         log_path,
         pressure_drop_columns=optimization_log_quantity_columns,
         objective_column=objective_log_column,
-        extra_columns=optimization_log_extra_columns,
     )
-    initialize_dilgen_fig8_metric_logs()
     initialize_df0dx_log(df0dx_log_path)
     initialize_sensitivity_check_log(sensitivity_check_log_path)
     initialize_sensitivity_verification_table(sensitivity_verification_table_path)
@@ -3312,7 +3280,6 @@ enforce_density_bounds_inplace(rho)
 iter_count = 0
 previous_objective = 0.0
 objective_scale_reference = None
-initial_objective_reference = None
 
 num_mma = int(ActiveDV.size)
 active_density_lower_values = density_lower_values[ActiveDV]
@@ -3340,56 +3307,6 @@ dfdx = np.zeros((mmma, num_mma))
 volume = assemble(VolumeRegion * dx)
 if volume <= 0.0:
     raise ValueError("The volume-constrained design region has zero measure.")
-
-
-def dilgen_objective_normalization_scale():
-    """Return the dimensional scale used for the Dilgen Fig. 8 comparison column."""
-    if "DILGEN_OBJECTIVE_NORMALIZATION_SCALE" in globals():
-        return float(globals()["DILGEN_OBJECTIVE_NORMALIZATION_SCALE"])
-
-    reference_density = float(globals().get("DILGEN_OBJECTIVE_REFERENCE_DENSITY", RHO_FLUID_VALUE))
-    reference_velocity = float(globals().get("DILGEN_OBJECTIVE_REFERENCE_VELOCITY", U_BULK_INLET))
-    reference_length = float(
-        globals().get(
-            "DILGEN_OBJECTIVE_REFERENCE_LENGTH",
-            globals().get("H", globals().get("INLET_HALF_HEIGHT", 1.0)),
-        )
-    )
-    if reference_density <= 0.0 or reference_velocity <= 0.0 or reference_length <= 0.0:
-        raise ValueError("Dilgen objective normalization needs positive rho, U, and length scales.")
-
-    # Eq. (42) is logged as 2D unit-depth power. For Dilgen's plotted
-    # nondimensional objective, scale by rho * U_b^3 * V_design / H.
-    return reference_density * reference_velocity**3.0 * float(volume) / reference_length
-
-
-def dilgen_optimization_log_extra_values(objective_value, volume_fraction):
-    if not optimization_log_extra_columns:
-        return ()
-
-    volume_target = float(VOL_FRAC)
-    if volume_target <= 0.0:
-        raise ValueError("Dilgen volume-constraint logging needs VOL_FRAC > 0.")
-
-    objective_scale = dilgen_objective_normalization_scale()
-    if objective_scale <= 0.0:
-        raise ValueError("Dilgen objective normalization scale must be positive.")
-
-    volume_constraint = float(volume_fraction) / volume_target - 1.0
-    objective_normalized = float(objective_value) / objective_scale
-    return volume_constraint, objective_normalized
-
-
-def append_dilgen_fig8_metric_logs(metric_values, global_iter):
-    if not optimization_log_extra_columns:
-        return
-
-    volume_constraint, objective_normalized = metric_values
-    if IS_ROOT:
-        with open(dilgen_volume_constraint_log_path, "a") as handle:
-            handle.write("{:.16e}\t{:d}\n".format(float(volume_constraint), int(global_iter)))
-        with open(dilgen_objective_normalized_log_path, "a") as handle:
-            handle.write("{:.16e}\t{:d}\n".format(float(objective_normalized), int(global_iter)))
 
 
 def _assign_scalar_active_density(active_density_value):
@@ -3469,13 +3386,7 @@ if resume_from_checkpoint:
         "objective_scale_reference",
         default=np.nan,
     )
-    initial_objective_candidate = checkpoint_scalar(
-        resume_checkpoint,
-        "initial_objective_reference",
-        default=np.nan,
-    )
     objective_scale_reference = objective_scale_candidate if np.isfinite(objective_scale_candidate) else None
-    initial_objective_reference = initial_objective_candidate if np.isfinite(initial_objective_candidate) else None
     resume_stage_idx = checkpoint_scalar(resume_checkpoint, "stage_idx", scalar_type=int)
     resume_inner_count = checkpoint_scalar(resume_checkpoint, "inner_count", scalar_type=int)
     resume_convergence_history = checkpoint_scalar(
@@ -3797,10 +3708,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         u_out << w_fwd.sub(0)
         p_out << w_fwd.sub(1)
         nu_tilde_out << nu_tilde_frozen
-        velocity_magnitude_plot = None
-        if save_dilgen_paper_data:
-            velocity_magnitude_plot = build_velocity_magnitude_field(w_fwd.sub(0, deepcopy=True), DensitySpace)
-            u_magnitude_out << velocity_magnitude_plot
         if save_sa_clipping_diagnostics:
             nu_tilde_raw_out << nu_tilde_raw_diagnostic
             nu_tilde_preclip_out << nu_tilde_preclip_diagnostic
@@ -3813,9 +3720,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
 
         f0val = assemble(ObjFunctional)
         if objective_scale_reference is None:
-            initial_objective_reference = float(f0val)
-            if abs(initial_objective_reference) <= float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)):
-                raise ValueError("Initial objective is too close to zero for Dilgen normalized line outputs.")
             objective_scale_reference = max(abs(float(f0val)), float(globals().get("OBJECTIVE_SCALE_FLOOR", 1.0e-30)))
             root_print("MMA objective scale: initial objective {:.6e}.".format(objective_scale_reference))
         # MMA sees scaled objective values; logs keep physical values.
@@ -3864,15 +3768,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         unfiltered_gradient.vector()[:] = assemble(objective_ddx)[:]
         filtered_gradient = pde_filter_design_gradient(unfiltered_gradient, filtered_gradient)
         np.savetxt(os.path.join(design_dir, "rho_{:03}.txt".format(iter_count)), rho.vector()[:])
-        if save_dilgen_paper_data:
-            df0dx_plot = copy_scalar_field(filtered_gradient, "df0dx")
-            df0dx_out << df0dx_plot
-            df0dx_normalized_plot = build_cell_area_normalized_field(
-                filtered_gradient,
-                "df0dx_normalized",
-            )
-            df0dx_normalized_out << df0dx_normalized_plot
-
         fval[0, 0] = assemble(vol_constraint) / volume
         unfiltered_s_vol.vector()[:] = assemble(sensitivities_vol_constraint)[:]
         filtered_s_vol = pde_filter_design_gradient(unfiltered_s_vol, filtered_s_vol)
@@ -3892,30 +3787,7 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         df0dx_centered_out << df0dx_centered_plot
         if bool(globals().get("SAVE_DF0DX_VECTOR", True)):
             np.savetxt(os.path.join(design_dir, "df0dx_{:03}.txt".format(iter_count)), df0dx[:, 0])
-            if save_dilgen_paper_data:
-                np.savetxt(
-                    os.path.join(design_dir, "df0dx_unscaled_{:03}.txt".format(iter_count)),
-                    objective_gradient_active_unscaled,
-                )
             np.savetxt(os.path.join(design_dir, "df0dx_centered_{:03}.txt".format(iter_count)), df0dx_centered)
-        if save_dilgen_paper_data:
-            df0dx_objective_normalized_plot = build_objective_normalized_field(
-                filtered_gradient,
-                initial_objective_reference,
-                "df0dx_objective_normalized",
-            )
-            write_dilgen_paper_data(
-                paper_data_dir,
-                iter_count,
-                velocity_magnitude_plot,
-                df0dx_plot,
-                DensitySpace,
-                ActiveDV,
-                globals(),
-                COMM,
-                include_g_state=False,
-                df0dx_objective_normalized_field=df0dx_objective_normalized_plot,
-            )
         append_df0dx_log_entry(
             df0dx_log_path,
             stage_idx + 1,
@@ -3985,9 +3857,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
         rho.vector().set_local(rho_values)
         rho.vector().apply("insert")
 
-        dilgen_fig8_metric_values = dilgen_optimization_log_extra_values(f0val, vol_fraction_now)
-        append_dilgen_fig8_metric_logs(dilgen_fig8_metric_values, iter_count)
-
         append_optimization_log_entry(
             log_path,
             stage_idx + 1,
@@ -4008,8 +3877,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             ),
             pressure_drop_columns=optimization_log_quantity_columns,
             objective_column=objective_log_column,
-            extra_values=dilgen_fig8_metric_values,
-            extra_columns=optimization_log_extra_columns,
         )
 
         checkpoint_next_iter = iter_count + 1
@@ -4029,7 +3896,6 @@ for stage_idx, q_val in enumerate(Q_PENAL_SCHEDULE):
             convergence_history=np.array(checkpoint_next_convergence_history, dtype=np.int64),
             previous_objective=np.array(float(previous_objective)),
             objective_scale_reference=np.array(float(objective_scale_reference)),
-            initial_objective_reference=np.array(float(initial_objective_reference)),
             rho=rho.vector().get_local(),
             xval=xval,
             xold1=xold1,

@@ -146,19 +146,39 @@ SAVE_SA_CLIPPING_DIAGNOSTICS = (
 
 # Topology-created solids act as walls for the reciprocal wall-distance solve.
 # The paper's implicit k-epsilon wall-function parameters psi_max=1000 and
-# P_con=4 are used here as the closest SA analogues: penalty amplitude and
-# solid-indicator exponent for both wall-distance and nu_tilde damping.
-SA_NU_TILDE_PENALTY_ALPHA = 1.0e5
-SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
-SA_NU_TILDE_PENALTY_N = 3.0
+# P_con=4 are used here as the closest SA analogues for the pressure objective.
+# The dissipation objective keeps the stronger ramp used for the robust JD path.
+SA_NU_TILDE_PENALTY_ALPHA_JD = 1.0e5
+SA_NU_TILDE_PENALTY_ALPHA_JP = 1.0e3
+SA_NU_TILDE_PENALTY_ALPHA = (
+    SA_NU_TILDE_PENALTY_ALPHA_JP
+    if _USE_PRESSURE_OBJECTIVE else SA_NU_TILDE_PENALTY_ALPHA_JD
+)
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3]
+SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE = (
+    SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JP
+    if _USE_PRESSURE_OBJECTIVE else SA_NU_TILDE_PENALTY_ALPHA_SCHEDULE_JD
+)
+SA_NU_TILDE_PENALTY_N = 4.0
 SA_NU_TILDE_PENALTY_INTERPOLATION = "power"
 
 SA_WALL_DISTANCE_MODE = "reciprocal_penalized"
 SA_WALL_SIGMA = 0.1
 SA_WALL_G0 = 20.0
-SA_WALL_PENALTY_ALPHA = 1.0e5
-SA_WALL_PENALTY_ALPHA_SCHEDULE = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
-SA_WALL_PENALTY_N = 3.0
+SA_WALL_PENALTY_ALPHA_JD = 1.0e5
+SA_WALL_PENALTY_ALPHA_JP = 1.0e3
+SA_WALL_PENALTY_ALPHA = (
+    SA_WALL_PENALTY_ALPHA_JP
+    if _USE_PRESSURE_OBJECTIVE else SA_WALL_PENALTY_ALPHA_JD
+)
+SA_WALL_PENALTY_ALPHA_SCHEDULE_JD = [1.0e3, 3.0e3, 1.0e4, 3.0e4, 1.0e5, 1.0e5, 1.0e5]
+SA_WALL_PENALTY_ALPHA_SCHEDULE_JP = [1.0e3]
+SA_WALL_PENALTY_ALPHA_SCHEDULE = (
+    SA_WALL_PENALTY_ALPHA_SCHEDULE_JP
+    if _USE_PRESSURE_OBJECTIVE else SA_WALL_PENALTY_ALPHA_SCHEDULE_JD
+)
+SA_WALL_PENALTY_N = 4.0
 SA_WALL_PENALTY_INTERPOLATION = "power"
 SA_WALL_G_FLOOR = 1.0e-8
 
